@@ -57,10 +57,10 @@ export default function BrandingPage() {
 
   return (
     <AppShell>
-      <h1 className="mb-6 text-2xl font-semibold">Branding presets</h1>
+      <h1 className="mb-6 text-2xl font-semibold tracking-tight">Branding presets</h1>
 
       <section className="card mb-8 p-6">
-        <h2 className="mb-4 text-lg font-medium">New preset</h2>
+        <h2 className="mb-4 text-lg font-semibold tracking-tight">New preset</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="text-sm text-gray-400">
             Name

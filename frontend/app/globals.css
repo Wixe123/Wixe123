@@ -8,8 +8,26 @@
 
 html,
 body {
-  background-color: #08090d;
+  background-color: #08090b;
   color: #f1f2f6;
+}
+
+body {
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(50rem 30rem at 15% -10%, rgba(124, 58, 237, 0.16), transparent 60%),
+    radial-gradient(40rem 26rem at 100% 0%, rgba(34, 211, 238, 0.10), transparent 55%),
+    radial-gradient(60rem 40rem at 50% 120%, rgba(124, 58, 237, 0.08), transparent 60%),
+    #08090b;
 }
 
 * {
@@ -17,25 +35,29 @@ body {
 }
 
 .card {
-  @apply rounded-xl2 border border-base-700 bg-base-900/80 backdrop-blur-sm;
+  @apply rounded-xl2 border border-white/[0.07] bg-base-900/70 shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset,0_12px_24px_-12px_rgba(0,0,0,0.6)] backdrop-blur-sm transition-colors;
 }
 
 .btn-primary {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-b from-brand-400 to-brand-600 px-4 py-2 text-sm font-medium text-white shadow-[0_1px_0_0_rgba(255,255,255,0.25)_inset,0_6px_16px_-6px_rgba(124,58,237,0.55)] transition hover:brightness-110 active:brightness-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none;
 }
 
 .btn-secondary {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-base-600 bg-base-800 px-4 py-2 text-sm font-medium text-gray-200 transition hover:bg-base-700;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-gray-200 shadow-[0_1px_0_0_rgba(255,255,255,0.06)_inset] transition hover:border-white/20 hover:bg-white/[0.08];
 }
 
 .btn-danger {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-red-900 bg-red-950/60 px-4 py-2 text-sm font-medium text-red-300 transition hover:bg-red-900/60;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-red-900/60 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 transition hover:border-red-800 hover:bg-red-500/20;
 }
 
 .input {
-  @apply w-full rounded-lg border border-base-600 bg-base-800 px-3 py-2 text-sm text-gray-100 outline-none focus:border-brand-500;
+  @apply w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-100 outline-none transition placeholder:text-gray-500 focus:border-brand-500/70 focus:bg-white/[0.05] focus:ring-2 focus:ring-brand-500/20;
 }
 
 .badge {
-  @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ring-white/5;
+}
+
+.icon-chip {
+  @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg;
 }

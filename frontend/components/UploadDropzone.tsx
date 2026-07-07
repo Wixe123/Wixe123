@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { IconUploadCloud } from "@/components/icons";
 
 const ACCEPTED = [".mp4", ".mov", ".avi", ".mkv"];
 
@@ -39,15 +40,22 @@ export default function UploadDropzone({
       }}
       onClick={() => inputRef.current?.click()}
       className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl2 border-2 border-dashed p-8 text-center transition sm:p-12 ${
-        dragging ? "border-brand-500 bg-brand-500/5" : "border-base-600 hover:border-base-500"
+        dragging ? "border-brand-500 bg-brand-500/5" : "border-white/10 hover:border-white/20 hover:bg-white/[0.02]"
       }`}
     >
-      <div className="text-4xl">⬆️</div>
+      <span className="icon-chip h-14 w-14 bg-brand-500/15 text-brand-400">
+        <IconUploadCloud className="h-6 w-6" />
+      </span>
       <p className="text-sm text-gray-300">
-        Drag & drop videos here, or <span className="text-brand-400">browse</span>
+        Drag & drop videos here, or <span className="font-medium text-brand-400">browse</span>
       </p>
       <p className="text-xs text-gray-500">MP4, MOV, AVI, MKV — multiple files supported</p>
-      {busy && <p className="text-xs text-brand-400">Uploading…</p>}
+      {busy && (
+        <p className="flex items-center gap-2 text-xs text-brand-400">
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand-500/50 border-t-brand-400" />
+          Uploading…
+        </p>
+      )}
       <input
         ref={inputRef}
         type="file"

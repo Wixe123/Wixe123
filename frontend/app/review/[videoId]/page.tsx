@@ -34,7 +34,7 @@ export default function ReviewPage() {
 
   return (
     <AppShell>
-      <h1 className="mb-1 text-2xl font-semibold">{video?.title || "Video"}</h1>
+      <h1 className="mb-1 text-2xl font-semibold tracking-tight">{video?.title || "Video"}</h1>
       <p className="mb-6 text-sm text-gray-400">
         Status: <span className="text-gray-300">{video?.status}</span>
         {video?.status === "analyzing" || video?.status === "transcribing" ? (

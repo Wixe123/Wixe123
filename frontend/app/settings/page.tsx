@@ -56,10 +56,10 @@ export default function SettingsPage() {
 
   return (
     <AppShell>
-      <h1 className="mb-6 text-2xl font-semibold">Settings</h1>
+      <h1 className="mb-6 text-2xl font-semibold tracking-tight">Settings</h1>
 
       <section className="card mb-6 p-6">
-        <h2 className="mb-4 text-lg font-medium">YouTube channel</h2>
+        <h2 className="mb-4 text-lg font-semibold tracking-tight">YouTube channel</h2>
         {youtube?.connected ? (
           <p className="text-sm text-emerald-400">Connected: {youtube.channel_title}</p>
         ) : (
@@ -73,7 +73,7 @@ export default function SettingsPage() {
       </section>
 
       <section className="card mb-6 p-6">
-        <h2 className="mb-4 text-lg font-medium">Subtitles</h2>
+        <h2 className="mb-4 text-lg font-semibold tracking-tight">Subtitles</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="text-sm text-gray-400">
             Font
@@ -133,7 +133,7 @@ export default function SettingsPage() {
       </section>
 
       <section className="card mb-6 p-6">
-        <h2 className="mb-4 text-lg font-medium">Clip generation</h2>
+        <h2 className="mb-4 text-lg font-semibold tracking-tight">Clip generation</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="text-sm text-gray-400">
             Min clip length (s)
@@ -191,7 +191,7 @@ export default function SettingsPage() {
       </section>
 
       <section className="card mb-6 p-6">
-        <h2 className="mb-4 text-lg font-medium">Upload defaults</h2>
+        <h2 className="mb-4 text-lg font-semibold tracking-tight">Upload defaults</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="text-sm text-gray-400">
             Default visibility

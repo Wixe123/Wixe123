@@ -6,12 +6,12 @@ import { api } from "@/lib/api";
 import type { ProcessingJob } from "@/lib/types";
 
 const STATUS_STYLES: Record<string, string> = {
-  queued: "bg-base-800 text-gray-300",
-  running: "bg-amber-950 text-amber-300",
-  paused: "bg-base-800 text-gray-400",
-  success: "bg-emerald-950 text-emerald-300",
-  failed: "bg-red-950 text-red-300",
-  cancelled: "bg-base-800 text-gray-500",
+  queued: "bg-white/5 text-gray-300",
+  running: "bg-amber-500/15 text-amber-300",
+  paused: "bg-white/5 text-gray-400",
+  success: "bg-emerald-500/15 text-emerald-300",
+  failed: "bg-red-500/15 text-red-300",
+  cancelled: "bg-white/5 text-gray-500",
 };
 
 export default function QueuePage() {
@@ -43,12 +43,8 @@ export default function QueuePage() {
   return (
     <AppShell>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-semibold">Processing queue</h1>
-        <select
-          className="input sm:w-48"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        >
+        <h1 className="text-2xl font-semibold tracking-tight">Processing queue</h1>
+        <select className="input sm:w-48" value={filter} onChange={(e) => setFilter(e.target.value)}>
           <option value="">All statuses</option>
           <option value="queued">Queued</option>
           <option value="running">Running</option>
@@ -61,38 +57,38 @@ export default function QueuePage() {
 
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="bg-base-800 text-gray-400">
+          <thead className="text-xs uppercase tracking-wide text-gray-500">
             <tr>
-              <th className="px-4 py-2 font-medium">Type</th>
-              <th className="px-4 py-2 font-medium">Status</th>
-              <th className="px-4 py-2 font-medium">Progress</th>
-              <th className="px-4 py-2 font-medium">Attempts</th>
-              <th className="px-4 py-2 font-medium">Error</th>
-              <th className="px-4 py-2 font-medium">Actions</th>
+              <th className="px-4 py-3 font-medium">Type</th>
+              <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Progress</th>
+              <th className="px-4 py-3 font-medium">Attempts</th>
+              <th className="px-4 py-3 font-medium">Error</th>
+              <th className="px-4 py-3 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
             {jobs.map((job) => (
-              <tr key={job.id} className="border-t border-base-800 align-top">
-                <td className="px-4 py-2">{job.job_type}</td>
-                <td className="px-4 py-2">
-                  <span className={`badge ${STATUS_STYLES[job.status] || "bg-base-800"}`}>{job.status}</span>
+              <tr key={job.id} className="border-t border-white/[0.05] align-top">
+                <td className="px-4 py-3 capitalize text-gray-200">{job.job_type.replace(/_/g, " ")}</td>
+                <td className="px-4 py-3">
+                  <span className={`badge ${STATUS_STYLES[job.status] || "bg-white/5"}`}>{job.status}</span>
                 </td>
-                <td className="px-4 py-2">
-                  <div className="h-1.5 w-24 overflow-hidden rounded-full bg-base-800">
+                <td className="px-4 py-3">
+                  <div className="h-1.5 w-24 overflow-hidden rounded-full bg-white/5">
                     <div
-                      className="h-full bg-brand-500"
+                      className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500"
                       style={{ width: `${Math.round(job.progress * 100)}%` }}
                     />
                   </div>
                 </td>
-                <td className="px-4 py-2 text-gray-500">{job.attempts}</td>
-                <td className="max-w-xs truncate px-4 py-2 text-red-400">{job.error_message}</td>
-                <td className="space-x-2 px-4 py-2">
+                <td className="px-4 py-3 text-gray-500">{job.attempts}</td>
+                <td className="max-w-xs truncate px-4 py-3 text-red-400">{job.error_message}</td>
+                <td className="space-x-2 px-4 py-3">
                   {job.status === "running" && (
                     <button
                       disabled={busyId === job.id}
-                      className="btn-secondary px-2 py-1 text-xs"
+                      className="btn-secondary px-2.5 py-1 text-xs"
                       onClick={() => act(job.id, api.pauseJob)}
                     >
                       Pause
@@ -101,7 +97,7 @@ export default function QueuePage() {
                   {(job.status === "queued" || job.status === "running" || job.status === "paused") && (
                     <button
                       disabled={busyId === job.id}
-                      className="btn-danger px-2 py-1 text-xs"
+                      className="btn-danger px-2.5 py-1 text-xs"
                       onClick={() => act(job.id, api.cancelJob)}
                     >
                       Cancel
@@ -110,7 +106,7 @@ export default function QueuePage() {
                   {job.status === "failed" && (
                     <button
                       disabled={busyId === job.id}
-                      className="btn-primary px-2 py-1 text-xs"
+                      className="btn-primary px-2.5 py-1 text-xs"
                       onClick={() => act(job.id, api.retryJob)}
                     >
                       Retry
@@ -121,7 +117,7 @@ export default function QueuePage() {
             ))}
             {jobs.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                   Queue is empty.
                 </td>
               </tr>
