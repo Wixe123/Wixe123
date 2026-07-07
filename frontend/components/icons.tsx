@@ -173,3 +173,50 @@ export const IconLogOut = (p: IconProps) =>
     </>,
     p
   );
+
+export const IconTrendingUp = (p: IconProps) =>
+  base(
+    <>
+      <path d="m3 17 6-6 4 4 8-8" />
+      <path d="M15 6h6v6" />
+    </>,
+    p
+  );
+
+export const IconEye = (p: IconProps) =>
+  base(
+    <>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </>,
+    p
+  );
+
+export const IconClock = (p: IconProps) =>
+  base(
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3.5 2" />
+    </>,
+    p
+  );
+
+export const IconHeart = (p: IconProps) =>
+  base(
+    <path d="M12 20.5s-7-4.35-9.5-8.7C.8 8.6 2.2 5 5.6 5c1.9 0 3.3 1 4.4 2.6C11.1 6 12.5 5 14.4 5c3.4 0 4.8 3.6 3.1 6.8C19.5 15.65 12 20.5 12 20.5Z" />,
+    p
+  );
+
+export const IconMessageCircle = (p: IconProps) =>
+  base(<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.35 0-2.6-.32-3.7-.9L3 20l1.05-4.2A8.5 8.5 0 1 1 21 11.5Z" />, p);
+
+export const IconUsers = (p: IconProps) =>
+  base(
+    <>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" />
+      <path d="M16 4.2c1.6.4 2.8 1.9 2.8 3.6 0 1.7-1.2 3.2-2.8 3.6" />
+      <path d="M21.5 20c0-3-2-5.2-4.8-5.8" />
+    </>,
+    p
+  );

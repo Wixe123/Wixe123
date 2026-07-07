@@ -5,10 +5,16 @@ import type { ComponentType, SVGProps } from "react";
 
 type Tone = "default" | "danger" | "success";
 
-const TONE_STYLES: Record<Tone, { value: string; chipBg: string; chipFg: string }> = {
-  default: { value: "text-gray-50", chipBg: "bg-brand-500/15", chipFg: "text-brand-400" },
-  danger: { value: "text-red-400", chipBg: "bg-red-500/15", chipFg: "text-red-400" },
-  success: { value: "text-emerald-400", chipBg: "bg-emerald-500/15", chipFg: "text-emerald-400" },
+const TONE_VALUE: Record<Tone, string> = {
+  default: "text-gray-50",
+  danger: "text-red-400/90",
+  success: "text-emerald-400/90",
+};
+
+const TONE_ICON: Record<Tone, string> = {
+  default: "text-gray-600",
+  danger: "text-red-400/70",
+  success: "text-emerald-400/70",
 };
 
 export default function StatCard({
@@ -22,22 +28,18 @@ export default function StatCard({
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   tone?: Tone;
 }) {
-  const styles = TONE_STYLES[tone];
-
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="card p-5"
+      className="card px-5 py-4"
     >
       <div className="flex items-center justify-between">
-        <span className="text-sm text-gray-400">{label}</span>
-        <span className={`icon-chip ${styles.chipBg} ${styles.chipFg}`}>
-          <Icon className="h-[18px] w-[18px]" />
-        </span>
+        <span className="text-[11px] font-medium uppercase tracking-wider2 text-gray-500">{label}</span>
+        <Icon className={`h-4 w-4 ${TONE_ICON[tone]}`} strokeWidth={1.3} />
       </div>
-      <p className={`mt-3 text-3xl font-semibold tracking-tight ${styles.value}`}>{value}</p>
+      <p className={`mt-3 text-3xl font-extralight tracking-tight ${TONE_VALUE[tone]}`}>{value}</p>
     </motion.div>
   );
 }

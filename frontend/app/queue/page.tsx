@@ -43,7 +43,7 @@ export default function QueuePage() {
   return (
     <AppShell>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Processing queue</h1>
+        <h1 className="text-3xl font-extralight tracking-tight">Processing queue</h1>
         <select className="input sm:w-48" value={filter} onChange={(e) => setFilter(e.target.value)}>
           <option value="">All statuses</option>
           <option value="queued">Queued</option>
@@ -77,7 +77,7 @@ export default function QueuePage() {
                 <td className="px-4 py-3">
                   <div className="h-1.5 w-24 overflow-hidden rounded-full bg-white/5">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500"
+                      className="h-full rounded-full bg-brand-400"
                       style={{ width: `${Math.round(job.progress * 100)}%` }}
                     />
                   </div>

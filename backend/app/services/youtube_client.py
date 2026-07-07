@@ -13,7 +13,8 @@ settings = get_settings()
 LOGIN_SCOPES = ["openid", "https://www.googleapis.com/auth/userinfo.email",
                 "https://www.googleapis.com/auth/userinfo.profile"]
 YOUTUBE_SCOPES = ["https://www.googleapis.com/auth/youtube.upload",
-                  "https://www.googleapis.com/auth/youtube.readonly"]
+                  "https://www.googleapis.com/auth/youtube.readonly",
+                  "https://www.googleapis.com/auth/yt-analytics.readonly"]
 
 CLIENT_CONFIG_TEMPLATE = {
     "web": {

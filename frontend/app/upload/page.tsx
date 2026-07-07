@@ -63,7 +63,7 @@ export default function UploadPage() {
 
   return (
     <AppShell>
-      <h1 className="mb-6 text-2xl font-semibold tracking-tight">Upload</h1>
+      <h1 className="mb-6 text-3xl font-extralight tracking-tight">Upload</h1>
 
       <UploadDropzone onFiles={handleFiles} busy={busy} />
 
@@ -87,7 +87,7 @@ export default function UploadPage() {
 
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
 
-      <h2 className="mb-3 mt-10 text-lg font-semibold tracking-tight">Your videos</h2>
+      <span className="eyebrow mb-5 mt-12 block">Your videos</span>
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[560px] text-left text-sm">
           <thead className="text-xs uppercase tracking-wide text-gray-500">

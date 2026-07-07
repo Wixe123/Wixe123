@@ -11,6 +11,7 @@ import {
   IconPalette,
   IconQueue,
   IconSettings,
+  IconTrendingUp,
   IconUpload,
 } from "@/components/icons";
 import type { User } from "@/lib/types";
@@ -19,15 +20,16 @@ const NAV_ITEMS = [
   { href: "/", label: "Dashboard", Icon: IconDashboard },
   { href: "/upload", label: "Upload", Icon: IconUpload },
   { href: "/queue", label: "Queue", Icon: IconQueue },
+  { href: "/analytics", label: "Analytics", Icon: IconTrendingUp },
   { href: "/branding", label: "Branding", Icon: IconPalette },
   { href: "/settings", label: "Settings", Icon: IconSettings },
 ];
 
-function Logo({ size = 32 }: { size?: number }) {
+function Logo({ size = 30 }: { size?: number }) {
   return (
     <div
-      className="flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 via-brand-500 to-accent-500 font-bold text-white shadow-[0_1px_0_0_rgba(255,255,255,0.35)_inset,0_6px_16px_-6px_rgba(124,58,237,0.7)]"
-      style={{ width: size, height: size, fontSize: size * 0.4 }}
+      className="flex shrink-0 items-center justify-center rounded-md border border-brand-400/30 bg-brand-400/[0.06] font-light tracking-wide text-brand-300"
+      style={{ width: size, height: size, fontSize: size * 0.36 }}
     >
       SF
     </div>
@@ -57,9 +59,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center gap-3 text-gray-400">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
-        Loading ShortsForge…
+      <div className="flex h-screen items-center justify-center gap-3 text-gray-500">
+        <div className="h-3.5 w-3.5 animate-spin rounded-full border border-brand-400 border-t-transparent" />
+        <span className="text-sm font-light tracking-wide">Loading ShortsForge…</span>
       </div>
     );
   }
@@ -72,10 +74,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       {/* Mobile top bar */}
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/[0.06] bg-base-950/80 px-4 py-3 backdrop-blur-md md:hidden">
-        <div className="flex items-center gap-2">
-          <Logo size={28} />
-          <span className="font-semibold tracking-tight">ShortsForge</span>
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/[0.06] bg-base-950/85 px-4 py-3 backdrop-blur-md md:hidden">
+        <div className="flex items-center gap-2.5">
+          <Logo size={26} />
+          <span className="text-[15px] font-light tracking-wide text-gray-100">ShortsForge</span>
         </div>
         {user && (
           <button onClick={signOut} className="flex items-center gap-2">
@@ -83,7 +85,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={user.avatar_url} alt="" className="h-7 w-7 rounded-full ring-1 ring-white/10" />
             ) : (
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-base-800 text-xs font-medium text-gray-300 ring-1 ring-white/10">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-base-800 text-xs font-light text-gray-300 ring-1 ring-white/10">
                 {(user.name || user.email || "?").slice(0, 1).toUpperCase()}
               </div>
             )}
@@ -92,12 +94,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-white/[0.06] bg-base-950/60 p-4 md:flex">
-        <div className="mb-8 flex items-center gap-2.5 px-2 pt-1">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-white/[0.06] bg-base-950/50 px-5 py-6 md:flex">
+        <div className="mb-10 flex items-center gap-3">
           <Logo />
-          <span className="text-lg font-semibold tracking-tight">ShortsForge</span>
+          <span className="text-[15px] font-light tracking-wide text-gray-100">ShortsForge</span>
         </div>
-        <nav className="flex flex-1 flex-col gap-1">
+        <nav className="flex flex-1 flex-col gap-0.5">
           {NAV_ITEMS.map((item) => {
             const active = pathname === item.href;
             return (
@@ -105,16 +107,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 {active && (
                   <motion.div
                     layoutId="nav-active-desktop"
-                    className="absolute inset-0 rounded-lg bg-gradient-to-r from-brand-500/20 to-accent-500/5 ring-1 ring-inset ring-brand-500/30"
+                    className="absolute inset-y-0 left-0 w-px bg-brand-400"
                     transition={{ type: "spring", stiffness: 500, damping: 40 }}
                   />
                 )}
                 <span
-                  className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                    active ? "text-white" : "text-gray-400 hover:text-gray-100"
+                  className={`relative flex items-center gap-3 py-2.5 pl-4 text-[13px] font-normal tracking-wide transition-colors ${
+                    active ? "text-brand-300" : "text-gray-500 hover:text-gray-200"
                   }`}
                 >
-                  <item.Icon className={`h-[18px] w-[18px] ${active ? "text-brand-400" : ""}`} />
+                  <item.Icon className="h-[17px] w-[17px]" strokeWidth={1.4} />
                   {item.label}
                 </span>
               </Link>
@@ -122,20 +124,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         {user && (
-          <div className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+          <div className="flex items-center gap-3 border-t border-white/[0.06] pt-4">
             {user.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.avatar_url} alt="" className="h-9 w-9 rounded-full ring-1 ring-white/10" />
+              <img src={user.avatar_url} alt="" className="h-8 w-8 rounded-full ring-1 ring-white/10" />
             ) : (
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-base-800 text-sm font-medium text-gray-300 ring-1 ring-white/10">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-base-800 text-xs font-light text-gray-300 ring-1 ring-white/10">
                 {(user.name || user.email || "?").slice(0, 1).toUpperCase()}
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-gray-100">{user.name || user.email}</p>
+              <p className="truncate text-[13px] font-normal text-gray-200">{user.name || user.email}</p>
               <button
                 onClick={signOut}
-                className="flex items-center gap-1 text-xs text-gray-500 transition hover:text-gray-300"
+                className="flex items-center gap-1 text-[11px] text-gray-500 transition hover:text-gray-300"
               >
                 <IconLogOut className="h-3 w-3" />
                 Sign out
@@ -145,13 +147,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         )}
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-4 pb-24 md:p-8 md:pb-8">
+      <main className="flex-1 overflow-y-auto p-5 pb-24 md:p-12 md:pb-12">
         <AnimatePresence mode="wait">
           <motion.div
             key={pathname}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            className="mx-auto max-w-5xl"
           >
             {children}
           </motion.div>
@@ -170,12 +173,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               {active && (
                 <motion.div
                   layoutId="nav-active-mobile"
-                  className="absolute top-1 h-0.5 w-8 rounded-full bg-brand-400"
+                  className="absolute top-0 h-px w-8 bg-brand-400"
                   transition={{ type: "spring", stiffness: 500, damping: 40 }}
                 />
               )}
-              <item.Icon className={`h-5 w-5 ${active ? "text-brand-400" : "text-gray-500"}`} />
-              <span className={`text-[10px] font-medium ${active ? "text-brand-400" : "text-gray-500"}`}>
+              <item.Icon className={`h-5 w-5 ${active ? "text-brand-300" : "text-gray-500"}`} strokeWidth={1.4} />
+              <span className={`text-[10px] font-normal ${active ? "text-brand-300" : "text-gray-500"}`}>
                 {item.label}
               </span>
             </Link>

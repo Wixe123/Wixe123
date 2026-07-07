@@ -79,6 +79,36 @@ class JobOut(BaseModel):
     updated_at: datetime
 
 
+class AnalyticsOverview(BaseModel):
+    period_days: int
+    start: str
+    end: str
+    views: int
+    watch_time_minutes: float
+    average_view_duration_seconds: float
+    likes: int
+    comments: int
+    shares: int
+    subscribers_gained: int
+    views_delta_pct: float | None
+    watch_time_delta_pct: float | None
+    subscribers_delta_pct: float | None
+
+
+class ClipPerformance(BaseModel):
+    clip_id: str
+    youtube_video_id: str
+    title: str
+    views: int
+    watch_time_minutes: float
+    average_view_duration_seconds: float
+    average_view_percentage: float
+    likes: int
+    comments: int
+    score: float
+    score_reasons: list[str]
+
+
 class DashboardStats(BaseModel):
     videos_today: int
     shorts_created_today: int

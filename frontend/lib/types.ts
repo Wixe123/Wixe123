@@ -70,6 +70,36 @@ export interface ProcessingJob {
   updated_at: string;
 }
 
+export interface AnalyticsOverview {
+  period_days: number;
+  start: string;
+  end: string;
+  views: number;
+  watch_time_minutes: number;
+  average_view_duration_seconds: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  subscribers_gained: number;
+  views_delta_pct: number | null;
+  watch_time_delta_pct: number | null;
+  subscribers_delta_pct: number | null;
+}
+
+export interface ClipPerformance {
+  clip_id: string;
+  youtube_video_id: string;
+  title: string;
+  views: number;
+  watch_time_minutes: number;
+  average_view_duration_seconds: number;
+  average_view_percentage: number;
+  likes: number;
+  comments: number;
+  score: number;
+  score_reasons: string[];
+}
+
 export interface DashboardStats {
   videos_today: number;
   shorts_created_today: number;

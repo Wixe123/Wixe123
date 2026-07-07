@@ -3,13 +3,12 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { api } from "@/lib/api";
-import { IconPalette, IconScissors, IconSparkles, IconUploadCloud } from "@/components/icons";
 
 const FEATURES = [
-  { Icon: IconScissors, text: "AI finds the hooks, funny moments, and highlights automatically" },
-  { Icon: IconSparkles, text: "Word-by-word animated captions, burned in and ready to post" },
-  { Icon: IconPalette, text: "Your fonts, colors, logo, and watermark on every clip" },
-  { Icon: IconUploadCloud, text: "One-tap upload straight to your own YouTube channel" },
+  "AI finds the hooks, funny moments, and highlights automatically",
+  "Word-by-word animated captions, burned in and ready to post",
+  "Your fonts, colors, logo, and watermark on every clip",
+  "One-tap upload straight to your own YouTube channel",
 ];
 
 export default function LoginPage() {
@@ -29,66 +28,58 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-16">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-6 py-20">
       <div
         className="pointer-events-none absolute inset-0 -z-10"
         style={{
           background:
-            "radial-gradient(38rem 24rem at 20% 10%, rgba(124,58,237,0.28), transparent 60%), radial-gradient(32rem 22rem at 85% 15%, rgba(34,211,238,0.16), transparent 55%), radial-gradient(40rem 30rem at 50% 100%, rgba(124,58,237,0.14), transparent 60%)",
+            "radial-gradient(46rem 30rem at 50% -8%, rgba(204,166,96,0.14), transparent 62%), radial-gradient(30rem 24rem at 100% 100%, rgba(255,255,255,0.03), transparent 55%)",
         }}
       />
 
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
+        initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: "easeOut" }}
-        className="w-full max-w-sm"
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="w-full max-w-md text-center"
       >
-        <div className="mb-8 flex flex-col items-center text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-400 via-brand-500 to-accent-500 text-xl font-bold text-white shadow-[0_1px_0_0_rgba(255,255,255,0.35)_inset,0_10px_30px_-8px_rgba(124,58,237,0.7)]">
-            SF
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight">ShortsForge</h1>
-          <p className="mt-2 text-sm text-gray-400">
-            Turn long-form video into YouTube Shorts, automatically.
-          </p>
+        <p className="eyebrow mb-5">Personal AI shorts studio</p>
+        <h1 className="mb-4 text-5xl font-extralight tracking-tight text-gray-50">ShortsForge</h1>
+        <p className="mx-auto mb-14 max-w-xs text-[15px] font-light leading-relaxed text-gray-400">
+          Turn long-form video into YouTube Shorts, automatically.
+        </p>
+
+        <div className="mb-10 space-y-5 border-y border-white/[0.07] py-9 text-left">
+          {FEATURES.map((text, i) => (
+            <div key={text} className="flex items-start gap-4">
+              <span className="mt-[7px] font-mono text-[11px] text-brand-400">{String(i + 1).padStart(2, "0")}</span>
+              <span className="text-[13px] font-light leading-relaxed text-gray-300">{text}</span>
+            </div>
+          ))}
         </div>
 
-        <div className="card p-6">
-          <ul className="mb-6 space-y-3.5">
-            {FEATURES.map(({ Icon, text }) => (
-              <li key={text} className="flex items-start gap-3 text-sm text-gray-300">
-                <span className="icon-chip mt-0.5 bg-brand-500/15 text-brand-400">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <span className="pt-1.5 leading-snug">{text}</span>
-              </li>
-            ))}
-          </ul>
+        <button onClick={handleLogin} disabled={loading} className="btn-primary w-full py-3">
+          {loading ? (
+            <>
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border border-ink/40 border-t-ink" />
+              Redirecting…
+            </>
+          ) : (
+            <>
+              <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81Z"
+                />
+              </svg>
+              Sign in with Google
+            </>
+          )}
+        </button>
+        {error && <p className="mt-3 text-center text-xs text-red-400">{error}</p>}
 
-          <button onClick={handleLogin} disabled={loading} className="btn-primary w-full py-2.5">
-            {loading ? (
-              <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                Redirecting…
-              </>
-            ) : (
-              <>
-                <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
-                  <path
-                    fill="currentColor"
-                    d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81Z"
-                  />
-                </svg>
-                Sign in with Google
-              </>
-            )}
-          </button>
-          {error && <p className="mt-3 text-center text-xs text-red-400">{error}</p>}
-        </div>
-
-        <p className="mt-6 text-center text-xs text-gray-600">
-          Personal use only — your videos, your channel, your data.
+        <p className="mt-8 text-[11px] font-light uppercase tracking-wider2 text-gray-600">
+          Personal use only — your videos, your channel, your data
         </p>
       </motion.div>
     </div>

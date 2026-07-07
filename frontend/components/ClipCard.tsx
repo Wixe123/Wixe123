@@ -6,11 +6,11 @@ import { IconExternalLink, IconSparkles } from "@/components/icons";
 import type { Clip } from "@/lib/types";
 
 const STATUS_STYLES: Record<string, string> = {
-  pending_render: "bg-white/5 text-gray-300",
+  pending_render: "bg-white/10 text-gray-300",
   rendering: "bg-amber-500/15 text-amber-300",
-  ready_for_review: "bg-sky-500/15 text-sky-300",
-  approved: "bg-violet-500/15 text-violet-300",
-  scheduled: "bg-violet-500/15 text-violet-300",
+  ready_for_review: "bg-white/15 text-gray-50",
+  approved: "bg-brand-400/15 text-brand-300",
+  scheduled: "bg-brand-400/15 text-brand-300",
   uploading: "bg-amber-500/15 text-amber-300",
   uploaded: "bg-emerald-500/15 text-emerald-300",
   failed: "bg-red-500/15 text-red-300",

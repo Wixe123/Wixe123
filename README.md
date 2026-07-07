@@ -29,6 +29,7 @@ Concretely:
 | Queue (parallel jobs, retry/pause/resume/cancel) | Implemented via Celery + Redis |
 | Scheduling + visibility (public/unlisted/private/draft) | Implemented |
 | YouTube upload (OAuth, metadata, thumbnail, playlist) | Implemented via `google-api-python-client`, requires your own OAuth client credentials |
+| Live YouTube Analytics (views, watch time, subscribers, likes, per-clip performance) | Implemented via the YouTube Analytics API (`yt-analytics.readonly` scope) — see the Analytics page. Channels connected before this feature was added need to hit "Reconnect" in Settings once to grant the new permission. |
 | Dashboard (today's stats, queue, storage/API usage) | Implemented |
 | Mobile / iPhone use | Implemented as a responsive web app — collapsible sidebar becomes a bottom tab bar on small screens, tables scroll horizontally, and it's installable to the iOS home screen ("Add to Home Screen" in Safari) via `manifest.json` + Apple touch icons for an app-like feel. This is Safari-based, not a native Swift app. |
 | GPU acceleration / 50 videos-per-day throughput | **Not provisioned here.** The pipeline is GPU-ready (`faster-whisper` and ffmpeg both use CUDA when available) — running it at that volume is a matter of running more Celery workers on GPU-backed machines, which is an infra/ops decision for your own cloud account, not something a repo can pre-package.

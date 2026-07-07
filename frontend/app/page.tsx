@@ -71,7 +71,7 @@ export default function DashboardPage() {
     <AppShell>
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <h1 className="text-3xl font-extralight tracking-tight">Dashboard</h1>
           <p className="mt-1 text-sm text-gray-400">Today&apos;s activity across your Shorts pipeline.</p>
         </div>
         <Link href="/upload" className="btn-primary self-start sm:self-auto">
@@ -103,9 +103,9 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold tracking-tight">Needs your review</h2>
-        <Link href="/queue" className="text-sm font-medium text-brand-400 transition hover:text-brand-300">
+      <div className="mb-5 flex items-center justify-between">
+        <span className="eyebrow">Needs your review</span>
+        <Link href="/queue" className="text-xs font-medium text-brand-400 transition hover:text-brand-300">
           View full queue →
         </Link>
       </div>
@@ -119,7 +119,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <h2 className="mb-4 text-lg font-semibold tracking-tight">Recent jobs</h2>
+      <span className="eyebrow mb-5 block">Recent jobs</span>
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[560px] text-left text-sm">
           <thead className="text-xs uppercase tracking-wide text-gray-500">
@@ -144,7 +144,7 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/5">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500"
+                        className="h-full rounded-full bg-brand-400"
                         style={{ width: `${Math.round(job.progress * 100)}%` }}
                       />
                     </div>

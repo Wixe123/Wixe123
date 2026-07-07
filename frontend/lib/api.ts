@@ -1,6 +1,8 @@
 import type {
+  AnalyticsOverview,
   BrandingPreset,
   Clip,
+  ClipPerformance,
   DashboardStats,
   ProcessingJob,
   User,
@@ -88,6 +90,9 @@ export const api = {
   retryJob: (id: string) => request<ProcessingJob>(`/api/jobs/${id}/retry`, { method: "POST" }),
 
   dashboardStats: () => request<DashboardStats>("/api/dashboard/stats"),
+
+  analyticsOverview: (days = 28) => request<AnalyticsOverview>(`/api/analytics/overview?days=${days}`),
+  analyticsClips: (days = 28) => request<ClipPerformance[]>(`/api/analytics/clips?days=${days}`),
 
   listBrandingPresets: () => request<BrandingPreset[]>("/api/branding"),
   createBrandingPreset: (payload: Partial<BrandingPreset>) =>
