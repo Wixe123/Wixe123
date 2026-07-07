@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background-color: #08090d;
+  color: #f1f2f6;
+}
+
+* {
+  scrollbar-color: #2a2f45 transparent;
+}
+
+.card {
+  @apply rounded-xl2 border border-base-700 bg-base-900/80 backdrop-blur-sm;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-base-600 bg-base-800 px-4 py-2 text-sm font-medium text-gray-200 transition hover:bg-base-700;
+}
+
+.btn-danger {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-red-900 bg-red-950/60 px-4 py-2 text-sm font-medium text-red-300 transition hover:bg-red-900/60;
+}
+
+.input {
+  @apply w-full rounded-lg border border-base-600 bg-base-800 px-3 py-2 text-sm text-gray-100 outline-none focus:border-brand-500;
+}
+
+.badge {
+  @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+}
