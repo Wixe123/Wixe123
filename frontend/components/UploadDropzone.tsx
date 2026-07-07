@@ -38,7 +38,7 @@ export default function UploadDropzone({
         handleFiles(e.dataTransfer.files);
       }}
       onClick={() => inputRef.current?.click()}
-      className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl2 border-2 border-dashed p-12 text-center transition ${
+      className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl2 border-2 border-dashed p-8 text-center transition sm:p-12 ${
         dragging ? "border-brand-500 bg-brand-500/5" : "border-base-600 hover:border-base-500"
       }`}
     >

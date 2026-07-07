@@ -87,8 +87,8 @@ export default function DashboardPage() {
       )}
 
       <h2 className="mb-4 text-lg font-medium">Recent jobs</h2>
-      <div className="card overflow-hidden">
-        <table className="w-full text-left text-sm">
+      <div className="card overflow-x-auto">
+        <table className="w-full min-w-[560px] text-left text-sm">
           <thead className="bg-base-800 text-gray-400">
             <tr>
               <th className="px-4 py-2 font-medium">Type</th>

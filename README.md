@@ -30,6 +30,7 @@ Concretely:
 | Scheduling + visibility (public/unlisted/private/draft) | Implemented |
 | YouTube upload (OAuth, metadata, thumbnail, playlist) | Implemented via `google-api-python-client`, requires your own OAuth client credentials |
 | Dashboard (today's stats, queue, storage/API usage) | Implemented |
+| Mobile / iPhone use | Implemented as a responsive web app — collapsible sidebar becomes a bottom tab bar on small screens, tables scroll horizontally, and it's installable to the iOS home screen ("Add to Home Screen" in Safari) via `manifest.json` + Apple touch icons for an app-like feel. This is Safari-based, not a native Swift app. |
 | GPU acceleration / 50 videos-per-day throughput | **Not provisioned here.** The pipeline is GPU-ready (`faster-whisper` and ffmpeg both use CUDA when available) — running it at that volume is a matter of running more Celery workers on GPU-backed machines, which is an infra/ops decision for your own cloud account, not something a repo can pre-package.
 | Cloud deployment (Terraform/GCP/AWS) | Not included — `docker-compose.yml` covers local/single-VM deployment. Point it at a GPU box and it will use the GPU. |
 
@@ -71,6 +72,33 @@ docker compose up --build
 
 You are responsible for complying with the YouTube API Services Terms of
 Service and YouTube's Community Guidelines for anything this app uploads.
+
+## Using it from your iPhone
+
+The dashboard is responsive (bottom tab bar, scrollable tables, "Add to
+Home Screen" support), so the UI itself works fine in Safari. The catch
+is Google OAuth: Google only allows an `http://` redirect URI for
+`localhost` — any other address (like your computer's LAN IP) must be
+`https://`, or the Google/YouTube login step will fail. So `http://<your
+LAN IP>:3000` from your phone gets you the UI but not a working login.
+Two ways around that:
+
+1. **Tunnel (fastest, good for trying it out):** run something like
+   `cloudflared tunnel --url http://localhost:3000` (or `ngrok http 3000`,
+   plus one for port 8000) to get a temporary `https://...` URL. Set
+   `FRONTEND_URL`, `GOOGLE_REDIRECT_URI`, and `YOUTUBE_REDIRECT_URI` in
+   `.env` to the tunneled HTTPS URLs, add them as authorized redirect URIs
+   in Google Cloud Console, rebuild the frontend with
+   `NEXT_PUBLIC_API_URL` pointing at the tunneled backend URL, and open
+   the tunneled frontend URL on your iPhone.
+2. **Real deployment (durable):** put this on a small VPS behind a domain
+   with real TLS (e.g. Caddy for automatic Let's Encrypt certs), point
+   the same three env vars and the Google redirect URIs at that domain.
+   Then any device, iPhone included, just works like a normal website.
+
+Either way, uploading large source videos is still easiest from a
+computer — the iPhone view is most useful for the review/approve step
+once clips exist.
 
 ## Scaling beyond one box
 

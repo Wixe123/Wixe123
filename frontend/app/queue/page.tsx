@@ -42,10 +42,10 @@ export default function QueuePage() {
 
   return (
     <AppShell>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold">Processing queue</h1>
         <select
-          className="input w-48"
+          className="input sm:w-48"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         >
@@ -59,8 +59,8 @@ export default function QueuePage() {
         </select>
       </div>
 
-      <div className="card overflow-hidden">
-        <table className="w-full text-left text-sm">
+      <div className="card overflow-x-auto">
+        <table className="w-full min-w-[640px] text-left text-sm">
           <thead className="bg-base-800 text-gray-400">
             <tr>
               <th className="px-4 py-2 font-medium">Type</th>
