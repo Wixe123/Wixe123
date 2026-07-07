@@ -18,12 +18,22 @@ export default function QueuePage() {
   const [jobs, setJobs] = useState<ProcessingJob[]>([]);
   const [filter, setFilter] = useState<string>("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   async function load() {
-    setJobs(await api.listJobs(filter || undefined));
+    try {
+      setJobs(await api.listJobs(filter || undefined));
+      setError("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
+    setLoading(true);
     load();
     const interval = setInterval(load, 3000);
     return () => clearInterval(interval);
@@ -54,6 +64,8 @@ export default function QueuePage() {
           <option value="cancelled">Cancelled</option>
         </select>
       </div>
+
+      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
 
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[640px] text-left text-sm">
@@ -115,7 +127,14 @@ export default function QueuePage() {
                 </td>
               </tr>
             ))}
-            {jobs.length === 0 && (
+            {loading && jobs.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  Loading…
+                </td>
+              </tr>
+            )}
+            {!loading && jobs.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                   Queue is empty.

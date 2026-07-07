@@ -18,9 +18,18 @@ export default function BrandingPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [assets, setAssets] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   async function load() {
-    setPresets(await api.listBrandingPresets());
+    try {
+      setPresets(await api.listBrandingPresets());
+      setError("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -150,6 +159,8 @@ export default function BrandingPage() {
         </button>
       </section>
 
+      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {presets.map((preset) => (
           <div key={preset.id} className="card p-5">
@@ -173,7 +184,9 @@ export default function BrandingPage() {
             </button>
           </div>
         ))}
-        {presets.length === 0 && <p className="text-sm text-gray-500">No branding presets yet.</p>}
+        {presets.length === 0 && (
+          <p className="text-sm text-gray-500">{loading ? "Loading…" : "No branding presets yet."}</p>
+        )}
       </div>
     </AppShell>
   );

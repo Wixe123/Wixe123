@@ -1,5 +1,8 @@
 import logging
 import os
+import subprocess
+
+from googleapiclient.errors import HttpError
 
 from app.core.security import decrypt_secret
 from app.db.models import (
@@ -40,6 +43,22 @@ def _mark(db, job: ProcessingJob | None, status: JobStatus, progress: float | No
     db.commit()
 
 
+def _is_transient(exc: Exception) -> bool:
+    """Failures worth retrying: ffmpeg/ffprobe blips, dropped connections,
+    timeouts, and 5xx responses from Google's API. Everything else (bad
+    input, missing credentials, 4xx auth/quota errors) is permanent — retrying
+    it would just burn the same error again, so those fail the job immediately."""
+    if isinstance(exc, (subprocess.CalledProcessError, ConnectionError, TimeoutError, OSError)):
+        return True
+    if isinstance(exc, HttpError):
+        return exc.resp is not None and exc.resp.status >= 500
+    return False
+
+
+def _retry_backoff_seconds(retries: int) -> int:
+    return min(2**retries * 15, 300)
+
+
 @celery_app.task(bind=True, max_retries=2)
 def import_from_url_task(self, video_id: str, job_id: str | None = None):
     db = SessionLocal()
@@ -60,7 +79,9 @@ def import_from_url_task(self, video_id: str, job_id: str | None = None):
         _mark(db, job, JobStatus.SUCCESS, progress=1.0)
         analyze_video_task.delay(video_id)
     except Exception as exc:  # noqa: BLE001
-        logger.exception("import_from_url_task failed")
+        logger.exception("import_from_url_task failed (attempt %s)", self.request.retries)
+        if _is_transient(exc) and self.request.retries < self.max_retries:
+            raise self.retry(exc=exc, countdown=_retry_backoff_seconds(self.request.retries))
         video = db.get(Video, video_id)
         if video:
             video.status = VideoStatus.FAILED
@@ -142,7 +163,9 @@ def analyze_video_task(self, video_id: str, job_id: str | None = None):
         db.commit()
         _mark(db, job, JobStatus.SUCCESS, progress=1.0)
     except Exception as exc:  # noqa: BLE001
-        logger.exception("analyze_video_task failed")
+        logger.exception("analyze_video_task failed (attempt %s)", self.request.retries)
+        if _is_transient(exc) and self.request.retries < self.max_retries:
+            raise self.retry(exc=exc, countdown=_retry_backoff_seconds(self.request.retries))
         video = db.get(Video, video_id)
         if video:
             video.status = VideoStatus.FAILED
@@ -210,7 +233,9 @@ def render_clip_task(self, clip_id: str, job_id: str | None = None):
 
         _mark(db, job, JobStatus.SUCCESS, progress=1.0)
     except Exception as exc:  # noqa: BLE001
-        logger.exception("render_clip_task failed")
+        logger.exception("render_clip_task failed (attempt %s)", self.request.retries)
+        if _is_transient(exc) and self.request.retries < self.max_retries:
+            raise self.retry(exc=exc, countdown=_retry_backoff_seconds(self.request.retries))
         clip = db.get(Clip, clip_id)
         if clip:
             clip.status = ClipStatus.FAILED
@@ -260,7 +285,9 @@ def upload_clip_task(self, clip_id: str, job_id: str | None = None):
         db.commit()
         _mark(db, job, JobStatus.SUCCESS, progress=1.0)
     except Exception as exc:  # noqa: BLE001
-        logger.exception("upload_clip_task failed")
+        logger.exception("upload_clip_task failed (attempt %s)", self.request.retries)
+        if _is_transient(exc) and self.request.retries < self.max_retries:
+            raise self.retry(exc=exc, countdown=_retry_backoff_seconds(self.request.retries))
         clip = db.get(Clip, clip_id)
         if clip:
             clip.status = ClipStatus.FAILED

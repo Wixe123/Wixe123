@@ -45,6 +45,7 @@ export default function DashboardPage() {
   const [reviewClips, setReviewClips] = useState<Clip[]>([]);
   const [jobs, setJobs] = useState<ProcessingJob[]>([]);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   async function load() {
     try {
@@ -56,8 +57,11 @@ export default function DashboardPage() {
       setStats(s);
       setReviewClips(clips.slice(0, 6));
       setJobs(jobList.slice(0, 8));
+      setError("");
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -110,7 +114,9 @@ export default function DashboardPage() {
         </Link>
       </div>
       {reviewClips.length === 0 ? (
-        <p className="mb-10 text-sm text-gray-500">Nothing waiting for review right now.</p>
+        <p className="mb-10 text-sm text-gray-500">
+          {loading ? "Loading…" : "Nothing waiting for review right now."}
+        </p>
       ) : (
         <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {reviewClips.map((clip) => (
@@ -157,7 +163,7 @@ export default function DashboardPage() {
             {jobs.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
-                  No jobs yet — upload a video to get started.
+                  {loading ? "Loading…" : "No jobs yet — upload a video to get started."}
                 </td>
               </tr>
             )}

@@ -12,6 +12,7 @@ export default function ReviewPage() {
   const [video, setVideo] = useState<Video | null>(null);
   const [clips, setClips] = useState<Clip[]>([]);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   async function load() {
     try {
@@ -21,15 +22,20 @@ export default function ReviewPage() {
       ]);
       setVideo(v);
       setClips(c);
+      setError("");
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setLoading(false);
     }
   }
 
   useEffect(() => {
+    setLoading(true);
     load();
     const interval = setInterval(load, 4000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.videoId]);
 
   return (
@@ -47,7 +53,9 @@ export default function ReviewPage() {
 
       {clips.length === 0 ? (
         <p className="text-sm text-gray-500">
-          No clips yet. Once analysis finishes, AI-selected clips will appear here for review.
+          {loading
+            ? "Loading…"
+            : "No clips yet. Once analysis finishes, AI-selected clips will appear here for review."}
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

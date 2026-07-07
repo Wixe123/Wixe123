@@ -11,16 +11,22 @@ export default function SettingsPage() {
   const [youtube, setYoutube] = useState<{ connected: boolean; channel_title?: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
   async function load() {
-    const [s, p, y] = await Promise.all([
-      api.getSettings(),
-      api.listBrandingPresets(),
-      api.youtubeStatus(),
-    ]);
-    setSettings(s);
-    setPresets(p);
-    setYoutube(y);
+    try {
+      const [s, p, y] = await Promise.all([
+        api.getSettings(),
+        api.listBrandingPresets(),
+        api.youtubeStatus(),
+      ]);
+      setSettings(s);
+      setPresets(p);
+      setYoutube(y);
+      setLoadError("");
+    } catch (e) {
+      setLoadError((e as Error).message);
+    }
   }
 
   useEffect(() => {
@@ -49,7 +55,11 @@ export default function SettingsPage() {
   if (!settings) {
     return (
       <AppShell>
-        <p className="text-gray-500">Loading settings…</p>
+        {loadError ? (
+          <p className="text-sm text-red-400">{loadError}</p>
+        ) : (
+          <p className="text-gray-500">Loading settings…</p>
+        )}
       </AppShell>
     );
   }

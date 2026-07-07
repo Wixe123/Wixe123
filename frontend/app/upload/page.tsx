@@ -20,9 +20,18 @@ export default function UploadPage() {
   const [busy, setBusy] = useState(false);
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   async function load() {
-    setVideos(await api.listVideos());
+    try {
+      setVideos(await api.listVideos());
+      setLoadError("");
+    } catch (e) {
+      setLoadError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -88,6 +97,7 @@ export default function UploadPage() {
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
 
       <span className="eyebrow mb-5 mt-12 block">Your videos</span>
+      {loadError && <p className="mb-4 text-sm text-red-400">{loadError}</p>}
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[560px] text-left text-sm">
           <thead className="text-xs uppercase tracking-wide text-gray-500">
@@ -119,7 +129,14 @@ export default function UploadPage() {
                 </td>
               </tr>
             ))}
-            {videos.length === 0 && (
+            {loading && videos.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                  Loading…
+                </td>
+              </tr>
+            )}
+            {!loading && videos.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                   No videos yet.

@@ -21,3 +21,4 @@ numpy==1.26.4
 ffmpeg-python==0.2.0
 anthropic==0.34.2
 python-slugify==8.0.4
+pytest==8.3.3

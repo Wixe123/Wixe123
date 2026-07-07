@@ -70,7 +70,7 @@ def _claude_metadata(transcript_text: str, reasons: list[str]) -> dict | None:
             f"Transcript:\n{transcript_text[:4000]}"
         )
         response = client.messages.create(
-            model="claude-sonnet-4-5",
+            model="claude-sonnet-5",
             max_tokens=600,
             messages=[{"role": "user", "content": prompt}],
         )
