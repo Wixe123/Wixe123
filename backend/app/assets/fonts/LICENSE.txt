@@ -4,3 +4,11 @@ across any deployment, regardless of what fonts the host has installed.
 Copyright 2020 The Inter Project Authors (https://github.com/rsms/inter)
 Licensed under the SIL Open Font License, Version 1.1.
 Full license text: https://openfontlicense.org
+
+Playfair Display (Bold) — bundled as the default caption font for the
+word-by-word pop-in style.
+
+Copyright 2021 The Playfair Display Project Authors
+(https://github.com/clauseggers/Playfair-Display)
+Licensed under the SIL Open Font License, Version 1.1.
+Full license text: https://openfontlicense.org

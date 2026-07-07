@@ -200,9 +200,9 @@ class UserSettings(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), unique=True)
 
-    subtitle_font: Mapped[str] = mapped_column(String, default="Inter Medium")
+    subtitle_font: Mapped[str] = mapped_column(String, default="Playfair Display")
     subtitle_color: Mapped[str] = mapped_column(String, default="#FFFFFF")
-    subtitle_highlight_color: Mapped[str] = mapped_column(String, default="#CCA660")
+    subtitle_highlight_color: Mapped[str] = mapped_column(String, default="#FFFFFF")
     subtitle_stroke_color: Mapped[str] = mapped_column(String, default="#000000")
     subtitle_position: Mapped[str] = mapped_column(String, default="bottom")  # bottom|center|top
     subtitle_emoji_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -14,12 +14,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Bundle a real caption font instead of relying on whatever (if anything)
+# Bundle real caption fonts instead of relying on whatever (if anything)
 # happens to be installed on the host — python:3.11-slim ships with no
 # fonts at all, so without this the `subtitles` ffmpeg filter would have
 # nothing to substitute and captions could render blank.
-RUN mkdir -p /usr/share/fonts/truetype/inter \
-    && cp app/assets/fonts/*.ttf /usr/share/fonts/truetype/inter/ \
+RUN mkdir -p /usr/share/fonts/truetype/shortsforge \
+    && cp app/assets/fonts/*.ttf /usr/share/fonts/truetype/shortsforge/ \
     && fc-cache -f
 
 EXPOSE 8000

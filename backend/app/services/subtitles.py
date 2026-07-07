@@ -1,5 +1,10 @@
-"""Builds .ass subtitle files with word-by-word highlight animation from
-Whisper word timestamps, for ffmpeg to burn in via the `subtitles` filter."""
+"""Builds .ass subtitle files with word-by-word pop-in animation from
+Whisper word timestamps, for ffmpeg to burn in via the `subtitles` filter.
+
+Words appear one at a time as they're spoken, building up a short line of
+up to `max_words_per_line` words; once that cap is hit the next word starts
+a fresh line (the old words disappear rather than scrolling), so at most
+that many words are ever on screen at once."""
 import re
 
 EMOJI_MAP = {
@@ -55,21 +60,20 @@ def build_ass(
     style: dict,
     out_path: str,
 ) -> str:
-    # Inter is bundled into the Docker image (see Dockerfile) precisely so
-    # this doesn't depend on the host having any particular font — e.g.
-    # "Helvetica Neue" is an Apple system font that would never actually be
-    # present on a Linux server, so it's not a safe default even though it
-    # happens to resolve to *something* via fontconfig substitution.
-    font = style.get("font", "Inter Medium")
+    # Playfair Display is bundled into the Docker image (see Dockerfile) so
+    # this renders identically everywhere, regardless of what's on the host.
+    font = style.get("font", "Playfair Display")
     base_color = _hex_to_ass_color(style.get("color", "#FFFFFF"))
-    highlight_color = _hex_to_ass_color(style.get("highlight_color", "#CCA660"))
+    highlight_color = _hex_to_ass_color(style.get("highlight_color", style.get("color", "#FFFFFF")))
     stroke_color = _hex_to_ass_color(style.get("stroke_color", "#000000"))
     alignment = ALIGNMENT_BY_POSITION.get(style.get("position", "bottom"), 2)
     emoji_enabled = style.get("emoji_enabled", True)
-    font_size = style.get("font_size", 88)
-    # "bold" defaults to False for a clean/editorial caption look (thin
-    # weight, subtle outline) rather than the heavy MrBeast-style default.
-    bold_flag = -1 if style.get("bold", False) else 0
+    font_size = style.get("font_size", 84)
+    max_words_per_line = style.get("max_words_per_line", 4)
+    lowercase = style.get("lowercase", True)
+    # Only a Bold weight is bundled for Playfair Display, so default to it —
+    # unlike the Inter/"light" style, this look is meant to read as bold serif.
+    bold_flag = -1 if style.get("bold", True) else 0
     outline_width = style.get("outline_width", 2)
 
     clip_words = [
@@ -77,7 +81,13 @@ def build_ass(
         for w in words
         if w["start"] >= clip_start and w["end"] <= clip_end
     ]
-    lines = _group_words(clip_words)
+    lines = _group_words(clip_words, max_words_per_line)
+
+    # Flat, clip-relative time ordering across line boundaries so each
+    # word's caption can hold until the very next word appears (no gaps
+    # or flicker between the last word of one line and the first of the
+    # next).
+    flat_words = [w for line in lines for w in line]
 
     header = f"""[Script Info]
 ScriptType: v4.00+
@@ -94,20 +104,28 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
     events = []
+    word_index = 0
     for line in lines:
-        for active_idx, active_word in enumerate(line):
-            start_t = active_word["start"]
-            end_t = active_word["end"]
+        for reveal_idx in range(len(line)):
+            start_t = line[reveal_idx]["start"]
+            # Hold until the next word anywhere in the clip appears, so
+            # there's no blank flicker between words or between lines.
+            next_word = flat_words[word_index + 1] if word_index + 1 < len(flat_words) else None
+            end_t = next_word["start"] if next_word else line[reveal_idx]["end"] + 1.5
+            word_index += 1
             if end_t <= start_t:
                 continue
+
             parts = []
-            for idx, w in enumerate(line):
+            for idx, w in enumerate(line[: reveal_idx + 1]):
                 text = w["word"].strip()
+                if lowercase:
+                    text = text.lower()
                 if emoji_enabled:
                     emoji = _maybe_emoji(text)
                     if emoji:
                         text = f"{text}{emoji}"
-                color = highlight_color if idx == active_idx else base_color
+                color = highlight_color if idx == reveal_idx else base_color
                 parts.append(f"{{\\c{color}}}{text}")
             text_line = " ".join(parts)
             events.append(
