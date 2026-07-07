@@ -55,13 +55,17 @@ def build_ass(
     style: dict,
     out_path: str,
 ) -> str:
-    font = style.get("font", "Montserrat")
+    font = style.get("font", "Helvetica Neue")
     base_color = _hex_to_ass_color(style.get("color", "#FFFFFF"))
-    highlight_color = _hex_to_ass_color(style.get("highlight_color", "#22D3EE"))
+    highlight_color = _hex_to_ass_color(style.get("highlight_color", "#CCA660"))
     stroke_color = _hex_to_ass_color(style.get("stroke_color", "#000000"))
     alignment = ALIGNMENT_BY_POSITION.get(style.get("position", "bottom"), 2)
     emoji_enabled = style.get("emoji_enabled", True)
-    font_size = style.get("font_size", 72)
+    font_size = style.get("font_size", 68)
+    # "bold" defaults to False for a clean/editorial caption look (thin
+    # weight, subtle outline) rather than the heavy MrBeast-style default.
+    bold_flag = -1 if style.get("bold", False) else 0
+    outline_width = style.get("outline_width", 2)
 
     clip_words = [
         {**w, "start": w["start"] - clip_start, "end": w["end"] - clip_start}
@@ -78,7 +82,7 @@ WrapStyle: 2
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{font},{font_size},{base_color},{base_color},{stroke_color},&H00000000,-1,0,0,0,100,100,0,0,1,4,1,{alignment},60,60,120,1
+Style: Default,{font},{font_size},{base_color},{base_color},{stroke_color},&H00000000,{bold_flag},0,0,0,100,100,0,0,1,{outline_width},1,{alignment},60,60,120,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

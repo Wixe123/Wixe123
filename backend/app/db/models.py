@@ -186,8 +186,8 @@ class BrandingPreset(Base):
     intro_path: Mapped[str] = mapped_column(String, default="")
     outro_path: Mapped[str] = mapped_column(String, default="")
     font_family: Mapped[str] = mapped_column(String, default="Inter")
-    primary_color: Mapped[str] = mapped_column(String, default="#7C3AED")
-    accent_color: Mapped[str] = mapped_column(String, default="#22D3EE")
+    primary_color: Mapped[str] = mapped_column(String, default="#CCA660")
+    accent_color: Mapped[str] = mapped_column(String, default="#F2F1EE")
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -200,9 +200,9 @@ class UserSettings(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), unique=True)
 
-    subtitle_font: Mapped[str] = mapped_column(String, default="Montserrat")
+    subtitle_font: Mapped[str] = mapped_column(String, default="Helvetica Neue")
     subtitle_color: Mapped[str] = mapped_column(String, default="#FFFFFF")
-    subtitle_highlight_color: Mapped[str] = mapped_column(String, default="#22D3EE")
+    subtitle_highlight_color: Mapped[str] = mapped_column(String, default="#CCA660")
     subtitle_stroke_color: Mapped[str] = mapped_column(String, default="#000000")
     subtitle_position: Mapped[str] = mapped_column(String, default="bottom")  # bottom|center|top
     subtitle_emoji_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
