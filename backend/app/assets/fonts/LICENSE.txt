@@ -1,0 +1,6 @@
+Inter (Regular, Medium, Bold) — bundled for burning captions consistently
+across any deployment, regardless of what fonts the host has installed.
+
+Copyright 2020 The Inter Project Authors (https://github.com/rsms/inter)
+Licensed under the SIL Open Font License, Version 1.1.
+Full license text: https://openfontlicense.org

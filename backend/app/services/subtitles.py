@@ -55,13 +55,18 @@ def build_ass(
     style: dict,
     out_path: str,
 ) -> str:
-    font = style.get("font", "Helvetica Neue")
+    # Inter is bundled into the Docker image (see Dockerfile) precisely so
+    # this doesn't depend on the host having any particular font — e.g.
+    # "Helvetica Neue" is an Apple system font that would never actually be
+    # present on a Linux server, so it's not a safe default even though it
+    # happens to resolve to *something* via fontconfig substitution.
+    font = style.get("font", "Inter Medium")
     base_color = _hex_to_ass_color(style.get("color", "#FFFFFF"))
     highlight_color = _hex_to_ass_color(style.get("highlight_color", "#CCA660"))
     stroke_color = _hex_to_ass_color(style.get("stroke_color", "#000000"))
     alignment = ALIGNMENT_BY_POSITION.get(style.get("position", "bottom"), 2)
     emoji_enabled = style.get("emoji_enabled", True)
-    font_size = style.get("font_size", 68)
+    font_size = style.get("font_size", 88)
     # "bold" defaults to False for a clean/editorial caption look (thin
     # weight, subtle outline) rather than the heavy MrBeast-style default.
     bold_flag = -1 if style.get("bold", False) else 0

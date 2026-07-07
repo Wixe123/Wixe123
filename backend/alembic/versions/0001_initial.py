@@ -84,7 +84,7 @@ def upgrade() -> None:
         "user_settings",
         sa.Column("id", sa.String(), primary_key=True),
         sa.Column("user_id", sa.String(), sa.ForeignKey("users.id"), unique=True, nullable=False),
-        sa.Column("subtitle_font", sa.String(), server_default="Helvetica Neue"),
+        sa.Column("subtitle_font", sa.String(), server_default="Inter Medium"),
         sa.Column("subtitle_color", sa.String(), server_default="#FFFFFF"),
         sa.Column("subtitle_highlight_color", sa.String(), server_default="#F2F1EE"),
         sa.Column("subtitle_stroke_color", sa.String(), server_default="#000000"),
