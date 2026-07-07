@@ -22,6 +22,14 @@ def _uuid() -> str:
     return str(uuid.uuid4())
 
 
+def _enum_column(enum_cls):
+    """sa.Enum(SomePyEnum) persists the member *name* (e.g. "PRIVATE") by
+    default, not its .value ("private") — but the Postgres enum type
+    created by the Alembic migration only has the lowercase values.
+    values_callable makes SQLAlchemy store/compare by .value instead."""
+    return Enum(enum_cls, values_callable=lambda obj: [e.value for e in obj])
+
+
 class VideoStatus(str, enum.Enum):
     UPLOADED = "uploaded"
     TRANSCRIBING = "transcribing"
@@ -105,7 +113,7 @@ class Video(Base):
     file_path: Mapped[str] = mapped_column(String, default="")
     duration_seconds: Mapped[float] = mapped_column(Float, default=0)
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
-    status: Mapped[VideoStatus] = mapped_column(Enum(VideoStatus), default=VideoStatus.UPLOADED)
+    status: Mapped[VideoStatus] = mapped_column(_enum_column(VideoStatus), default=VideoStatus.UPLOADED)
     error_message: Mapped[str] = mapped_column(Text, default="")
     transcript: Mapped[dict] = mapped_column(JSON, default=dict)  # {segments:[...], words:[...]}
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -124,7 +132,7 @@ class Clip(Base):
     end_seconds: Mapped[float] = mapped_column(Float)
     score: Mapped[float] = mapped_column(Float, default=0)
     score_reasons: Mapped[list] = mapped_column(JSON, default=list)
-    status: Mapped[ClipStatus] = mapped_column(Enum(ClipStatus), default=ClipStatus.PENDING_RENDER)
+    status: Mapped[ClipStatus] = mapped_column(_enum_column(ClipStatus), default=ClipStatus.PENDING_RENDER)
     file_path: Mapped[str] = mapped_column(String, default="")
     thumbnail_path: Mapped[str] = mapped_column(String, default="")
 
@@ -134,7 +142,7 @@ class Clip(Base):
     keywords: Mapped[list] = mapped_column(JSON, default=list)
     seo_score: Mapped[float] = mapped_column(Float, default=0)
 
-    visibility: Mapped[Visibility] = mapped_column(Enum(Visibility), default=Visibility.PRIVATE)
+    visibility: Mapped[Visibility] = mapped_column(_enum_column(Visibility), default=Visibility.PRIVATE)
     playlist_id: Mapped[str] = mapped_column(String, default="")
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -155,8 +163,8 @@ class ProcessingJob(Base):
     __tablename__ = "processing_jobs"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    job_type: Mapped[JobType] = mapped_column(Enum(JobType))
-    status: Mapped[JobStatus] = mapped_column(Enum(JobStatus), default=JobStatus.QUEUED)
+    job_type: Mapped[JobType] = mapped_column(_enum_column(JobType))
+    status: Mapped[JobStatus] = mapped_column(_enum_column(JobStatus), default=JobStatus.QUEUED)
     video_id: Mapped[str | None] = mapped_column(ForeignKey("videos.id"), nullable=True)
     clip_id: Mapped[str | None] = mapped_column(ForeignKey("clips.id"), nullable=True)
     celery_task_id: Mapped[str] = mapped_column(String, default="")
@@ -206,7 +214,7 @@ class UserSettings(Base):
     max_clips_per_video: Mapped[int] = mapped_column(Integer, default=6)
     ai_sensitivity: Mapped[float] = mapped_column(Float, default=0.5)  # 0..1, lower = more clips
 
-    default_visibility: Mapped[Visibility] = mapped_column(Enum(Visibility), default=Visibility.PRIVATE)
+    default_visibility: Mapped[Visibility] = mapped_column(_enum_column(Visibility), default=Visibility.PRIVATE)
     auto_upload_after_approval: Mapped[bool] = mapped_column(Boolean, default=False)
     default_branding_preset_id: Mapped[str | None] = mapped_column(ForeignKey("branding_presets.id"), nullable=True)
 

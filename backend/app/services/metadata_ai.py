@@ -33,7 +33,10 @@ def _template_metadata(transcript_text: str, reasons: list[str]) -> dict:
     title = (snippet or "Watch this clip").rstrip(",") + " #shorts"
     title = title[:95]
 
-    hashtags = [f"#{k}" for k in keywords[:5]] + ["#shorts"]
+    # Hashtags can't contain apostrophes etc. (breaks on most platforms) even
+    # though keywords/tags keep contractions like "here's" intact.
+    hashtags = [f"#{re.sub(r'[^a-z0-9]', '', k)}" for k in keywords[:5]] + ["#shorts"]
+    hashtags = [h for h in hashtags if len(h) > 1]
     description = (
         f"{snippet}...\n\n"
         f"Highlighted for: {', '.join(reasons) if reasons else 'strong moment'}.\n\n"

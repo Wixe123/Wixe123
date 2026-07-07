@@ -7,20 +7,35 @@ Create Date: 2026-07-07
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import ENUM as PGEnum
 
 revision = "0001"
 down_revision = None
 branch_labels = None
 depends_on = None
 
-video_status = sa.Enum("uploaded", "transcribing", "analyzing", "analyzed", "failed", name="videostatus")
-clip_status = sa.Enum(
-    "pending_render", "rendering", "ready_for_review", "approved", "scheduled",
-    "uploading", "uploaded", "failed", "rejected", name="clipstatus",
+# create_type=False on every enum: they're explicitly created once up front
+# in upgrade() below. Without this, SQLAlchemy also tries to auto-create
+# the enum type the first time each column using it appears in a
+# create_table() call — and visibility/clip_status etc. are each reused
+# across multiple tables, so the second table hits "type already exists".
+# Note this only takes effect via postgresql.ENUM specifically — the
+# generic sa.Enum(create_type=False) silently ignores the kwarg when
+# adapted to the postgres dialect.
+video_status = PGEnum(
+    "uploaded", "transcribing", "analyzing", "analyzed", "failed",
+    name="videostatus", create_type=False,
 )
-visibility = sa.Enum("public", "unlisted", "private", "draft", name="visibility")
-job_status = sa.Enum("queued", "running", "paused", "success", "failed", "cancelled", name="jobstatus")
-job_type = sa.Enum("analyze_video", "render_clip", "upload_clip", name="jobtype")
+clip_status = PGEnum(
+    "pending_render", "rendering", "ready_for_review", "approved", "scheduled",
+    "uploading", "uploaded", "failed", "rejected", name="clipstatus", create_type=False,
+)
+visibility = PGEnum("public", "unlisted", "private", "draft", name="visibility", create_type=False)
+job_status = PGEnum(
+    "queued", "running", "paused", "success", "failed", "cancelled",
+    name="jobstatus", create_type=False,
+)
+job_type = PGEnum("analyze_video", "render_clip", "upload_clip", name="jobtype", create_type=False)
 
 
 def upgrade() -> None:
