@@ -105,11 +105,19 @@ def retry_render(clip_id: str, user: User = Depends(get_current_user), db: Sessi
 
 
 @router.get("/{clip_id}/video")
-def get_clip_video(clip_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_clip_video(
+    clip_id: str, download: bool = False, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
     clip = _owned_clip(clip_id, user, db)
     if not clip.file_path:
         raise HTTPException(404, "Clip not rendered yet")
-    return FileResponse(clip.file_path, media_type="video/mp4")
+    # Plain inline response for <video> preview playback; with ?download=true
+    # the filename= kwarg makes Starlette send Content-Disposition: attachment,
+    # which the browser honors as a real download regardless of how the link
+    # was clicked (the HTML `download` attribute alone isn't reliable
+    # cross-origin, e.g. frontend on :3000 fetching from backend on :8000).
+    filename = f"{(clip.title or 'clip').strip()[:80]}.mp4" if download else None
+    return FileResponse(clip.file_path, media_type="video/mp4", filename=filename)
 
 
 @router.get("/{clip_id}/thumbnail")

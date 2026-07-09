@@ -82,6 +82,7 @@ export const api = {
   uploadClip: (id: string) => request<Clip>(`/api/clips/${id}/upload`, { method: "POST" }),
   retryRender: (id: string) => request<Clip>(`/api/clips/${id}/retry-render`, { method: "POST" }),
   clipVideoUrl: (id: string) => `${API_URL}/api/clips/${id}/video?token=${getToken()}`,
+  clipDownloadUrl: (id: string) => `${API_URL}/api/clips/${id}/video?download=true&token=${getToken()}`,
   clipThumbnailUrl: (id: string) => `${API_URL}/api/clips/${id}/thumbnail?token=${getToken()}`,
 
   listJobs: (status?: string) => request<ProcessingJob[]>(`/api/jobs${status ? `?status=${status}` : ""}`),

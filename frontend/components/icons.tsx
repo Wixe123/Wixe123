@@ -210,6 +210,19 @@ export const IconHeart = (p: IconProps) =>
 export const IconMessageCircle = (p: IconProps) =>
   base(<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.35 0-2.6-.32-3.7-.9L3 20l1.05-4.2A8.5 8.5 0 1 1 21 11.5Z" />, p);
 
+export const IconDownload = (p: IconProps) =>
+  base(
+    <>
+      <path d="M12 4v12" />
+      <path d="M6.5 10.5 12 16l5.5-5.5" />
+      <path d="M4 19.5h16" />
+    </>,
+    p
+  );
+
+export const IconPlay = (p: IconProps) =>
+  base(<path d="M7 4.5v15l13-7.5-13-7.5Z" />, p);
+
 export const IconUsers = (p: IconProps) =>
   base(
     <>

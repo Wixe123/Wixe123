@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { api } from "@/lib/api";
-import { IconExternalLink, IconSparkles } from "@/components/icons";
+import { IconDownload, IconExternalLink, IconPlay, IconSparkles } from "@/components/icons";
 import type { Clip } from "@/lib/types";
 
 const STATUS_STYLES: Record<string, string> = {
@@ -25,6 +25,8 @@ function formatDuration(start: number, end: number): string {
 export default function ClipCard({ clip, onChange }: { clip: Clip; onChange: () => void }) {
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const canPlay = Boolean(clip.file_path);
 
   async function act(fn: () => Promise<unknown>) {
     setBusy(true);
@@ -41,7 +43,15 @@ export default function ClipCard({ clip, onChange }: { clip: Clip; onChange: () 
   return (
     <div className="card overflow-hidden transition hover:border-white/[0.12]">
       <div className="relative aspect-[9/16] max-h-64 w-full bg-base-800">
-        {clip.thumbnail_path ? (
+        {previewing && canPlay ? (
+          // eslint-disable-next-line jsx-a11y/media-has-caption
+          <video
+            src={api.clipVideoUrl(clip.id)}
+            controls
+            autoPlay
+            className="h-full w-full object-contain bg-black"
+          />
+        ) : clip.thumbnail_path ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={api.clipThumbnailUrl(clip.id)} alt="" className="h-full w-full object-cover" />
         ) : (
@@ -50,13 +60,30 @@ export default function ClipCard({ clip, onChange }: { clip: Clip; onChange: () 
             Rendering…
           </div>
         )}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30" />
-        <span className="absolute left-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-xs font-medium text-gray-100 ring-1 ring-white/10">
-          {formatDuration(clip.start_seconds, clip.end_seconds)}
-        </span>
-        <span className={`badge absolute right-2 top-2 ${STATUS_STYLES[clip.status] || "bg-white/5"}`}>
-          {clip.status.replace(/_/g, " ")}
-        </span>
+        {!previewing && (
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30" />
+        )}
+        {!previewing && canPlay && (
+          <button
+            onClick={() => setPreviewing(true)}
+            aria-label="Play preview"
+            className="absolute inset-0 flex items-center justify-center"
+          >
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50 text-gray-50 ring-1 ring-white/20 transition hover:bg-black/70">
+              <IconPlay className="h-5 w-5 translate-x-0.5" />
+            </span>
+          </button>
+        )}
+        {!previewing && (
+          <>
+            <span className="absolute left-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-xs font-medium text-gray-100 ring-1 ring-white/10">
+              {formatDuration(clip.start_seconds, clip.end_seconds)}
+            </span>
+            <span className={`badge absolute right-2 top-2 ${STATUS_STYLES[clip.status] || "bg-white/5"}`}>
+              {clip.status.replace(/_/g, " ")}
+            </span>
+          </>
+        )}
       </div>
       <div className="p-4">
         <p className="line-clamp-2 text-sm font-medium text-gray-100">{clip.title || "Untitled clip"}</p>
@@ -104,6 +131,16 @@ export default function ClipCard({ clip, onChange }: { clip: Clip; onChange: () 
         )}
 
         <div className="mt-4 flex flex-wrap gap-2">
+          {canPlay && (
+            <a
+              href={api.clipDownloadUrl(clip.id)}
+              download
+              className="btn-secondary inline-flex items-center gap-1.5"
+            >
+              <IconDownload className="h-3.5 w-3.5" />
+              Download
+            </a>
+          )}
           {clip.status === "ready_for_review" && (
             <>
               <button disabled={busy} className="btn-primary flex-1" onClick={() => act(() => api.approveClip(clip.id))}>
