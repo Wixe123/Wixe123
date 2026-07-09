@@ -24,6 +24,14 @@ class Settings(BaseSettings):
 
     ANTHROPIC_API_KEY: str = ""
 
+    # Path (inside the container) to a Netscape-format cookies.txt exported
+    # from a real logged-in browser session. YouTube increasingly blocks
+    # unauthenticated automated requests with "Please sign in" / "confirm
+    # you're not a bot" even for ordinary public videos; passing real
+    # session cookies is the reliable workaround. Optional — URL import
+    # just won't survive that wall without it. See README.
+    YTDLP_COOKIES_FILE: str = ""
+
     STORAGE_ROOT: str = "/data"
     MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024 * 1024  # 5 GB
     STORAGE_QUOTA_BYTES: int = 200 * 1024 * 1024 * 1024  # 200 GB, informational only

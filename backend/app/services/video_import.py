@@ -1,6 +1,12 @@
 """Download a source video from a YouTube (or other yt-dlp-supported) URL
 so it can be run through the same clip pipeline as a direct upload."""
+import os
+
 import yt_dlp
+
+from app.core.config import get_settings
+
+settings = get_settings()
 
 
 def download_video(url: str, out_dir: str) -> tuple[str, str]:
@@ -12,6 +18,10 @@ def download_video(url: str, out_dir: str) -> tuple[str, str]:
         "noplaylist": True,
         "quiet": True,
     }
+    # Without real session cookies, YouTube frequently rejects even
+    # ordinary public videos with "Please sign in" / bot-check errors.
+    if settings.YTDLP_COOKIES_FILE and os.path.isfile(settings.YTDLP_COOKIES_FILE):
+        ydl_opts["cookiefile"] = settings.YTDLP_COOKIES_FILE
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         file_path = ydl.prepare_filename(info)

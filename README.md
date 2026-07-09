@@ -74,6 +74,30 @@ docker compose up --build
 You are responsible for complying with the YouTube API Services Terms of
 Service and YouTube's Community Guidelines for anything this app uploads.
 
+### Fixing "Please sign in" when importing from a YouTube URL
+
+YouTube increasingly rejects automated download requests — even for
+ordinary public videos — unless they look like they're coming from a real
+logged-in browser session. If importing a video by URL fails with
+`ERROR: [youtube] ...: Please sign in`, give it your own session cookies:
+
+1. Install a cookie-export browser extension, e.g. "Get cookies.txt
+   LOCALLY" (Chrome/Firefox).
+2. While logged into YouTube, use the extension to export cookies for
+   `youtube.com` to a file.
+3. In this project's folder, create a `secrets/` folder (next to
+   `docker-compose.yml`) and save the exported file as
+   `secrets/youtube_cookies.txt`.
+4. In `.env`, uncomment/set:
+   ```
+   YTDLP_COOKIES_FILE=/secrets/youtube_cookies.txt
+   ```
+5. Restart: `docker compose up --build`.
+
+`secrets/` is git-ignored — this file never gets committed. Treat it like
+a password: it's your real login session, so don't share it, and re-export
+it if imports start failing again (cookies expire).
+
 ## Using it from your iPhone
 
 The dashboard is responsive (bottom tab bar, scrollable tables, "Add to
