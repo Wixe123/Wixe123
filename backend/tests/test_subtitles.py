@@ -31,7 +31,11 @@ def test_words_reveal_one_at_a_time(tmp_path):
     ]
     out_path = tmp_path / "clip.ass"
     subtitles.build_ass(
-        words, clip_start=0.0, clip_end=2.1, style={"max_words_per_line": 4}, out_path=str(out_path)
+        words,
+        clip_start=0.0,
+        clip_end=2.1,
+        style={"max_words_per_line": 4, "case": "lower"},
+        out_path=str(out_path),
     )
 
     texts = _dialogue_texts(out_path.read_text())
@@ -42,6 +46,15 @@ def test_words_reveal_one_at_a_time(tmp_path):
         ["here's", "why", "nobody", "tells"],
         ["you"],
     ]
+
+
+def test_default_case_is_uppercase(tmp_path):
+    words = [_word("here's", 0.0, 0.4)]
+    out_path = tmp_path / "clip.ass"
+    subtitles.build_ass(words, clip_start=0.0, clip_end=0.4, style={}, out_path=str(out_path))
+
+    texts = _dialogue_texts(out_path.read_text())
+    assert texts[0].strip() == "HERE'S"
 
 
 def test_default_max_words_per_line_is_two(tmp_path):
@@ -164,7 +177,9 @@ def test_words_outside_clip_bounds_are_excluded(tmp_path):
         _word("after", 10.0, 10.5),
     ]
     out_path = tmp_path / "clip.ass"
-    subtitles.build_ass(words, clip_start=0.0, clip_end=1.0, style={}, out_path=str(out_path))
+    subtitles.build_ass(
+        words, clip_start=0.0, clip_end=1.0, style={"case": "lower"}, out_path=str(out_path)
+    )
 
     texts = _dialogue_texts(out_path.read_text())
     joined = " ".join(texts)

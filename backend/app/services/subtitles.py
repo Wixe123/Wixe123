@@ -110,7 +110,7 @@ def build_ass(
     emoji_enabled = style.get("emoji_enabled", True)
     font_size = style.get("font_size", 84)
     max_words_per_line = style.get("max_words_per_line", 2)
-    lowercase = style.get("lowercase", True)
+    text_case = style.get("case", "upper")  # "upper" | "lower" | "original"
     # Only a Bold weight is bundled for Playfair Display, so default to it —
     # unlike the Inter/"light" style, this look is meant to read as bold serif.
     bold_flag = -1 if style.get("bold", True) else 0
@@ -170,7 +170,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             parts = []
             for idx, w in enumerate(line[: reveal_idx + 1]):
                 text = w["word"].strip()
-                if lowercase:
+                if text_case == "upper":
+                    text = text.upper()
+                elif text_case == "lower":
                     text = text.lower()
                 if emoji_enabled:
                     emoji = _maybe_emoji(text)
