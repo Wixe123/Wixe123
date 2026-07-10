@@ -88,7 +88,7 @@ def upgrade() -> None:
         sa.Column("subtitle_color", sa.String(), server_default="#FFFFFF"),
         sa.Column("subtitle_highlight_color", sa.String(), server_default="#FFFFFF"),
         sa.Column("subtitle_stroke_color", sa.String(), server_default="#000000"),
-        sa.Column("subtitle_position", sa.String(), server_default="bottom"),
+        sa.Column("subtitle_position", sa.String(), server_default="center"),
         sa.Column("subtitle_emoji_enabled", sa.Boolean(), server_default=sa.true()),
         sa.Column("subtitle_language", sa.String(), server_default="en"),
         sa.Column("export_quality", sa.String(), server_default="1080p"),

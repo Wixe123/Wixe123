@@ -204,7 +204,7 @@ class UserSettings(Base):
     subtitle_color: Mapped[str] = mapped_column(String, default="#FFFFFF")
     subtitle_highlight_color: Mapped[str] = mapped_column(String, default="#FFFFFF")
     subtitle_stroke_color: Mapped[str] = mapped_column(String, default="#000000")
-    subtitle_position: Mapped[str] = mapped_column(String, default="bottom")  # bottom|center|top
+    subtitle_position: Mapped[str] = mapped_column(String, default="center")  # bottom|center|top
     subtitle_emoji_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     subtitle_language: Mapped[str] = mapped_column(String, default="en")
 

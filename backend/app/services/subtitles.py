@@ -17,6 +17,11 @@ EMOJI_MAP = {
 
 ALIGNMENT_BY_POSITION = {"bottom": 2, "center": 5, "top": 8}
 
+# White first so the most common/default speaker reads as the "main" color;
+# the rest are accents cycled in for other speakers.
+SPEAKER_COLOR_PALETTE = ["#FFFFFF", "#FFD23F", "#5DD9C1", "#FF6B6B", "#9D8DF1"]
+SPEAKER_TURN_GAP_SECONDS = 0.6
+
 
 def _hex_to_ass_color(hex_color: str) -> str:
     hex_color = hex_color.lstrip("#")
@@ -38,6 +43,42 @@ def _group_words(words: list[dict], max_words_per_line: int = 4) -> list[list[di
     if current:
         lines.append(current)
     return lines
+
+
+def _clean_word_timings(words: list[dict]) -> list[dict]:
+    """Whisper's word-level timestamps aren't always perfectly monotonic —
+    two words can occasionally come back with overlapping or out-of-order
+    start/end times. Left alone, that produces two caption events active on
+    screen at the same instant, rendering as stacked/overlapping text.
+    Sorting and clamping each word's start to the previous word's end
+    guarantees the reveal sequence below can never overlap."""
+    cleaned: list[dict] = []
+    prev_end = -1.0
+    for w in sorted(words, key=lambda w: w["start"]):
+        start = max(w["start"], prev_end)
+        if w["end"] <= start:
+            continue
+        cleaned.append({**w, "start": start})
+        prev_end = w["end"]
+    return cleaned
+
+
+def _assign_turn_colors(words: list[dict], palette: list[str], gap_s: float) -> list[str]:
+    """Approximates "who's talking" by cycling the color palette whenever
+    the gap between two consecutive words exceeds gap_s. This is a pause
+    heuristic, not real speaker diarization (which needs a much heavier
+    voice-identification model) — it reads well for back-and-forth
+    conversation but a single speaker pausing mid-thought can flip colors
+    when a real diarizer wouldn't."""
+    colors = []
+    palette_idx = 0
+    prev_end = None
+    for w in words:
+        if prev_end is not None and w["start"] - prev_end > gap_s:
+            palette_idx = (palette_idx + 1) % len(palette)
+        colors.append(palette[palette_idx])
+        prev_end = w["end"]
+    return colors
 
 
 def _maybe_emoji(word: str) -> str:
@@ -64,23 +105,33 @@ def build_ass(
     # this renders identically everywhere, regardless of what's on the host.
     font = style.get("font", "Playfair Display")
     base_color = _hex_to_ass_color(style.get("color", "#FFFFFF"))
-    highlight_color = _hex_to_ass_color(style.get("highlight_color", style.get("color", "#FFFFFF")))
     stroke_color = _hex_to_ass_color(style.get("stroke_color", "#000000"))
-    alignment = ALIGNMENT_BY_POSITION.get(style.get("position", "bottom"), 2)
+    alignment = ALIGNMENT_BY_POSITION.get(style.get("position", "center"), 5)
     emoji_enabled = style.get("emoji_enabled", True)
     font_size = style.get("font_size", 84)
-    max_words_per_line = style.get("max_words_per_line", 4)
+    max_words_per_line = style.get("max_words_per_line", 2)
     lowercase = style.get("lowercase", True)
     # Only a Bold weight is bundled for Playfair Display, so default to it —
     # unlike the Inter/"light" style, this look is meant to read as bold serif.
     bold_flag = -1 if style.get("bold", True) else 0
     outline_width = style.get("outline_width", 2)
+    speaker_colors_enabled = style.get("speaker_colors_enabled", True)
+    speaker_palette = style.get("speaker_color_palette", SPEAKER_COLOR_PALETTE)
+    # Only used when speaker_colors_enabled is off, to highlight the
+    # just-revealed word against the already-shown ones.
+    highlight_color = _hex_to_ass_color(style.get("highlight_color", style.get("color", "#FFFFFF")))
 
-    clip_words = [
+    clip_words = _clean_word_timings(
         {**w, "start": w["start"] - clip_start, "end": w["end"] - clip_start}
         for w in words
         if w["start"] >= clip_start and w["end"] <= clip_end
-    ]
+    )
+
+    if speaker_colors_enabled:
+        turn_colors = _assign_turn_colors(clip_words, speaker_palette, SPEAKER_TURN_GAP_SECONDS)
+        for w, color in zip(clip_words, turn_colors):
+            w["_color"] = _hex_to_ass_color(color)
+
     lines = _group_words(clip_words, max_words_per_line)
 
     # Flat, clip-relative time ordering across line boundaries so each
@@ -125,7 +176,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     emoji = _maybe_emoji(text)
                     if emoji:
                         text = f"{text}{emoji}"
-                color = highlight_color if idx == reveal_idx else base_color
+                if speaker_colors_enabled:
+                    color = w.get("_color", base_color)
+                else:
+                    color = highlight_color if idx == reveal_idx else base_color
                 parts.append(f"{{\\c{color}}}{text}")
             text_line = " ".join(parts)
             events.append(
