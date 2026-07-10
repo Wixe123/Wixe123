@@ -44,6 +44,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!getToken()) {
+      setLoading(false);
       router.replace("/login");
       return;
     }
