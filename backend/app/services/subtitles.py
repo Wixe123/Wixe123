@@ -169,7 +169,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
             parts = []
             for idx, w in enumerate(line[: reveal_idx + 1]):
-                text = w["word"].strip()
+                # Commas/periods read as clutter on a short pop-in caption —
+                # strip them for display (the grouping/line-break logic above
+                # still uses the original punctuation to detect sentence
+                # ends, this only affects what's drawn on screen).
+                text = w["word"].strip().replace(",", "").replace(".", "")
                 if text_case == "upper":
                     text = text.upper()
                 elif text_case == "lower":

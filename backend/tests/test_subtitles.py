@@ -82,6 +82,24 @@ def test_default_position_is_center(tmp_path):
     assert alignment == "5"  # libass center-middle alignment code
 
 
+def test_commas_and_periods_stripped_from_displayed_text(tmp_path):
+    words = [
+        _word("well,", 0.0, 0.4),
+        _word("actually.", 0.5, 0.9),
+    ]
+    out_path = tmp_path / "clip.ass"
+    subtitles.build_ass(
+        words, clip_start=0.0, clip_end=0.9, style={"case": "lower"}, out_path=str(out_path)
+    )
+
+    texts = _dialogue_texts(out_path.read_text())
+    joined = " ".join(texts)
+    assert "," not in joined
+    assert "." not in joined
+    assert "well" in joined
+    assert "actually" in joined
+
+
 def test_line_never_exceeds_max_words_per_line(tmp_path):
     words = [_word(f"word{i}", i * 0.5, i * 0.5 + 0.4) for i in range(9)]
     out_path = tmp_path / "clip.ass"
