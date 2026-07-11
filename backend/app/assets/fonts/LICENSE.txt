@@ -5,10 +5,17 @@ Copyright 2020 The Inter Project Authors (https://github.com/rsms/inter)
 Licensed under the SIL Open Font License, Version 1.1.
 Full license text: https://openfontlicense.org
 
-Playfair Display (Bold) — bundled as the default caption font for the
-word-by-word pop-in style.
+Playfair Display (Bold) — an earlier default caption font, kept available
+as a style option.
 
 Copyright 2021 The Playfair Display Project Authors
 (https://github.com/clauseggers/Playfair-Display)
+Licensed under the SIL Open Font License, Version 1.1.
+Full license text: https://openfontlicense.org
+
+Bebas Neue (Regular) — the default caption font: bold condensed
+all-caps display type.
+
+Copyright 2010-2022 Fontfabric Type Foundry (https://fontfabric.com)
 Licensed under the SIL Open Font License, Version 1.1.
 Full license text: https://openfontlicense.org

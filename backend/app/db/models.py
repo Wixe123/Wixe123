@@ -200,7 +200,7 @@ class UserSettings(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), unique=True)
 
-    subtitle_font: Mapped[str] = mapped_column(String, default="Playfair Display")
+    subtitle_font: Mapped[str] = mapped_column(String, default="Bebas Neue")
     subtitle_color: Mapped[str] = mapped_column(String, default="#FFFFFF")
     subtitle_highlight_color: Mapped[str] = mapped_column(String, default="#FFFFFF")
     subtitle_stroke_color: Mapped[str] = mapped_column(String, default="#000000")

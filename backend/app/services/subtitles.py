@@ -101,9 +101,9 @@ def build_ass(
     style: dict,
     out_path: str,
 ) -> str:
-    # Playfair Display is bundled into the Docker image (see Dockerfile) so
-    # this renders identically everywhere, regardless of what's on the host.
-    font = style.get("font", "Playfair Display")
+    # Bebas Neue is bundled into the Docker image (see Dockerfile) so this
+    # renders identically everywhere, regardless of what's on the host.
+    font = style.get("font", "Bebas Neue")
     base_color = _hex_to_ass_color(style.get("color", "#FFFFFF"))
     stroke_color = _hex_to_ass_color(style.get("stroke_color", "#000000"))
     alignment = ALIGNMENT_BY_POSITION.get(style.get("position", "center"), 5)
@@ -111,9 +111,10 @@ def build_ass(
     font_size = style.get("font_size", 84)
     max_words_per_line = style.get("max_words_per_line", 2)
     text_case = style.get("case", "upper")  # "upper" | "lower" | "original"
-    # Only a Bold weight is bundled for Playfair Display, so default to it —
-    # unlike the Inter/"light" style, this look is meant to read as bold serif.
-    bold_flag = -1 if style.get("bold", True) else 0
+    # Bebas Neue only ships one weight and is already a heavy display face —
+    # forcing synthetic bold on top of it just looks chunky, so default off
+    # (unlike the old Playfair Display default, which needed it).
+    bold_flag = -1 if style.get("bold", False) else 0
     outline_width = style.get("outline_width", 2)
     speaker_colors_enabled = style.get("speaker_colors_enabled", True)
     speaker_palette = style.get("speaker_color_palette", SPEAKER_COLOR_PALETTE)
