@@ -18,6 +18,7 @@ export default function ThumbnailsPage() {
   const [loading, setLoading] = React.useState(false);
   const [thumbs, setThumbs] = React.useState<Thumb[]>([]);
   const [favorites, setFavorites] = React.useState<Set<string>>(new Set());
+  const [downloadingId, setDownloadingId] = React.useState<string | null>(null);
 
   async function handleGenerate() {
     setLoading(true);
@@ -36,6 +37,32 @@ export default function ThumbnailsPage() {
       }
       return next;
     });
+  }
+
+  async function downloadThumbnail(t: Thumb) {
+    setDownloadingId(t.id);
+    try {
+      const res = await fetch("/api/render-thumbnail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ style: t.style, gradient: t.gradient, ctrEstimate: t.ctrEstimate }),
+      });
+      if (!res.ok) throw new Error("Render failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `thumbnail-${t.style.toLowerCase()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Real PNG downloaded");
+    } catch {
+      toast.error("Could not render thumbnail");
+    } finally {
+      setDownloadingId(null);
+    }
   }
 
   return (
@@ -81,9 +108,14 @@ export default function ThumbnailsPage() {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => toast.success("Thumbnail downloaded")}
+                  onClick={() => downloadThumbnail(t)}
+                  disabled={downloadingId === t.id}
                 >
-                  <Download className="size-3.5" />
+                  {downloadingId === t.id ? (
+                    <RefreshCw className="size-3.5 animate-spin" />
+                  ) : (
+                    <Download className="size-3.5" />
+                  )}
                 </Button>
               </div>
             </Card>

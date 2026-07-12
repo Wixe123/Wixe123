@@ -1,6 +1,6 @@
 import Link from "next/link";
 import {
-  Clapperboard, Zap, Download, Heart, DollarSign, Eye, Gauge, TrendingUp, ArrowRight,
+  Clapperboard, Zap, Download, Heart, DollarSign, Eye, Gauge, TrendingUp, ArrowRight, Sparkles,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -9,16 +9,23 @@ import { ProjectCard } from "@/components/dashboard/project-card";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import {
-  DASHBOARD_STATS, RECENT_PROJECTS, TOP_HOOKS, SCORE_BREAKDOWN,
-} from "@/lib/mock-data";
+import { DASHBOARD_STATS, TOP_HOOKS, SCORE_BREAKDOWN } from "@/lib/mock-data";
 import { formatCurrency } from "@/lib/utils";
+import { getCurrentUser } from "@/lib/server/auth";
+import { listProjects, toClientProject } from "@/lib/server/projects";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const user = await getCurrentUser();
+  const projects = user ? listProjects(user.id).map(toClientProject) : [];
+  const favoritesCount = projects.filter((p) => p.favorite).length;
+  const avgOptimization = projects.length
+    ? Math.round(projects.reduce((sum, p) => sum + p.adQualityScore, 0) / projects.length)
+    : DASHBOARD_STATS.avgOptimizationScore;
+
   return (
     <div>
       <PageHeader
-        title="Welcome back, Love"
+        title={`Welcome back${user ? `, ${user.name.split(" ")[0]}` : ""}`}
         description="Here's how your UGC ads are performing this week."
         actions={
           <Button asChild variant="gradient">
@@ -30,14 +37,14 @@ export default function DashboardPage() {
       />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Videos created" value={DASHBOARD_STATS.videosCreated.toString()} icon={Clapperboard} trend={12} />
+        <StatCard label="Videos created" value={projects.length.toString()} icon={Clapperboard} />
         <StatCard
           label="Credits remaining"
           value={`${DASHBOARD_STATS.creditsRemaining}/${DASHBOARD_STATS.creditsTotal}`}
           icon={Zap}
         />
         <StatCard label="Downloads" value={DASHBOARD_STATS.downloads.toString()} icon={Download} trend={8} />
-        <StatCard label="Favorites" value={DASHBOARD_STATS.favorites.toString()} icon={Heart} trend={-3} />
+        <StatCard label="Favorites" value={favoritesCount.toString()} icon={Heart} />
         <StatCard
           label="Est. revenue generated"
           value={formatCurrency(DASHBOARD_STATS.estimatedRevenue)}
@@ -47,18 +54,17 @@ export default function DashboardPage() {
         <StatCard label="Avg. watch time" value={`${DASHBOARD_STATS.avgWatchTime}s`} icon={Eye} trend={5} />
         <StatCard
           label="AI optimization score"
-          value={`${DASHBOARD_STATS.avgOptimizationScore}/100`}
+          value={`${avgOptimization}/100`}
           icon={Gauge}
-          trend={4}
         />
-        <StatCard label="Generation history" value="342 runs" icon={TrendingUp} trend={17} />
+        <StatCard label="Generation history" value={`${projects.length} runs`} icon={TrendingUp} />
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Weekly performance</CardTitle>
-            <CardDescription>Videos created and average watch time, last 7 days.</CardDescription>
+            <CardDescription>Illustrative — connect ad platform analytics to make this real.</CardDescription>
           </CardHeader>
           <CardContent>
             <PerformanceChart />
@@ -89,7 +95,7 @@ export default function DashboardPage() {
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <div>
               <CardTitle>Recent projects</CardTitle>
-              <CardDescription>Your latest generated ads.</CardDescription>
+              <CardDescription>Your latest generated ads — real, saved to your account.</CardDescription>
             </div>
             <Button variant="ghost" size="sm" asChild>
               <Link href="/dashboard/projects">
@@ -98,16 +104,24 @@ export default function DashboardPage() {
             </Button>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {RECENT_PROJECTS.slice(0, 4).map((p) => (
-              <ProjectCard key={p.id} project={p} />
-            ))}
+            {projects.length === 0 ? (
+              <div className="col-span-full flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+                <Sparkles className="size-5 text-primary" />
+                No ads yet — create your first one.
+                <Button asChild variant="gradient" size="sm">
+                  <Link href="/dashboard/projects/new">New ad</Link>
+                </Button>
+              </div>
+            ) : (
+              projects.slice(0, 4).map((p) => <ProjectCard key={p.id} project={p} />)
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
             <CardTitle>Top performing hooks</CardTitle>
-            <CardDescription>Ranked by average viral score.</CardDescription>
+            <CardDescription>Illustrative industry benchmarks.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {TOP_HOOKS.map((h, i) => (

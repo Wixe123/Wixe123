@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Sparkles, RefreshCw, Copy } from "lucide-react";
+import { Sparkles, RefreshCw, Copy, Download } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { ScriptCard } from "@/components/wizard/script-card";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Badge } from "@/components/ui/badge";
 import { AUDIENCES, PLATFORMS, OBJECTIVES, HOOKS, TOP_HOOKS } from "@/lib/mock-data";
 import { generateScripts, type ProductInfo, type Script } from "@/lib/ai/engine";
+import { downloadTextFile } from "@/lib/utils";
 
 const DEMO_PRODUCT: ProductInfo = {
   title: "GlowSerum Vitamin C Brightening Serum",
@@ -49,6 +50,18 @@ export default function ScriptsPage() {
     setScripts(result);
     setSelectedId(result[0]?.id ?? null);
     setLoading(false);
+  }
+
+  function downloadScripts() {
+    const content = scripts
+      .map(
+        (s, i) =>
+          `SCRIPT ${i + 1} — Quality score: ${s.qualityScore}/100 (${s.tone}, ${s.durationSec}s)\n` +
+          `Hook: ${s.hook}\n${s.body}\nCTA: ${s.cta}\nTags: ${s.tags.join(", ")}\n`
+      )
+      .join("\n" + "-".repeat(48) + "\n\n");
+    downloadTextFile(`${productName.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-scripts.txt`, content);
+    toast.success("Downloaded scripts.txt");
   }
 
   return (
@@ -109,10 +122,17 @@ export default function ScriptsPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-3">
-              {scripts.map((s) => (
-                <ScriptCard key={s.id} script={s} selected={selectedId === s.id} onSelect={() => setSelectedId(s.id)} />
-              ))}
+            <div>
+              <div className="mb-3 flex justify-end">
+                <Button variant="outline" size="sm" onClick={downloadScripts}>
+                  <Download className="size-3.5" /> Download all as .txt
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {scripts.map((s) => (
+                  <ScriptCard key={s.id} script={s} selected={selectedId === s.id} onSelect={() => setSelectedId(s.id)} />
+                ))}
+              </div>
             </div>
           )}
 

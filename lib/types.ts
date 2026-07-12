@@ -1,0 +1,24 @@
+export type RealProject = {
+  id: string;
+  name: string;
+  platform: string;
+  audience: string;
+  objective: string;
+  ratio: string;
+  hook: string;
+  body: string;
+  cta: string;
+  avatarName: string;
+  avatarEmoji: string;
+  avatarGradient: string;
+  voiceName: string;
+  viralityScore: number;
+  adQualityScore: number;
+  hookStrength: number;
+  ctrPrediction: number;
+  status: string;
+  favorite: boolean;
+  hasVideo: boolean;
+  createdAt: number;
+  fileName: string | null;
+};

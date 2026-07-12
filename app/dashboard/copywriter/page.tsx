@@ -2,13 +2,14 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Sparkles, RefreshCw, Copy } from "lucide-react";
+import { Sparkles, RefreshCw, Copy, Download } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generateCopy, type CopyChannel } from "@/lib/ai/engine";
+import { downloadTextFile } from "@/lib/utils";
 
 const CHANNELS: CopyChannel[] = [
   "TikTok caption", "Instagram caption", "Facebook caption", "Product description",
@@ -77,11 +78,20 @@ export default function CopywriterPage() {
             </Card>
           ) : (
             results.map((r, i) => (
-              <Card key={i} className="flex items-start justify-between gap-3 p-4">
+              <Card key={i} className="flex items-start justify-between gap-1 p-4">
                 <p className="text-sm">{r}</p>
-                <Button variant="ghost" size="icon-sm" onClick={() => copyText(r)}>
-                  <Copy className="size-3.5" />
-                </Button>
+                <div className="flex shrink-0 gap-1">
+                  <Button variant="ghost" size="icon-sm" onClick={() => copyText(r)}>
+                    <Copy className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => downloadTextFile(`${channel.replace(/\s+/g, "-").toLowerCase()}-${i + 1}.txt`, r)}
+                  >
+                    <Download className="size-3.5" />
+                  </Button>
+                </div>
               </Card>
             ))
           )}

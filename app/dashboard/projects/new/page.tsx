@@ -71,6 +71,8 @@ export default function NewProjectPage() {
   const [rendered, setRendered] = React.useState(false);
   const [viralScore, setViralScore] = React.useState<ViralScore | null>(null);
   const [exportOpen, setExportOpen] = React.useState(false);
+  const [projectId, setProjectId] = React.useState<string | null>(null);
+  const [renderError, setRenderError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const t = setInterval(() => setElapsed((e) => e + 1), 1000);
@@ -128,21 +130,56 @@ export default function NewProjectPage() {
   }
 
   async function handleRender() {
-    if (!selectedScript) return;
+    if (!selectedScript || !selectedAvatar || !selectedVoice || !product) return;
     setRendering(true);
     setRenderProgress(0);
+    setRenderError(null);
     const interval = setInterval(() => {
-      setRenderProgress((p) => Math.min(96, p + Math.random() * 14));
+      setRenderProgress((p) => Math.min(90, p + Math.random() * 10));
     }, 260);
-    const score = await scoreVirality(selectedScript);
-    await sleep(2400);
-    clearInterval(interval);
-    setRenderProgress(100);
-    setViralScore(score);
-    await sleep(300);
-    setRendering(false);
-    setRendered(true);
-    toast.success("Your ad is ready");
+    try {
+      const score = await scoreVirality(selectedScript);
+      setRenderProgress(92);
+
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `${product.title} — ${selectedScript.hook.slice(0, 40)}`,
+          platform: PLATFORMS.find((p) => p.id === platform)?.name ?? platform,
+          audience,
+          objective,
+          ratio: PLATFORMS.find((p) => p.id === platform)?.ratio ?? "9:16",
+          hook: selectedScript.hook,
+          bodyText: selectedScript.body,
+          cta: selectedScript.cta,
+          avatarName: selectedAvatar.name,
+          avatarEmoji: selectedAvatar.emoji,
+          avatarGradient: selectedAvatar.gradient,
+          voiceName: selectedVoice.name,
+          viralityScore: score.viralityScore,
+          adQualityScore: score.adQualityScore,
+          hookStrength: score.hookStrength,
+          ctrPrediction: score.ctrPrediction,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Render failed");
+
+      clearInterval(interval);
+      setRenderProgress(100);
+      setViralScore(score);
+      setProjectId(data.project.id);
+      await sleep(250);
+      setRendering(false);
+      setRendered(true);
+      toast.success("Your ad is ready — a real MP4 was rendered on the server");
+    } catch (err) {
+      clearInterval(interval);
+      setRendering(false);
+      setRenderError(err instanceof Error ? err.message : "Render failed — try again");
+      toast.error("Render failed — try again");
+    }
   }
 
   function canContinue() {
@@ -410,31 +447,51 @@ export default function NewProjectPage() {
                     <div className="mt-8 w-full max-w-sm">
                       <Progress value={renderProgress} />
                       <p className="mt-2 text-xs text-muted-foreground">
-                        Rendering avatar, syncing lip movement, adding captions… {Math.round(renderProgress)}%
+                        Rendering gradient background, burning in captions via ffmpeg… {Math.round(renderProgress)}%
                       </p>
                     </div>
                   ) : (
-                    <Button variant="gradient" size="lg" className="mt-8" onClick={handleRender}>
-                      <Sparkles className="size-4" /> Generate video
-                    </Button>
+                    <>
+                      {renderError && (
+                        <p className="mt-4 text-sm text-destructive">{renderError}</p>
+                      )}
+                      <Button variant="gradient" size="lg" className="mt-8" onClick={handleRender}>
+                        <Sparkles className="size-4" /> Generate video
+                      </Button>
+                    </>
                   )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
                   <div>
-                    <div
-                      className={cn(
-                        "relative flex aspect-9/16 flex-col items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br text-6xl text-white",
-                        selectedAvatar?.gradient
-                      )}
-                    >
-                      {selectedAvatar?.emoji}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 text-left">
-                        <p className="text-xs font-medium text-white">&ldquo;{selectedScript?.hook}&rdquo;</p>
+                    {projectId ? (
+                      <video
+                        key={projectId}
+                        className="aspect-9/16 w-full rounded-2xl bg-black object-cover"
+                        src={`/api/download?id=${projectId}&type=video`}
+                        poster={`/api/download?id=${projectId}&type=thumbnail`}
+                        controls
+                        autoPlay
+                        loop
+                        muted
+                      />
+                    ) : (
+                      <div
+                        className={cn(
+                          "relative flex aspect-9/16 flex-col items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br text-6xl text-white",
+                          selectedAvatar?.gradient
+                        )}
+                      >
+                        {selectedAvatar?.emoji}
                       </div>
-                    </div>
+                    )}
                     <div className="mt-3 flex gap-2">
-                      <Button variant="gradient" className="flex-1" onClick={() => setExportOpen(true)}>
+                      <Button
+                        variant="gradient"
+                        className="flex-1"
+                        disabled={!projectId}
+                        onClick={() => setExportOpen(true)}
+                      >
                         <Download className="size-4" /> Export
                       </Button>
                     </div>
@@ -507,24 +564,36 @@ export default function NewProjectPage() {
           <Tabs defaultValue="1080p">
             <TabsList>
               <TabsTrigger value="1080p">1080p</TabsTrigger>
-              <TabsTrigger value="2k">2K</TabsTrigger>
-              <TabsTrigger value="4k">4K</TabsTrigger>
+              <TabsTrigger value="2k" disabled>2K</TabsTrigger>
+              <TabsTrigger value="4k" disabled>4K</TabsTrigger>
             </TabsList>
           </Tabs>
           <div className="grid grid-cols-4 gap-2">
             {["MP4", "MOV", "WebM", "GIF"].map((f) => (
-              <Badge key={f} variant="outline" className="justify-center py-2">{f}</Badge>
+              <Badge
+                key={f}
+                variant={f === "MP4" ? "outline" : "secondary"}
+                className={cn("justify-center py-2", f !== "MP4" && "text-muted-foreground/50")}
+              >
+                {f}
+              </Badge>
             ))}
           </div>
+          <p className="text-xs text-muted-foreground">
+            Only 1080p MP4 is wired to the real renderer right now — this downloads the
+            actual file that was rendered on the server.
+          </p>
           <DialogFooter>
             <Button
               variant="gradient"
+              disabled={!projectId}
               onClick={() => {
+                if (!projectId) return;
+                window.location.href = `/api/download?id=${projectId}&type=video`;
                 setExportOpen(false);
-                toast.success("Export started — you'll get a notification when it's ready.");
               }}
             >
-              <Download className="size-4" /> Start export
+              <Download className="size-4" /> Download MP4
             </Button>
           </DialogFooter>
         </DialogContent>

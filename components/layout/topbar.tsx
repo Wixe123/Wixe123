@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Menu, Search, Bell, ChevronDown, LogOut, Settings, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,8 +19,18 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-export function Topbar({ title }: { title?: string }) {
+type SessionUser = { name: string; email: string; initials: string };
+
+export function Topbar({ title, user }: { title?: string; user: SessionUser }) {
   const [open, setOpen] = React.useState(false);
+  const router = useRouter();
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/");
+    router.refresh();
+  }
+
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-md sm:px-6">
       <Sheet open={open} onOpenChange={setOpen}>
@@ -50,7 +61,7 @@ export function Topbar({ title }: { title?: string }) {
             <button className="flex items-center gap-2 rounded-xl border border-border py-1 pr-2 pl-1 hover:bg-secondary">
               <Avatar className="size-7">
                 <AvatarFallback className="bg-[linear-gradient(135deg,var(--gradient-1),var(--gradient-2))] text-white text-xs">
-                  LL
+                  {user.initials}
                 </AvatarFallback>
               </Avatar>
               <ChevronDown className="size-3.5 text-muted-foreground" />
@@ -58,8 +69,8 @@ export function Topbar({ title }: { title?: string }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
-              <p className="text-sm font-medium">Love Lindberg</p>
-              <p className="text-xs font-normal text-muted-foreground">love.lindberg10@gmail.com</p>
+              <p className="text-sm font-medium">{user.name}</p>
+              <p className="text-xs font-normal text-muted-foreground">{user.email}</p>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
@@ -69,8 +80,8 @@ export function Topbar({ title }: { title?: string }) {
               <Link href="/dashboard/settings"><Settings className="size-4" /> Settings</Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/"><LogOut className="size-4" /> Log out</Link>
+            <DropdownMenuItem onSelect={handleLogout}>
+              <LogOut className="size-4" /> Log out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
