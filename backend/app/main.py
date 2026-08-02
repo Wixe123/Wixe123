@@ -3,7 +3,18 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import analytics, auth, branding, clips, dashboard, jobs, settings as settings_route, style, videos
+from app.api.routes import (
+    analytics,
+    auth,
+    branding,
+    clips,
+    dashboard,
+    jobs,
+    settings as settings_route,
+    style,
+    videos,
+    watched_channels,
+)
 from app.core.config import get_settings
 
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +39,7 @@ app.include_router(branding.router)
 app.include_router(settings_route.router)
 app.include_router(analytics.router)
 app.include_router(style.router)
+app.include_router(watched_channels.router)
 
 
 @app.get("/api/health")

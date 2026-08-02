@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
-import { IconExternalLink } from "@/components/icons";
+import { IconExternalLink, IconUsers, IconX } from "@/components/icons";
 import { api } from "@/lib/api";
-import type { StyleProfile } from "@/lib/types";
+import type { StyleProfile, WatchedChannel } from "@/lib/types";
 
 const STATUS_STYLES: Record<string, string> = {
   analyzing: "bg-amber-500/15 text-amber-300",
@@ -114,11 +114,23 @@ export default function StylePage() {
   const [submitting, setSubmitting] = useState(false);
   const [applying, setApplying] = useState(false);
 
+  const [watchedChannels, setWatchedChannels] = useState<WatchedChannel[]>([]);
+  const [channelUrl, setChannelUrl] = useState("");
+  const [channelLabel, setChannelLabel] = useState("");
+  const [addingChannel, setAddingChannel] = useState(false);
+  const [analyzingChannelId, setAnalyzingChannelId] = useState<string | null>(null);
+  const [channelError, setChannelError] = useState("");
+
   async function load() {
     try {
-      const [p, settings] = await Promise.all([api.listStyleProfiles(), api.getSettings()]);
+      const [p, settings, channels] = await Promise.all([
+        api.listStyleProfiles(),
+        api.getSettings(),
+        api.listWatchedChannels(),
+      ]);
       setProfiles(p);
       setActiveId(settings.active_style_profile_id);
+      setWatchedChannels(channels);
       setError("");
     } catch (e) {
       setError((e as Error).message);
@@ -132,6 +144,44 @@ export default function StylePage() {
     const interval = setInterval(load, 4000);
     return () => clearInterval(interval);
   }, []);
+
+  async function handleAddChannel() {
+    if (!channelUrl.trim()) return;
+    setAddingChannel(true);
+    setChannelError("");
+    try {
+      await api.createWatchedChannel(channelUrl.trim(), channelLabel.trim());
+      setChannelUrl("");
+      setChannelLabel("");
+      await load();
+    } catch (e) {
+      setChannelError((e as Error).message);
+    } finally {
+      setAddingChannel(false);
+    }
+  }
+
+  async function handleRemoveChannel(id: string) {
+    try {
+      await api.deleteWatchedChannel(id);
+      await load();
+    } catch (e) {
+      setChannelError((e as Error).message);
+    }
+  }
+
+  async function handleAnalyzeChannel(id: string) {
+    setAnalyzingChannelId(id);
+    setChannelError("");
+    try {
+      await api.analyzeWatchedChannel(id);
+      await load();
+    } catch (e) {
+      setChannelError((e as Error).message);
+    } finally {
+      setAnalyzingChannelId(null);
+    }
+  }
 
   async function handleAnalyze() {
     if (!url.trim()) return;
@@ -211,6 +261,91 @@ export default function StylePage() {
       </div>
 
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+
+      <div className="card mb-8 p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <IconUsers className="h-4 w-4 text-gray-400" />
+          <h2 className="text-sm font-medium text-gray-200">Watched channels</h2>
+        </div>
+        <p className="mb-4 text-sm text-gray-400">
+          Save creators you want to keep learning from. Each one just stores a channel URL and a
+          label — nothing runs until you click &quot;Analyze latest&quot;, which pulls their most
+          recent public upload and generates a technique breakdown for it, same as pasting a URL
+          above.
+        </p>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className="text-sm text-gray-400">
+            Channel URL
+            <input
+              className="input mt-1"
+              placeholder="https://www.youtube.com/@creator"
+              value={channelUrl}
+              onChange={(e) => setChannelUrl(e.target.value)}
+            />
+          </label>
+          <label className="text-sm text-gray-400">
+            Label (optional)
+            <input
+              className="input mt-1"
+              placeholder="e.g. their channel name"
+              value={channelLabel}
+              onChange={(e) => setChannelLabel(e.target.value)}
+            />
+          </label>
+        </div>
+        <button
+          className="btn-secondary mt-4"
+          disabled={addingChannel || !channelUrl.trim()}
+          onClick={handleAddChannel}
+        >
+          {addingChannel ? "Saving…" : "Save channel"}
+        </button>
+
+        {channelError && <p className="mt-3 text-sm text-red-400">{channelError}</p>}
+
+        {watchedChannels.length > 0 && (
+          <ul className="mt-5 divide-y divide-white/5">
+            {watchedChannels.map((c) => (
+              <li key={c.id} className="flex items-center justify-between gap-3 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-gray-200">{c.label || c.channel_url}</p>
+                  <a
+                    href={c.channel_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-0.5 inline-flex items-center gap-1 truncate text-xs text-gray-500 hover:text-brand-400"
+                  >
+                    <IconExternalLink className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{c.channel_url}</span>
+                  </a>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    className="btn-secondary px-2.5 py-1 text-xs"
+                    disabled={analyzingChannelId === c.id}
+                    onClick={() => handleAnalyzeChannel(c.id)}
+                  >
+                    {analyzingChannelId === c.id ? "Starting…" : "Analyze latest"}
+                  </button>
+                  <button
+                    className="rounded-md p-1.5 text-gray-500 transition hover:bg-white/5 hover:text-red-400"
+                    onClick={() => handleRemoveChannel(c.id)}
+                    aria-label="Remove channel"
+                  >
+                    <IconX className="h-4 w-4" />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        {watchedChannels.length === 0 && (
+          <p className="mt-5 text-sm text-gray-500">
+            No saved channels yet — add one above to build your watchlist.
+          </p>
+        )}
+      </div>
 
       <span className="eyebrow mb-5 block">Past analyses</span>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

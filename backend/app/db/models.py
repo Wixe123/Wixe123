@@ -87,6 +87,7 @@ class User(Base):
     branding_presets: Mapped[list["BrandingPreset"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     youtube_credential: Mapped["YouTubeCredential"] = relationship(back_populates="user", uselist=False, cascade="all, delete-orphan")
     style_profiles: Mapped[list["StyleProfile"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    watched_channels: Mapped[list["WatchedChannel"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class YouTubeCredential(Base):
@@ -255,3 +256,20 @@ class StyleProfile(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     user: Mapped[User] = relationship(back_populates="style_profiles")
+
+
+class WatchedChannel(Base):
+    """A creator's channel the user has saved for repeat style analysis —
+    a curated reference list, not a subscription/import source. "Analyze
+    latest" resolves and studies their most recent public upload the same
+    way pasting a single video URL into the Style Analyzer would."""
+
+    __tablename__ = "watched_channels"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    channel_url: Mapped[str] = mapped_column(String)
+    label: Mapped[str] = mapped_column(String, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped[User] = relationship(back_populates="watched_channels")

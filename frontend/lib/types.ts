@@ -155,6 +155,13 @@ export interface StyleProfile {
   created_at: string;
 }
 
+export interface WatchedChannel {
+  id: string;
+  channel_url: string;
+  label: string;
+  created_at: string;
+}
+
 export interface UserSettings {
   subtitle_font: string;
   subtitle_color: string;

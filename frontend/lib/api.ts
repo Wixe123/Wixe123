@@ -11,6 +11,7 @@ import type {
   User,
   UserSettings,
   Video,
+  WatchedChannel,
 } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -126,4 +127,15 @@ export const api = {
   getStyleProfile: (id: string) => request<StyleProfile>(`/api/style-profiles/${id}`),
   deleteStyleProfile: (id: string) =>
     request<{ ok: boolean }>(`/api/style-profiles/${id}`, { method: "DELETE" }),
+
+  listWatchedChannels: () => request<WatchedChannel[]>("/api/watched-channels"),
+  createWatchedChannel: (channel_url: string, label: string) =>
+    request<WatchedChannel>("/api/watched-channels", {
+      method: "POST",
+      body: JSON.stringify({ channel_url, label }),
+    }),
+  deleteWatchedChannel: (id: string) =>
+    request<{ ok: boolean }>(`/api/watched-channels/${id}`, { method: "DELETE" }),
+  analyzeWatchedChannel: (id: string) =>
+    request<StyleProfile>(`/api/watched-channels/${id}/analyze`, { method: "POST" }),
 };

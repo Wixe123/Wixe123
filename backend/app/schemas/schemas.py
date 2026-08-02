@@ -203,6 +203,19 @@ class StyleProfileCreate(BaseModel):
     creator_label: str = ""
 
 
+class WatchedChannelOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    channel_url: str
+    label: str
+    created_at: datetime
+
+
+class WatchedChannelCreate(BaseModel):
+    channel_url: str
+    label: str = ""
+
+
 class UserSettingsIn(BaseModel):
     subtitle_font: str | None = None
     subtitle_color: str | None = None
