@@ -86,6 +86,7 @@ class User(Base):
     settings: Mapped["UserSettings"] = relationship(back_populates="user", uselist=False, cascade="all, delete-orphan")
     branding_presets: Mapped[list["BrandingPreset"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     youtube_credential: Mapped["YouTubeCredential"] = relationship(back_populates="user", uselist=False, cascade="all, delete-orphan")
+    style_profiles: Mapped[list["StyleProfile"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class YouTubeCredential(Base):
@@ -219,3 +220,27 @@ class UserSettings(Base):
     default_branding_preset_id: Mapped[str | None] = mapped_column(ForeignKey("branding_presets.id"), nullable=True)
 
     user: Mapped[User] = relationship(back_populates="settings")
+
+
+class StyleProfile(Base):
+    """A reference video the user points the analyzer at (a creator/clip
+    whose approach they want to deliberately emulate) plus the extracted
+    style findings — hook pattern, pacing, structure. This never stores or
+    re-publishes the reference creator's actual content, only a written
+    analysis of their technique."""
+
+    __tablename__ = "style_profiles"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    source_url: Mapped[str] = mapped_column(String)
+    creator_label: Mapped[str] = mapped_column(String, default="")
+    status: Mapped[str] = mapped_column(String, default="analyzing")  # analyzing|ready|failed
+    hook_analysis: Mapped[str] = mapped_column(Text, default="")
+    pacing_analysis: Mapped[str] = mapped_column(Text, default="")
+    structure_analysis: Mapped[str] = mapped_column(Text, default="")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    error_message: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped[User] = relationship(back_populates="style_profiles")

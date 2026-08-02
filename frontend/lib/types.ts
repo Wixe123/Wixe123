@@ -125,6 +125,21 @@ export interface BrandingPreset {
   is_default: boolean;
 }
 
+export type StyleProfileStatus = "analyzing" | "ready" | "failed";
+
+export interface StyleProfile {
+  id: string;
+  source_url: string;
+  creator_label: string;
+  status: StyleProfileStatus;
+  hook_analysis: string;
+  pacing_analysis: string;
+  structure_analysis: string;
+  summary: string;
+  error_message: string;
+  created_at: string;
+}
+
 export interface UserSettings {
   subtitle_font: string;
   subtitle_color: string;

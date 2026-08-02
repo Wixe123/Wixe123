@@ -164,6 +164,15 @@ export const IconSparkles = (p: IconProps) =>
     p
   );
 
+export const IconCopyStyle = (p: IconProps) =>
+  base(
+    <>
+      <rect x="4" y="7" width="12" height="14" rx="1.75" />
+      <path d="M9 7V5.75A1.75 1.75 0 0 1 10.75 4h7.5A1.75 1.75 0 0 1 20 5.75v10.5A1.75 1.75 0 0 1 18.25 18H16" />
+    </>,
+    p
+  );
+
 export const IconLogOut = (p: IconProps) =>
   base(
     <>

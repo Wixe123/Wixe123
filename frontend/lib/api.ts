@@ -5,6 +5,7 @@ import type {
   ClipPerformance,
   DashboardStats,
   ProcessingJob,
+  StyleProfile,
   User,
   UserSettings,
   Video,
@@ -111,4 +112,14 @@ export const api = {
   getSettings: () => request<UserSettings>("/api/settings"),
   updateSettings: (payload: Partial<UserSettings>) =>
     request<UserSettings>("/api/settings", { method: "PUT", body: JSON.stringify(payload) }),
+
+  listStyleProfiles: () => request<StyleProfile[]>("/api/style-profiles"),
+  createStyleProfile: (source_url: string, creator_label: string) =>
+    request<StyleProfile>("/api/style-profiles", {
+      method: "POST",
+      body: JSON.stringify({ source_url, creator_label }),
+    }),
+  getStyleProfile: (id: string) => request<StyleProfile>(`/api/style-profiles/${id}`),
+  deleteStyleProfile: (id: string) =>
+    request<{ ok: boolean }>(`/api/style-profiles/${id}`, { method: "DELETE" }),
 };

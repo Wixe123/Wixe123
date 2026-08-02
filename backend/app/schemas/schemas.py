@@ -166,6 +166,25 @@ class UserSettingsOut(BaseModel):
     default_branding_preset_id: str | None
 
 
+class StyleProfileOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    source_url: str
+    creator_label: str
+    status: str
+    hook_analysis: str
+    pacing_analysis: str
+    structure_analysis: str
+    summary: str
+    error_message: str
+    created_at: datetime
+
+
+class StyleProfileCreate(BaseModel):
+    source_url: str
+    creator_label: str = ""
+
+
 class UserSettingsIn(BaseModel):
     subtitle_font: str | None = None
     subtitle_color: str | None = None

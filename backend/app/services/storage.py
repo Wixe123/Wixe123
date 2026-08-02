@@ -30,6 +30,15 @@ def branding_dir(user_id: str) -> str:
     return path
 
 
+def style_profile_dir(profile_id: str) -> str:
+    """Scratch space for a style analysis's downloaded reference
+    video/audio — deleted once analysis finishes, since only the written
+    findings are meant to persist, not the reference creator's content."""
+    path = os.path.join(settings.STORAGE_ROOT, "style_profiles", profile_id)
+    _ensure_dir(path)
+    return path
+
+
 def new_filename(original_name: str) -> str:
     ext = os.path.splitext(original_name)[1].lower() or ".mp4"
     return f"{uuid.uuid4()}{ext}"

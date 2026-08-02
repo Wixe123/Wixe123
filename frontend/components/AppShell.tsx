@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, clearToken, getToken } from "@/lib/api";
 import {
+  IconCopyStyle,
   IconDashboard,
   IconLogOut,
   IconPalette,
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { href: "/upload", label: "Upload", Icon: IconUpload },
   { href: "/queue", label: "Queue", Icon: IconQueue },
   { href: "/analytics", label: "Analytics", Icon: IconTrendingUp },
+  { href: "/style", label: "Style Analyzer", Icon: IconCopyStyle },
   { href: "/branding", label: "Branding", Icon: IconPalette },
   { href: "/settings", label: "Settings", Icon: IconSettings },
 ];

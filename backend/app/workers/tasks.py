@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 import subprocess
 
 from googleapiclient.errors import HttpError
@@ -13,6 +14,7 @@ from app.db.models import (
     JobStatus,
     JobType,
     ProcessingJob,
+    StyleProfile,
     User,
     UserSettings,
     Video,
@@ -25,6 +27,7 @@ from app.services.algorithm_digest import build_digest_email, fetch_recent_artic
 from app.services.clip_scoring import find_candidates
 from app.services.email_utils import send_email
 from app.services.metadata_ai import generate_metadata
+from app.services.style_analysis import analyze_style
 from app.services.transcription import transcribe
 from app.services.youtube_client import YOUTUBE_SCOPES
 from app.workers.celery_app import celery_app
@@ -322,3 +325,40 @@ def send_algorithm_digest_task(self):
         if _is_transient(exc) and self.request.retries < self.max_retries:
             raise self.retry(exc=exc, countdown=_retry_backoff_seconds(self.request.retries))
         raise
+
+
+@celery_app.task(bind=True, max_retries=2)
+def analyze_style_task(self, style_profile_id: str):
+    db = SessionLocal()
+    try:
+        profile = db.get(StyleProfile, style_profile_id)
+        if not profile:
+            return
+
+        work_dir = storage.style_profile_dir(profile.id)
+        video_path, _title = video_import.download_video(profile.source_url, work_dir)
+        wav_path = os.path.join(work_dir, "audio.wav")
+        ffmpeg_utils.extract_audio(video_path, wav_path)
+        transcript = transcribe(wav_path)
+
+        findings = analyze_style(transcript)
+        profile.hook_analysis = findings["hook_analysis"]
+        profile.pacing_analysis = findings["pacing_analysis"]
+        profile.structure_analysis = findings["structure_analysis"]
+        profile.summary = findings["summary"]
+        profile.status = "ready"
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("analyze_style_task failed (attempt %s)", self.request.retries)
+        if _is_transient(exc) and self.request.retries < self.max_retries:
+            raise self.retry(exc=exc, countdown=_retry_backoff_seconds(self.request.retries))
+        profile = db.get(StyleProfile, style_profile_id)
+        if profile:
+            profile.status = "failed"
+            profile.error_message = str(exc)
+            db.commit()
+    finally:
+        # Only the written findings are meant to persist — never the
+        # downloaded reference creator's actual video/audio.
+        shutil.rmtree(storage.style_profile_dir(style_profile_id), ignore_errors=True)
+        db.close()
