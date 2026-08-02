@@ -221,6 +221,14 @@ class UserSettings(Base):
     # When set, new clip titles/descriptions are written to emulate this
     # StyleProfile's analyzed hook/tone/structure (see metadata_ai.py).
     active_style_profile_id: Mapped[str | None] = mapped_column(ForeignKey("style_profiles.id"), nullable=True)
+    # When set, a clip scoring at or above this skips manual review and
+    # uploads immediately once rendered (see render_clip_task). None/unset
+    # means every clip still needs a manual Approve click, same as before.
+    auto_approve_score_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Poll the connected channel's uploads for new videos and auto-import
+    # them, instead of requiring a manual upload/URL-import each time.
+    auto_import_from_channel: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_channel_check_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="settings")
 

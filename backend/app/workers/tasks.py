@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import subprocess
+from datetime import datetime, timedelta
 
 from googleapiclient.errors import HttpError
 
@@ -247,6 +248,15 @@ def render_clip_task(self, clip_id: str, job_id: str | None = None):
         clip.status = ClipStatus.READY_FOR_REVIEW
         db.commit()
 
+        threshold = user_settings.auto_approve_score_threshold if user_settings else None
+        if threshold is not None and clip.score >= threshold:
+            clip.status = ClipStatus.APPROVED
+            db.commit()
+            upload_job = ProcessingJob(job_type=JobType.UPLOAD_CLIP, video_id=clip.video_id, clip_id=clip.id)
+            db.add(upload_job)
+            db.commit()
+            upload_clip_task.delay(clip.id, upload_job.id)
+
         _mark(db, job, JobStatus.SUCCESS, progress=1.0)
     except Exception as exc:  # noqa: BLE001
         logger.exception("render_clip_task failed (attempt %s)", self.request.retries)
@@ -370,4 +380,63 @@ def analyze_style_task(self, style_profile_id: str):
         # Only the written findings are meant to persist — never the
         # downloaded reference creator's actual video/audio.
         shutil.rmtree(storage.style_profile_dir(style_profile_id), ignore_errors=True)
+        db.close()
+
+
+def _check_one_channel(db, user: User, user_settings: UserSettings) -> None:
+    refresh_token = decrypt_secret(user.youtube_credential.encrypted_refresh_token)
+    credentials = youtube_client.credentials_from_refresh_token(refresh_token, YOUTUBE_SCOPES)
+
+    playlist_id = youtube_client.get_uploads_playlist_id(credentials)
+    if not playlist_id:
+        return
+
+    since = user_settings.last_channel_check_at or (datetime.utcnow() - timedelta(days=1))
+    new_videos = youtube_client.list_recent_channel_videos(credentials, playlist_id, since)
+
+    existing_urls = {v.source_url for v in db.query(Video).filter_by(owner_id=user.id).all()}
+    for v in new_videos:
+        url = f"https://www.youtube.com/watch?v={v['video_id']}"
+        if not v["video_id"] or url in existing_urls:
+            continue
+        video = Video(
+            owner_id=user.id,
+            title=v.get("title", ""),
+            source_type="youtube_channel_watch",
+            source_url=url,
+            status=VideoStatus.UPLOADED,
+        )
+        db.add(video)
+        db.commit()
+        db.refresh(video)
+        job = ProcessingJob(job_type=JobType.ANALYZE_VIDEO, video_id=video.id)
+        db.add(job)
+        db.commit()
+        import_from_url_task.delay(video.id, job.id)
+        logger.info("Auto-imported new channel upload %s for user %s", url, user.id)
+
+    user_settings.last_channel_check_at = datetime.utcnow()
+    db.commit()
+
+
+@celery_app.task
+def check_channels_for_new_videos_task():
+    """Runs on Celery Beat's schedule (see celery_app.py). For every user
+    with auto_import_from_channel enabled, polls their connected channel's
+    uploads playlist and imports anything published since the last check —
+    the same pipeline a manual URL import triggers, just self-triggered."""
+    db = SessionLocal()
+    try:
+        watchers = db.query(UserSettings).filter(UserSettings.auto_import_from_channel.is_(True)).all()
+        for user_settings in watchers:
+            user = db.get(User, user_settings.user_id)
+            if not user or not user.youtube_credential:
+                continue
+            try:
+                _check_one_channel(db, user, user_settings)
+            except Exception:  # noqa: BLE001
+                # One user's channel check failing (expired token, API
+                # error, etc.) shouldn't stop the rest from being checked.
+                logger.exception("Channel check failed for user %s", user_settings.user_id)
+    finally:
         db.close()

@@ -1,4 +1,6 @@
 """Google OAuth (login) and YouTube Data API v3 (upload) integration."""
+from datetime import datetime
+
 import httpx
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2.credentials import Credentials
@@ -78,6 +80,45 @@ def get_my_channel(credentials: Credentials) -> dict | None:
     if not items:
         return None
     return {"id": items[0]["id"], "title": items[0]["snippet"]["title"]}
+
+
+def get_uploads_playlist_id(credentials: Credentials) -> str | None:
+    """Every channel has a hidden "uploads" playlist containing all its
+    videos — listing that playlist is far cheaper (quota-wise) than
+    search.list for periodically checking "what's new on my channel"."""
+    youtube = build("youtube", "v3", credentials=credentials)
+    resp = youtube.channels().list(part="contentDetails", mine=True).execute()
+    items = resp.get("items", [])
+    if not items:
+        return None
+    return items[0]["contentDetails"]["relatedPlaylists"]["uploads"]
+
+
+def list_recent_channel_videos(credentials: Credentials, playlist_id: str, published_after: datetime) -> list[dict]:
+    """Videos in the uploads playlist published after `published_after`
+    (a naive UTC datetime, matching this app's convention elsewhere). The
+    playlist is newest-first by default, so this can stop as soon as it
+    hits something older than the cutoff."""
+    youtube = build("youtube", "v3", credentials=credentials)
+    resp = youtube.playlistItems().list(part="snippet", playlistId=playlist_id, maxResults=25).execute()
+
+    videos = []
+    for item in resp.get("items", []):
+        snippet = item.get("snippet", {})
+        published_raw = snippet.get("publishedAt")
+        if not published_raw:
+            continue
+        published_at = datetime.fromisoformat(published_raw.replace("Z", "+00:00")).replace(tzinfo=None)
+        if published_at <= published_after:
+            break
+        videos.append(
+            {
+                "video_id": snippet.get("resourceId", {}).get("videoId", ""),
+                "title": snippet.get("title", ""),
+                "published_at": published_at,
+            }
+        )
+    return videos
 
 
 def get_video_titles(credentials: Credentials, video_ids: list[str]) -> dict[str, dict]:

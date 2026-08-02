@@ -131,6 +131,30 @@ Setup (uses your existing Gmail account, no new service to sign up for):
    your local send time to UTC).
 5. Restart: `docker compose up --build`.
 
+### Fully hands-off pipeline (auto-import + auto-upload)
+
+Two independent Settings toggles let the whole thing run without touching
+it, video in → Short out:
+
+- **Auto-import new uploads from my channel** — polls your connected
+  channel's uploads every 30 minutes (via the same `beat` container as the
+  digest above) and automatically starts the clip pipeline on anything
+  new, same as pasting the URL in yourself. Requires YouTube connected in
+  Settings.
+- **Auto-upload clips above a score threshold** — clips scoring at or
+  above the threshold you set skip manual review entirely and upload as
+  soon as they're rendered. Anything below the bar still lands in the
+  normal review queue.
+
+Both only pull from **your own** connected channel — there's no "find
+trending videos from other creators" mode, since auto-downloading and
+re-uploading someone else's content without permission is copyright
+infringement and would violate YouTube's Terms of Service. Use the Style
+Analyzer page instead to learn from other creators' technique without
+touching their actual content.
+
+Like the digest, this only runs on days your Docker stack is up.
+
 ## Using it from your iPhone
 
 The dashboard is responsive (bottom tab bar, scrollable tables, "Add to

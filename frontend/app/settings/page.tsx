@@ -253,6 +253,55 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      <section className="card mb-6 p-6">
+        <h2 className="mb-1 text-base font-light tracking-tight">Automation</h2>
+        <p className="mb-4 text-xs text-gray-500">
+          Run the whole pipeline hands-off: pull in new videos from your channel automatically,
+          and skip manual review for clips that already score well.
+        </p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="flex items-center gap-2 text-sm text-gray-400">
+              <input
+                type="checkbox"
+                disabled={!youtube?.connected}
+                defaultChecked={settings.auto_import_from_channel}
+                onChange={(e) => save({ auto_import_from_channel: e.target.checked })}
+              />
+              Auto-import new uploads from my channel
+            </label>
+            {!youtube?.connected && (
+              <p className="mt-1 text-xs text-gray-600">Connect your YouTube channel above first.</p>
+            )}
+          </div>
+          <div>
+            <label className="flex items-center gap-2 text-sm text-gray-400">
+              <input
+                type="checkbox"
+                checked={settings.auto_approve_score_threshold !== null}
+                onChange={(e) => save({ auto_approve_score_threshold: e.target.checked ? 7 : null })}
+              />
+              Auto-upload clips above a score threshold
+            </label>
+            {settings.auto_approve_score_threshold !== null && (
+              <label className="mt-2 block text-sm text-gray-400">
+                Score threshold ({settings.auto_approve_score_threshold.toFixed(1)})
+                <input
+                  type="range"
+                  min={0}
+                  max={12}
+                  step={0.5}
+                  className="mt-2 w-full"
+                  defaultValue={settings.auto_approve_score_threshold}
+                  onChange={(e) => save({ auto_approve_score_threshold: Number(e.target.value) })}
+                />
+                <span className="text-xs text-gray-500">Clips scoring at or above this skip review and upload immediately; scores typically range 0-10.</span>
+              </label>
+            )}
+          </div>
+        </div>
+      </section>
+
       <p className="text-xs text-gray-500">
         {saving ? "Saving…" : saved ? "Saved." : ""}
       </p>

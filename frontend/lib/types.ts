@@ -172,4 +172,6 @@ export interface UserSettings {
   auto_upload_after_approval: boolean;
   default_branding_preset_id: string | null;
   active_style_profile_id: string | null;
+  auto_approve_score_threshold: number | null;
+  auto_import_from_channel: boolean;
 }

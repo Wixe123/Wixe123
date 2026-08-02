@@ -28,5 +28,9 @@ celery_app.conf.update(
             "task": "app.workers.tasks.send_algorithm_digest_task",
             "schedule": crontab(hour=settings.DIGEST_HOUR_UTC, minute=0),
         },
+        "check-channels-for-new-videos": {
+            "task": "app.workers.tasks.check_channels_for_new_videos_task",
+            "schedule": crontab(minute="*/30"),
+        },
     },
 )
