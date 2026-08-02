@@ -226,7 +226,16 @@ def render_clip_task(self, clip_id: str, job_id: str | None = None):
             s["text"] for s in (video.transcript or {}).get("segments", [])
             if s["start"] >= clip.start_seconds and s["end"] <= clip.end_seconds
         ) or " ".join(w["word"] for w in words)
-        meta = generate_metadata(segment_text, clip.score_reasons or [])
+
+        style_guide = ""
+        if user_settings and user_settings.active_style_profile_id:
+            style_profile = db.get(StyleProfile, user_settings.active_style_profile_id)
+            if style_profile and style_profile.status == "ready":
+                style_guide = style_profile.summary or "\n".join(
+                    filter(None, [style_profile.hook_analysis, style_profile.pacing_analysis, style_profile.structure_analysis])
+                )
+
+        meta = generate_metadata(segment_text, clip.score_reasons or [], style_guide=style_guide)
 
         clip.file_path = out_path
         clip.thumbnail_path = thumb_path

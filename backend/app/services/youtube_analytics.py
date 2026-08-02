@@ -67,6 +67,24 @@ def get_video_performance(credentials: Credentials, video_ids: list[str], days: 
     return {row[0]: dict(zip(headers, row)) for row in rows}
 
 
+def get_daily_trend(credentials: Credentials, days: int = 28) -> list[dict]:
+    """Day-by-day views/watch-time for the window, for a trend line chart —
+    the overview/clip endpoints above only ever return period totals."""
+    analytics = build("youtubeAnalytics", "v2", credentials=credentials)
+    start, end = _date_range(days)
+    resp = analytics.reports().query(
+        ids="channel==MINE",
+        startDate=start,
+        endDate=end,
+        metrics="views,estimatedMinutesWatched",
+        dimensions="day",
+        sort="day",
+    ).execute()
+    headers = [h["name"] for h in resp.get("columnHeaders", [])]
+    rows = resp.get("rows") or []
+    return [dict(zip(headers, row)) for row in rows]
+
+
 def get_top_channel_videos(credentials: Credentials, days: int = 28, max_results: int = 10) -> list[dict]:
     """Top-performing videos on the whole channel in the window (not just
     ones uploaded by this app) — useful for spotting patterns to copy."""

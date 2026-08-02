@@ -218,6 +218,9 @@ class UserSettings(Base):
     default_visibility: Mapped[Visibility] = mapped_column(_enum_column(Visibility), default=Visibility.PRIVATE)
     auto_upload_after_approval: Mapped[bool] = mapped_column(Boolean, default=False)
     default_branding_preset_id: Mapped[str | None] = mapped_column(ForeignKey("branding_presets.id"), nullable=True)
+    # When set, new clip titles/descriptions are written to emulate this
+    # StyleProfile's analyzed hook/tone/structure (see metadata_ai.py).
+    active_style_profile_id: Mapped[str | None] = mapped_column(ForeignKey("style_profiles.id"), nullable=True)
 
     user: Mapped[User] = relationship(back_populates="settings")
 

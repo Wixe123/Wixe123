@@ -7,9 +7,9 @@ from app.api.deps import get_current_user
 from app.core.security import decrypt_secret
 from app.db.models import Clip, ClipStatus, User, Video
 from app.db.session import get_db
-from app.schemas.schemas import AnalyticsOverview, ClipPerformance
+from app.schemas.schemas import AnalyticsOverview, ClipPerformance, TopVideo, TrendPoint
 from app.services import youtube_analytics
-from app.services.youtube_client import YOUTUBE_SCOPES, credentials_from_refresh_token
+from app.services.youtube_client import YOUTUBE_SCOPES, credentials_from_refresh_token, get_video_titles
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -109,4 +109,60 @@ def clip_performance(days: int = 28, user: User = Depends(get_current_user), db:
             )
         )
     results.sort(key=lambda r: r.views, reverse=True)
+    return results
+
+
+@router.get("/trend", response_model=list[TrendPoint])
+def trend(days: int = 28, user: User = Depends(get_current_user)):
+    credentials = _credentials_for(user)
+    try:
+        rows = youtube_analytics.get_daily_trend(credentials, days=days)
+    except HttpError as exc:
+        raise HTTPException(
+            502,
+            "YouTube Analytics request failed. If you connected your channel before analytics "
+            "support was added, reconnect it in Settings to grant the new permission. "
+            f"({exc})",
+        ) from exc
+
+    return [
+        TrendPoint(
+            date=str(row.get("day", "")),
+            views=int(row.get("views", 0)),
+            watch_time_minutes=float(row.get("estimatedMinutesWatched", 0)),
+        )
+        for row in rows
+    ]
+
+
+@router.get("/top-videos", response_model=list[TopVideo])
+def top_videos(days: int = 28, user: User = Depends(get_current_user)):
+    credentials = _credentials_for(user)
+    try:
+        rows = youtube_analytics.get_top_channel_videos(credentials, days=days, max_results=10)
+    except HttpError as exc:
+        raise HTTPException(
+            502,
+            "YouTube Analytics request failed. If you connected your channel before analytics "
+            "support was added, reconnect it in Settings to grant the new permission. "
+            f"({exc})",
+        ) from exc
+
+    video_ids = [row.get("video", "") for row in rows if row.get("video")]
+    titles = get_video_titles(credentials, video_ids)
+
+    results = []
+    for row in rows:
+        video_id = row.get("video", "")
+        info = titles.get(video_id, {})
+        results.append(
+            TopVideo(
+                video_id=video_id,
+                title=info.get("title", "Untitled"),
+                thumbnail=info.get("thumbnail", ""),
+                views=int(row.get("views", 0)),
+                watch_time_minutes=float(row.get("estimatedMinutesWatched", 0)),
+                likes=int(row.get("likes", 0)),
+            )
+        )
     return results

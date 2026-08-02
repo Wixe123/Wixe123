@@ -80,6 +80,26 @@ def get_my_channel(credentials: Credentials) -> dict | None:
     return {"id": items[0]["id"], "title": items[0]["snippet"]["title"]}
 
 
+def get_video_titles(credentials: Credentials, video_ids: list[str]) -> dict[str, dict]:
+    """Batch-fetches title/thumbnail for a set of video IDs, keyed by id.
+    The Analytics API only ever returns bare video IDs in its rows — this
+    is the Data API call needed to turn those into something displayable."""
+    if not video_ids:
+        return {}
+    youtube = build("youtube", "v3", credentials=credentials)
+    out: dict[str, dict] = {}
+    # videos().list caps at 50 ids per call.
+    for i in range(0, len(video_ids), 50):
+        batch = video_ids[i : i + 50]
+        resp = youtube.videos().list(part="snippet", id=",".join(batch)).execute()
+        for item in resp.get("items", []):
+            snippet = item.get("snippet", {})
+            thumbnails = snippet.get("thumbnails", {})
+            thumb = thumbnails.get("medium") or thumbnails.get("default") or {}
+            out[item["id"]] = {"title": snippet.get("title", ""), "thumbnail": thumb.get("url", "")}
+    return out
+
+
 def upload_video(
     credentials: Credentials,
     file_path: str,

@@ -52,20 +52,27 @@ def _template_metadata(transcript_text: str, reasons: list[str]) -> dict:
     }
 
 
-def _claude_metadata(transcript_text: str, reasons: list[str]) -> dict | None:
+def _claude_metadata(transcript_text: str, reasons: list[str], style_guide: str = "") -> dict | None:
     if not settings.ANTHROPIC_API_KEY:
         return None
     try:
         import anthropic
 
         client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        style_instruction = (
+            f"\n\nWrite the title and description in this style (matching tone, hook "
+            f"approach, and phrasing patterns — not the subject matter):\n{style_guide[:1500]}"
+            if style_guide
+            else ""
+        )
         prompt = (
             "You write metadata for a YouTube Short. Given the transcript "
             "below, return strict JSON with keys: title (<=95 chars, "
             "punchy, include relevant emotion/curiosity hook), description "
             "(2-3 sentences plus hashtags), hashtags (array of 5-8 strings "
             "starting with #), keywords (array of 5-10 lowercase strings), "
-            "seo_score (0-100 number).\n\n"
+            "seo_score (0-100 number)."
+            f"{style_instruction}\n\n"
             f"Why this moment was selected: {', '.join(reasons) or 'strong moment'}\n\n"
             f"Transcript:\n{transcript_text[:4000]}"
         )
@@ -83,8 +90,12 @@ def _claude_metadata(transcript_text: str, reasons: list[str]) -> dict | None:
         return None
 
 
-def generate_metadata(transcript_text: str, reasons: list[str]) -> dict:
-    result = _claude_metadata(transcript_text, reasons)
+def generate_metadata(transcript_text: str, reasons: list[str], style_guide: str = "") -> dict:
+    """style_guide: optional text describing a reference creator's hook/
+    tone/structure (from a StyleProfile analysis) to write in the style of.
+    Only affects the Claude path — the template fallback has no way to
+    apply a style, since it isn't generating prose."""
+    result = _claude_metadata(transcript_text, reasons, style_guide)
     if result:
         return result
     return _template_metadata(transcript_text, reasons)

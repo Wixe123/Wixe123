@@ -100,6 +100,21 @@ export interface ClipPerformance {
   score_reasons: string[];
 }
 
+export interface TrendPoint {
+  date: string;
+  views: number;
+  watch_time_minutes: number;
+}
+
+export interface TopVideo {
+  video_id: string;
+  title: string;
+  thumbnail: string;
+  views: number;
+  watch_time_minutes: number;
+  likes: number;
+}
+
 export interface DashboardStats {
   videos_today: number;
   shorts_created_today: number;
@@ -156,4 +171,5 @@ export interface UserSettings {
   default_visibility: Visibility;
   auto_upload_after_approval: boolean;
   default_branding_preset_id: string | null;
+  active_style_profile_id: string | null;
 }

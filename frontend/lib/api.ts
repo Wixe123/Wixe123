@@ -6,6 +6,8 @@ import type {
   DashboardStats,
   ProcessingJob,
   StyleProfile,
+  TopVideo,
+  TrendPoint,
   User,
   UserSettings,
   Video,
@@ -95,6 +97,8 @@ export const api = {
 
   analyticsOverview: (days = 28) => request<AnalyticsOverview>(`/api/analytics/overview?days=${days}`),
   analyticsClips: (days = 28) => request<ClipPerformance[]>(`/api/analytics/clips?days=${days}`),
+  analyticsTrend: (days = 28) => request<TrendPoint[]>(`/api/analytics/trend?days=${days}`),
+  analyticsTopVideos: (days = 28) => request<TopVideo[]>(`/api/analytics/top-videos?days=${days}`),
 
   listBrandingPresets: () => request<BrandingPreset[]>("/api/branding"),
   createBrandingPreset: (payload: Partial<BrandingPreset>) =>

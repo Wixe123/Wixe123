@@ -12,12 +12,24 @@ const STATUS_STYLES: Record<string, string> = {
   failed: "bg-red-500/15 text-red-300",
 };
 
-function StyleProfileCard({ profile }: { profile: StyleProfile }) {
+function StyleProfileCard({
+  profile,
+  isActive,
+  busy,
+  onApply,
+  onClear,
+}: {
+  profile: StyleProfile;
+  isActive: boolean;
+  busy: boolean;
+  onApply: (id: string) => void;
+  onClear: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const hasFindings = profile.status === "ready";
 
   return (
-    <div className="card p-5">
+    <div className={`card p-5 ${isActive ? "ring-1 ring-brand-400/50" : ""}`}>
       <div className="mb-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-gray-100">
@@ -69,6 +81,23 @@ function StyleProfileCard({ profile }: { profile: StyleProfile }) {
               </div>
             </div>
           )}
+
+          {isActive ? (
+            <div className="mt-4 flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-brand-300">Applied to new clips</span>
+              <button disabled={busy} className="btn-secondary px-2.5 py-1 text-xs" onClick={onClear}>
+                Remove
+              </button>
+            </div>
+          ) : (
+            <button
+              disabled={busy}
+              className="btn-primary mt-4 w-full"
+              onClick={() => onApply(profile.id)}
+            >
+              Apply this style
+            </button>
+          )}
         </>
       )}
     </div>
@@ -77,15 +106,19 @@ function StyleProfileCard({ profile }: { profile: StyleProfile }) {
 
 export default function StylePage() {
   const [profiles, setProfiles] = useState<StyleProfile[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [url, setUrl] = useState("");
   const [label, setLabel] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [applying, setApplying] = useState(false);
 
   async function load() {
     try {
-      setProfiles(await api.listStyleProfiles());
+      const [p, settings] = await Promise.all([api.listStyleProfiles(), api.getSettings()]);
+      setProfiles(p);
+      setActiveId(settings.active_style_profile_id);
       setError("");
     } catch (e) {
       setError((e as Error).message);
@@ -116,6 +149,30 @@ export default function StylePage() {
     }
   }
 
+  async function applyStyle(id: string) {
+    setApplying(true);
+    try {
+      await api.updateSettings({ active_style_profile_id: id });
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  async function clearStyle() {
+    setApplying(true);
+    try {
+      await api.updateSettings({ active_style_profile_id: null });
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setApplying(false);
+    }
+  }
+
   return (
     <AppShell>
       <h1 className="mb-1 text-3xl font-extralight tracking-tight">Style analyzer</h1>
@@ -123,7 +180,8 @@ export default function StylePage() {
         Paste a reference video from any creator you want to learn from — this analyzes their
         hook, pacing, and structure so you can deliberately apply the same approach to your own
         content. It doesn&apos;t download or reuse their video itself, only a written breakdown of
-        their technique.
+        their technique. Apply one to a card below and every clip title/description you generate
+        from now on is written in that style.
       </p>
 
       <div className="card mb-8 p-6">
@@ -157,7 +215,14 @@ export default function StylePage() {
       <span className="eyebrow mb-5 block">Past analyses</span>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {profiles.map((p) => (
-          <StyleProfileCard key={p.id} profile={p} />
+          <StyleProfileCard
+            key={p.id}
+            profile={p}
+            isActive={p.id === activeId}
+            busy={applying}
+            onApply={applyStyle}
+            onClear={clearStyle}
+          />
         ))}
         {profiles.length === 0 && (
           <p className="text-sm text-gray-500">

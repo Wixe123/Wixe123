@@ -109,6 +109,21 @@ class ClipPerformance(BaseModel):
     score_reasons: list[str]
 
 
+class TrendPoint(BaseModel):
+    date: str
+    views: int
+    watch_time_minutes: float
+
+
+class TopVideo(BaseModel):
+    video_id: str
+    title: str
+    thumbnail: str
+    views: int
+    watch_time_minutes: float
+    likes: int
+
+
 class DashboardStats(BaseModel):
     videos_today: int
     shorts_created_today: int
@@ -164,6 +179,7 @@ class UserSettingsOut(BaseModel):
     default_visibility: Visibility
     auto_upload_after_approval: bool
     default_branding_preset_id: str | None
+    active_style_profile_id: str | None
 
 
 class StyleProfileOut(BaseModel):
@@ -201,3 +217,4 @@ class UserSettingsIn(BaseModel):
     default_visibility: Visibility | None = None
     auto_upload_after_approval: bool | None = None
     default_branding_preset_id: str | None = None
+    active_style_profile_id: str | None = None

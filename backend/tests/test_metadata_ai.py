@@ -28,3 +28,16 @@ def test_hashtags_strip_apostrophes_and_symbols():
 def test_hashtags_never_contain_empty_placeholder():
     result = metadata_ai._template_metadata("study study study practice practice", [])
     assert all(len(h) > 1 for h in result["hashtags"])
+
+
+def test_generate_metadata_accepts_style_guide_without_crashing(monkeypatch):
+    # Without an API key the template fallback has no way to apply a style
+    # guide (it isn't generating prose) — it should just ignore it cleanly
+    # rather than erroring on the extra argument.
+    monkeypatch.setattr(metadata_ai.settings, "ANTHROPIC_API_KEY", "")
+    result = metadata_ai.generate_metadata(
+        "Here's why nobody tells you the truth.",
+        ["hook phrase"],
+        style_guide="Fast-paced, punchy, opens with a bold claim.",
+    )
+    assert result["title"]

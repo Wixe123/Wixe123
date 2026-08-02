@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
+import TopVideosBarList from "@/components/TopVideosBarList";
+import TrendChart from "@/components/TrendChart";
 import { IconClock, IconEye, IconHeart, IconSparkles, IconUsers } from "@/components/icons";
 import { api } from "@/lib/api";
-import type { AnalyticsOverview, ClipPerformance } from "@/lib/types";
+import type { AnalyticsOverview, ClipPerformance, TopVideo, TrendPoint } from "@/lib/types";
 
 const RANGES = [
   { label: "7 days", days: 7 },
@@ -27,6 +29,9 @@ export default function AnalyticsPage() {
   const [days, setDays] = useState(28);
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [clips, setClips] = useState<ClipPerformance[]>([]);
+  const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [topVideos, setTopVideos] = useState<TopVideo[]>([]);
+  const [trendMetric, setTrendMetric] = useState<"views" | "watch_time_minutes">("views");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState<boolean | null>(null);
@@ -40,9 +45,16 @@ export default function AnalyticsPage() {
         setLoading(false);
         return;
       }
-      const [o, c] = await Promise.all([api.analyticsOverview(days), api.analyticsClips(days)]);
+      const [o, c, t, tv] = await Promise.all([
+        api.analyticsOverview(days),
+        api.analyticsClips(days),
+        api.analyticsTrend(days),
+        api.analyticsTopVideos(days),
+      ]);
       setOverview(o);
       setClips(c);
+      setTrend(t);
+      setTopVideos(tv);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -163,6 +175,26 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
+          <div className="card mb-10 p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <span className="eyebrow">Trend</span>
+              <div className="flex gap-1 rounded-md border border-white/10 p-1">
+                {(["views", "watch_time_minutes"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setTrendMetric(m)}
+                    className={`rounded px-2.5 py-1 text-xs font-medium transition ${
+                      trendMetric === m ? "bg-brand-400/15 text-brand-300" : "text-gray-500 hover:text-gray-200"
+                    }`}
+                  >
+                    {m === "views" ? "Views" : "Watch time"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <TrendChart data={trend} metric={trendMetric} />
+          </div>
+
           {insight && insight.ranked.length > 0 && (
             <div className="card mb-10 p-6">
               <div className="mb-3 flex items-center gap-2">
@@ -184,6 +216,11 @@ export default function AnalyticsPage() {
               </div>
             </div>
           )}
+
+          <div className="card mb-10 p-6">
+            <p className="eyebrow mb-4">Top videos on your channel</p>
+            <TopVideosBarList videos={topVideos} />
+          </div>
 
           <p className="eyebrow mb-5">Clips uploaded via ShortsForge</p>
           <div className="card overflow-x-auto">
