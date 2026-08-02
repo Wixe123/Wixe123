@@ -46,6 +46,18 @@ class Settings(BaseSettings):
 
     CELERY_CONCURRENCY: int = 2
 
+    # --- Daily algorithm-trends email digest ---
+    # SMTP over a Gmail App Password is the path of least friction for a
+    # single-user deploy: no new account/API key to sign up for, just
+    # https://myaccount.google.com/apppasswords on an existing Gmail account.
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""  # defaults to SMTP_USERNAME if unset
+    DIGEST_RECIPIENT_EMAIL: str = ""
+    DIGEST_HOUR_UTC: int = 8  # convert your preferred local send time to UTC
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -59,6 +59,23 @@ services:
       - ./secrets:/secrets:ro
     command: celery -A app.workers.celery_app worker --loglevel=info
 
+  beat:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://shortsforge:shortsforge@postgres:5432/shortsforge
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    # Only triggers scheduled tasks (currently: the daily digest email) —
+    # the worker service above still does the actual work. Needs to be
+    # running at the scheduled hour for the digest to fire that day.
+    command: celery -A app.workers.celery_app beat --loglevel=info
+
   frontend:
     build: ./frontend
     restart: unless-stopped

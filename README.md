@@ -98,6 +98,39 @@ logged-in browser session. If importing a video by URL fails with
 a password: it's your real login session, so don't share it, and re-export
 it if imports start failing again (cookies expire).
 
+### Daily YouTube/Shorts trends email digest
+
+A `beat` container fires a scheduled job once a day that pulls recent
+posts from a few creator-economy sources (YouTube's official blog,
+TubeFilter, Social Media Today, VidIQ's blog), optionally summarizes them
+with Claude if `ANTHROPIC_API_KEY` is set (otherwise it emails a plain
+grouped headline list), and sends it to you by email. This is general
+trend/news commentary, not an analysis of your own channel's numbers —
+that's what the in-app Analytics page is for.
+
+**This only fires on days your Docker stack is actually running** — it's
+not a cloud service, so if `docker compose` isn't up at the scheduled
+hour, that day's email just doesn't go out.
+
+Setup (uses your existing Gmail account, no new service to sign up for):
+
+1. Turn on 2-Step Verification on your Google account if it isn't already
+   (required for the next step): `myaccount.google.com/security`.
+2. Generate an App Password: `myaccount.google.com/apppasswords` — name it
+   anything (e.g. "ShortsForge"), copy the 16-character password it gives
+   you.
+3. In `.env`, set:
+   ```
+   SMTP_USERNAME=your.email@gmail.com
+   SMTP_PASSWORD=<the 16-character app password, no spaces>
+   DIGEST_RECIPIENT_EMAIL=your.email@gmail.com
+   ```
+   (`SMTP_USERNAME` and `DIGEST_RECIPIENT_EMAIL` can be different people —
+   e.g. send from a throwaway Gmail to your main inbox.)
+4. Optionally change `DIGEST_HOUR_UTC` (default 8, i.e. 8am UTC — convert
+   your local send time to UTC).
+5. Restart: `docker compose up --build`.
+
 ## Using it from your iPhone
 
 The dashboard is responsive (bottom tab bar, scrollable tables, "Add to

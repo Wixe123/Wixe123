@@ -4,6 +4,7 @@ import subprocess
 
 from googleapiclient.errors import HttpError
 
+from app.core.config import get_settings
 from app.core.security import decrypt_secret
 from app.db.models import (
     BrandingPreset,
@@ -20,13 +21,16 @@ from app.db.models import (
 )
 from app.db.session import SessionLocal
 from app.services import ffmpeg_utils, storage, subtitles, video_import, youtube_client
+from app.services.algorithm_digest import build_digest_email, fetch_recent_articles
 from app.services.clip_scoring import find_candidates
+from app.services.email_utils import send_email
 from app.services.metadata_ai import generate_metadata
 from app.services.transcription import transcribe
 from app.services.youtube_client import YOUTUBE_SCOPES
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 
 def _job(db, job_id: str | None) -> ProcessingJob | None:
@@ -296,3 +300,25 @@ def upload_clip_task(self, clip_id: str, job_id: str | None = None):
         _mark(db, _job(db, job_id), JobStatus.FAILED, error=str(exc))
     finally:
         db.close()
+
+
+@celery_app.task(bind=True, max_retries=3)
+def send_algorithm_digest_task(self):
+    """Runs on Celery Beat's daily schedule (see celery_app.py). Not tied to
+    any Video/Clip/ProcessingJob — this is a standalone scheduled mailing,
+    not part of the per-video pipeline."""
+    try:
+        articles = fetch_recent_articles()
+        email_content = build_digest_email(articles)
+        send_email(
+            to=settings.DIGEST_RECIPIENT_EMAIL,
+            subject=email_content["subject"],
+            html_body=email_content["html_body"],
+            text_body=email_content["text_body"],
+        )
+        logger.info("Sent daily algorithm digest to %s", settings.DIGEST_RECIPIENT_EMAIL)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("send_algorithm_digest_task failed (attempt %s)", self.request.retries)
+        if _is_transient(exc) and self.request.retries < self.max_retries:
+            raise self.retry(exc=exc, countdown=_retry_backoff_seconds(self.request.retries))
+        raise
