@@ -209,11 +209,34 @@ class WatchedChannelOut(BaseModel):
     channel_url: str
     label: str
     created_at: datetime
+    channel_title: str
+    avatar_url: str
+    subscriber_count: int | None
+    last_refreshed_at: datetime | None
 
 
 class WatchedChannelCreate(BaseModel):
     channel_url: str
     label: str = ""
+
+
+class TrendingClipOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    watched_channel_id: str
+    youtube_video_id: str
+    video_url: str
+    title: str
+    thumbnail_url: str
+    channel_title: str
+    channel_url: str
+    view_count: int
+    published_at: datetime | None
+    duration_seconds: int
+
+
+class WatchedChannelDetail(WatchedChannelOut):
+    clips: list[TrendingClipOut] = []
 
 
 class UserSettingsIn(BaseModel):

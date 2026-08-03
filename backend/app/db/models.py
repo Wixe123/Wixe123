@@ -272,4 +272,39 @@ class WatchedChannel(Base):
     label: Mapped[str] = mapped_column(String, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    # Cached from the channel's public page on each Trending refresh, so the
+    # UI has something to show without a live yt-dlp lookup per page view.
+    channel_title: Mapped[str] = mapped_column(String, default="")
+    avatar_url: Mapped[str] = mapped_column(String, default="")
+    subscriber_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_refreshed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     user: Mapped[User] = relationship(back_populates="watched_channels")
+    trending_clips: Mapped[list["TrendingClip"]] = relationship(
+        back_populates="watched_channel", cascade="all, delete-orphan"
+    )
+
+
+class TrendingClip(Base):
+    """A snapshot of one Short published by a watched channel within the
+    last week, refreshed periodically for the Trending feed. Only public
+    metadata (title/thumbnail/view count) is stored — playback happens via
+    YouTube's own embed player, nothing is downloaded or re-hosted."""
+
+    __tablename__ = "trending_clips"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    watched_channel_id: Mapped[str] = mapped_column(ForeignKey("watched_channels.id"))
+    youtube_video_id: Mapped[str] = mapped_column(String)
+    video_url: Mapped[str] = mapped_column(String)
+    title: Mapped[str] = mapped_column(String, default="")
+    thumbnail_url: Mapped[str] = mapped_column(String, default="")
+    channel_title: Mapped[str] = mapped_column(String, default="")
+    channel_url: Mapped[str] = mapped_column(String, default="")
+    view_count: Mapped[int] = mapped_column(Integer, default=0)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    duration_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    watched_channel: Mapped[WatchedChannel] = relationship(back_populates="trending_clips")

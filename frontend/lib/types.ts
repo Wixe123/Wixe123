@@ -160,6 +160,28 @@ export interface WatchedChannel {
   channel_url: string;
   label: string;
   created_at: string;
+  channel_title: string;
+  avatar_url: string;
+  subscriber_count: number | null;
+  last_refreshed_at: string | null;
+}
+
+export interface TrendingClip {
+  id: string;
+  watched_channel_id: string;
+  youtube_video_id: string;
+  video_url: string;
+  title: string;
+  thumbnail_url: string;
+  channel_title: string;
+  channel_url: string;
+  view_count: number;
+  published_at: string | null;
+  duration_seconds: number;
+}
+
+export interface WatchedChannelDetail extends WatchedChannel {
+  clips: TrendingClip[];
 }
 
 export interface UserSettings {

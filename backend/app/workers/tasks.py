@@ -16,11 +16,13 @@ from app.db.models import (
     JobType,
     ProcessingJob,
     StyleProfile,
+    TrendingClip,
     User,
     UserSettings,
     Video,
     VideoStatus,
     Visibility,
+    WatchedChannel,
 )
 from app.db.session import SessionLocal
 from app.services import ffmpeg_utils, storage, subtitles, video_import, youtube_client
@@ -417,6 +419,56 @@ def _check_one_channel(db, user: User, user_settings: UserSettings) -> None:
 
     user_settings.last_channel_check_at = datetime.utcnow()
     db.commit()
+
+
+def _refresh_channel_trending_clips(db, channel: WatchedChannel) -> None:
+    data = video_import.fetch_channel_weekly_shorts(channel.channel_url)
+
+    channel.channel_title = data["channel_title"] or channel.channel_title
+    channel.avatar_url = data["avatar_url"] or channel.avatar_url
+    channel.subscriber_count = data["subscriber_count"]
+    channel.last_refreshed_at = datetime.utcnow()
+    db.commit()
+
+    db.query(TrendingClip).filter_by(watched_channel_id=channel.id).delete()
+    for v in data["videos"]:
+        db.add(
+            TrendingClip(
+                user_id=channel.user_id,
+                watched_channel_id=channel.id,
+                youtube_video_id=v["youtube_video_id"],
+                video_url=v["video_url"],
+                title=v["title"],
+                thumbnail_url=v["thumbnail_url"],
+                channel_title=channel.channel_title,
+                channel_url=channel.channel_url,
+                view_count=v["view_count"],
+                published_at=v["published_at"],
+                duration_seconds=v["duration_seconds"],
+            )
+        )
+    db.commit()
+
+
+@celery_app.task
+def refresh_trending_feed_task(user_id: str | None = None):
+    """Runs on Celery Beat's schedule (see celery_app.py) and can also be
+    triggered on demand from the Trending page's Refresh button. For each
+    watched channel (optionally scoped to one user), re-pulls this week's
+    Shorts metadata for the Trending feed. One channel failing (private,
+    deleted, rate-limited) doesn't stop the rest from refreshing."""
+    db = SessionLocal()
+    try:
+        query = db.query(WatchedChannel)
+        if user_id:
+            query = query.filter_by(user_id=user_id)
+        for channel in query.all():
+            try:
+                _refresh_channel_trending_clips(db, channel)
+            except Exception:  # noqa: BLE001
+                logger.exception("Trending refresh failed for watched channel %s", channel.id)
+    finally:
+        db.close()
 
 
 @celery_app.task

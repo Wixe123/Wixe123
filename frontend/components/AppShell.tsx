@@ -8,6 +8,7 @@ import { api, clearToken, getToken } from "@/lib/api";
 import {
   IconCopyStyle,
   IconDashboard,
+  IconFlame,
   IconLogOut,
   IconPalette,
   IconQueue,
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Dashboard", Icon: IconDashboard },
   { href: "/upload", label: "Upload", Icon: IconUpload },
   { href: "/queue", label: "Queue", Icon: IconQueue },
+  { href: "/trending", label: "Trending", Icon: IconFlame },
   { href: "/analytics", label: "Analytics", Icon: IconTrendingUp },
   { href: "/style", label: "Style Analyzer", Icon: IconCopyStyle },
   { href: "/branding", label: "Branding", Icon: IconPalette },

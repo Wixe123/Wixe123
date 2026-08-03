@@ -32,5 +32,9 @@ celery_app.conf.update(
             "task": "app.workers.tasks.check_channels_for_new_videos_task",
             "schedule": crontab(minute="*/30"),
         },
+        "refresh-trending-feed": {
+            "task": "app.workers.tasks.refresh_trending_feed_task",
+            "schedule": crontab(minute=0, hour="*/6"),
+        },
     },
 )

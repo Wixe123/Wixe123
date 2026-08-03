@@ -7,11 +7,13 @@ import type {
   ProcessingJob,
   StyleProfile,
   TopVideo,
+  TrendingClip,
   TrendPoint,
   User,
   UserSettings,
   Video,
   WatchedChannel,
+  WatchedChannelDetail,
 } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -138,4 +140,8 @@ export const api = {
     request<{ ok: boolean }>(`/api/watched-channels/${id}`, { method: "DELETE" }),
   analyzeWatchedChannel: (id: string) =>
     request<StyleProfile>(`/api/watched-channels/${id}/analyze`, { method: "POST" }),
+
+  listTrending: () => request<TrendingClip[]>("/api/trending"),
+  refreshTrending: () => request<{ status: string }>("/api/trending/refresh", { method: "POST" }),
+  getTrendingChannel: (id: string) => request<WatchedChannelDetail>(`/api/trending/channels/${id}`),
 };

@@ -12,6 +12,7 @@ from app.api.routes import (
     jobs,
     settings as settings_route,
     style,
+    trending,
     videos,
     watched_channels,
 )
@@ -40,6 +41,7 @@ app.include_router(settings_route.router)
 app.include_router(analytics.router)
 app.include_router(style.router)
 app.include_router(watched_channels.router)
+app.include_router(trending.router)
 
 
 @app.get("/api/health")
