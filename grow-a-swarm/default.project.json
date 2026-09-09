@@ -1,0 +1,27 @@
+{
+  "name": "GrowASwarm",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "Modules": {
+        "$path": "src/ReplicatedStorage/Modules"
+      }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "GrowASwarm": {
+        "$path": "src/ServerScriptService/GrowASwarm"
+      }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "GrowASwarm": {
+          "$path": "src/StarterPlayer/StarterPlayerScripts/GrowASwarm"
+        }
+      }
+    }
+  }
+}
