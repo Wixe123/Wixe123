@@ -225,7 +225,7 @@ class UserSettings(Base):
     # When set, a clip scoring at or above this skips manual review and
     # uploads immediately once rendered (see render_clip_task). None/unset
     # means every clip still needs a manual Approve click, same as before.
-    auto_approve_score_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+    auto_approve_score_threshold: Mapped[float | None] = mapped_column(Float, nullable=True, default=7.0)
     # Poll the connected channel's uploads for new videos and auto-import
     # them, instead of requiring a manual upload/URL-import each time.
     auto_import_from_channel: Mapped[bool] = mapped_column(Boolean, default=False)

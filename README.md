@@ -146,7 +146,9 @@ it, video in → Short out:
 - **Auto-upload clips above a score threshold** — clips scoring at or
   above the threshold you set skip manual review entirely and upload as
   soon as they're rendered. Anything below the bar still lands in the
-  normal review queue.
+  normal review queue. **On by default at a threshold of 7** (out of a
+  roughly 0-10 range) — turn it off or change the number in Settings if
+  you'd rather review everything yourself.
 
 Both only pull from **your own** connected channel — there's no "find
 trending videos from other creators" mode, since auto-downloading and

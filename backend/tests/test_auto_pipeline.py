@@ -27,6 +27,21 @@ def _make_user_with_settings(session, **settings_kwargs):
     return user, settings_row
 
 
+def test_new_user_settings_default_to_auto_approve_enabled(session_factory):
+    """Auto-upload above a score threshold is on by default (threshold 7)
+    for any settings row that doesn't explicitly opt out, so a brand new
+    account gets the hands-off pipeline without visiting Settings first."""
+    session = session_factory()
+    user = User(email="fresh@example.com", google_sub="sub-fresh")
+    session.add(user)
+    session.commit()
+    settings_row = UserSettings(user_id=user.id)
+    session.add(settings_row)
+    session.commit()
+
+    assert settings_row.auto_approve_score_threshold == 7.0
+
+
 def test_render_clip_task_auto_approves_and_uploads_above_threshold(session_factory, monkeypatch):
     monkeypatch.setattr(tasks_module, "SessionLocal", session_factory)
 
