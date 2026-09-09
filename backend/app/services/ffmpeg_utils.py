@@ -44,58 +44,87 @@ def extract_audio(src_path: str, out_wav_path: str) -> str:
     return out_wav_path
 
 
-def detect_face_center(src_path: str, start: float, duration: float) -> tuple[float, float] | None:
-    """Sample a few frames in [start, start+duration] with OpenCV's Haar
-    cascade face detector and return a normalized (x, y) center in [0, 1]
-    to drive the vertical-crop window. Falls back to None (caller centers
-    the crop) if no face is found."""
+def detect_face_track(
+    src_path: str, start: float, duration: float, segment_s: float = 3.0, max_segments: int = 12
+) -> list[tuple[float, float]]:
+    """Samples faces across [start, start+duration] with OpenCV's Haar
+    cascade detector in `segment_s`-second windows, returning one
+    (offset_seconds, normalized_x_center) point per window where a face
+    was found. offset_seconds is relative to the clip start (0..duration).
+    Segments with no detected face are simply omitted — the caller
+    interpolates between whatever points remain. Returns an empty list
+    when nothing was found at all (caller falls back to a centered crop)."""
     cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
     detector = cv2.CascadeClassifier(cascade_path)
 
     cap = cv2.VideoCapture(src_path)
     if not cap.isOpened():
-        return None
+        return []
 
-    fps = cap.get(cv2.CAP_PROP_FPS) or 25
     frame_w = cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1
-    frame_h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 1
+    num_segments = max(1, min(round(duration / segment_s), max_segments))
 
-    sample_times = [start + duration * frac for frac in (0.1, 0.4, 0.7, 0.9)]
-    centers: list[tuple[float, float]] = []
-
-    for t in sample_times:
-        cap.set(cv2.CAP_PROP_POS_MSEC, max(t, 0) * 1000)
-        ok, frame = cap.read()
-        if not ok:
-            continue
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
-        if len(faces) == 0:
-            continue
-        # largest face wins
-        x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
-        centers.append(((x + w / 2) / frame_w, (y + h / 2) / frame_h))
+    points: list[tuple[float, float]] = []
+    for i in range(num_segments):
+        seg_offset = duration * i / num_segments
+        seg_dur = duration / num_segments
+        xs = []
+        for frac in (0.3, 0.6):
+            cap.set(cv2.CAP_PROP_POS_MSEC, max(start + seg_offset + seg_dur * frac, 0) * 1000)
+            ok, frame = cap.read()
+            if not ok:
+                continue
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
+            if len(faces) == 0:
+                continue
+            # largest face wins
+            x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
+            xs.append((x + w / 2) / frame_w)
+        if xs:
+            points.append((seg_offset, float(np.median(xs))))
 
     cap.release()
-    if not centers:
-        return None
-    arr = np.array(centers)
-    return float(np.median(arr[:, 0])), float(np.median(arr[:, 1]))
+    return points
 
 
-def build_vertical_crop_filter(src_w: int, src_h: int, target_ratio: float, face_center_x: float | None) -> str:
+def _piecewise_linear_expr(points: list[tuple[float, float]]) -> str:
+    """Builds an ffmpeg eval expression in `t` that linearly interpolates
+    between (time, value) points, holding the first/last value outside the
+    covered range. Commas inside the expression are backslash-escaped since
+    the caller embeds this inside a comma-separated ffmpeg filter chain."""
+    points = sorted(points)
+    expr = f"{points[-1][1]:.4f}"
+    for (t0, v0), (t1, v1) in reversed(list(zip(points, points[1:]))):
+        segment = f"({v0:.4f}+({v1:.4f}-{v0:.4f})*(t-{t0:.4f})/({t1:.4f}-{t0:.4f}))"
+        expr = f"if(lt(t\\,{t1:.4f})\\,{segment}\\,{expr})"
+    return expr
+
+
+def build_vertical_crop_filter(
+    src_w: int, src_h: int, target_ratio: float, face_track: list[tuple[float, float]] | None
+) -> str:
     """Build an ffmpeg crop filter that reframes a landscape source to a
-    vertical target ratio (default 9:16), centered on the detected face
-    when available, else centered on the frame."""
+    vertical target ratio (default 9:16). With two or more face-track
+    points the crop pans smoothly between them over the clip's duration —
+    following the subject through movement or a cut — instead of locking
+    to one static position for the whole clip. Falls back to a single
+    centered (or single-point) crop when there's nothing to pan between."""
     crop_w = int(src_h * target_ratio)
     crop_w = min(crop_w, src_w)
-    if face_center_x is not None:
-        center_px = face_center_x * src_w
-    else:
-        center_px = src_w / 2
-    x = int(center_px - crop_w / 2)
-    x = max(0, min(x, src_w - crop_w))
-    return f"crop={crop_w}:{src_h}:{x}:0"
+
+    if not face_track:
+        x = int(src_w / 2 - crop_w / 2)
+        return f"crop={crop_w}:{src_h}:{x}:0"
+
+    if len(face_track) == 1:
+        center_px = face_track[0][1] * src_w
+        x = int(max(0, min(center_px - crop_w / 2, src_w - crop_w)))
+        return f"crop={crop_w}:{src_h}:{x}:0"
+
+    center_expr = _piecewise_linear_expr(face_track)
+    x_expr = f"clip(({center_expr})*{src_w}-{crop_w}/2\\,0\\,{src_w - crop_w})"
+    return f"crop={crop_w}:{src_h}:{x_expr}:0"
 
 
 def detect_silences(path: str, noise_db: float = -35.0, min_silence_s: float = 0.6) -> list[tuple[float, float]]:
@@ -171,12 +200,15 @@ def render_clip(
     has_audio = any(s["codec_type"] == "audio" for s in info["streams"])
     src_w, src_h = int(video_stream["width"]), int(video_stream["height"])
 
-    face_center = detect_face_center(src_path, start, duration)
-    face_x = face_center[0] if face_center else None
-    crop_filter = build_vertical_crop_filter(src_w, src_h, target_ratio=9 / 16, face_center_x=face_x)
+    face_track = detect_face_track(src_path, start, duration)
+    crop_filter = build_vertical_crop_filter(src_w, src_h, target_ratio=9 / 16, face_track=face_track)
 
     target_w, target_h = preset["width"], preset["height"]
-    video_filters = [crop_filter, f"scale={target_w}:{target_h}"]
+    # Subtle contrast/saturation lift — the flat, slightly washed-out look
+    # of a raw webcam/screen recording reads as "amateur" next to edited
+    # Shorts; this pushes it toward a more finished, punchier look by
+    # default on every render.
+    video_filters = [crop_filter, f"scale={target_w}:{target_h}", "eq=contrast=1.06:saturation=1.15"]
 
     # Silence removal must drop the same time ranges from video and audio,
     # or the two drift out of sync — so both get the same `between()` gate,
@@ -214,6 +246,12 @@ def render_clip(
             audio_filters.append(f"aselect='{select_expr}'")
             audio_filters.append("asetpts=N/SR/TB")
         if normalize_audio:
+            # Compress before loudnorm so quiet/loud words in the same clip
+            # land closer together first — loudnorm alone matches the
+            # *average* level but leaves the raw dynamic range intact,
+            # which is what makes unedited speech sound thin next to
+            # produced Shorts audio.
+            audio_filters.append("acompressor=threshold=-18dB:ratio=3:attack=5:release=50")
             audio_filters.append("loudnorm=I=-16:TP=-1.5:LRA=11")
         if audio_filters:
             chains.append(f"[0:a]{','.join(audio_filters)}[abase]")

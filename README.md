@@ -21,8 +21,9 @@ Concretely:
 | Import from YouTube URL (`yt-dlp`) | Implemented |
 | Transcription (word-level timestamps) | Implemented via `faster-whisper` |
 | Clip candidate detection | Implemented — **heuristic** scorer (audio energy, speech rate, keyword/question/emotion hits, sentence boundaries), not a trained virality model |
-| Auto 9:16 reframe | Implemented — OpenCV face detection drives crop window; falls back to center crop |
-| Silence removal / loudness normalization | Implemented via ffmpeg `silencedetect` + `loudnorm` |
+| Auto 9:16 reframe | Implemented — OpenCV face detection samples the clip in windows and the crop pans smoothly between them, following the subject through movement/cuts instead of one static crop; falls back to a centered crop when no face is found |
+| Auto color grade | Implemented — subtle contrast/saturation lift (ffmpeg `eq`) applied to every render by default |
+| Silence removal / loudness normalization | Implemented via ffmpeg `silencedetect` + `acompressor` + `loudnorm` |
 | Word-by-word animated subtitles | Implemented — ASS subtitles generated from Whisper word timestamps, burned in with ffmpeg |
 | Branding (logo/watermark/intro/outro/fonts/colors, presets) | Implemented |
 | AI metadata (title/description/hashtags/SEO score) | Implemented — template-based generator, or set `ANTHROPIC_API_KEY` to use Claude instead |
@@ -46,9 +47,10 @@ postgres    metadata (users, videos, clips, jobs, branding, settings)
 redis       Celery broker/result backend + job queue state
 ```
 
-Pipeline: `upload → transcribe → score & pick clips → render (reframe +
-subtitles + branding + silence removal + loudness norm) → generate
-metadata → your review/approval → upload to YouTube`.
+Pipeline: `upload → transcribe → score & pick clips → render (pan-tracking
+reframe + color grade + subtitles + branding + silence removal + audio
+compression/loudness norm) → generate metadata → your review/approval →
+upload to YouTube`.
 
 ## Running it
 
