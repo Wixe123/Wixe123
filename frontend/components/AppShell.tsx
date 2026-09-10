@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 import { api, clearToken, getToken } from "@/lib/api";
 import {
   IconCopyStyle,
-  IconDashboard,
   IconFlame,
   IconLogOut,
   IconPalette,
@@ -20,10 +19,9 @@ import {
 import type { User } from "@/lib/types";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Dashboard", Icon: IconDashboard },
+  { href: "/", label: "Agent World", Icon: IconWorld },
   { href: "/upload", label: "Upload", Icon: IconUpload },
   { href: "/queue", label: "Queue", Icon: IconQueue },
-  { href: "/world", label: "Agent World", Icon: IconWorld },
   { href: "/trending", label: "Trending", Icon: IconFlame },
   { href: "/analytics", label: "Analytics", Icon: IconTrendingUp },
   { href: "/style", label: "Style Analyzer", Icon: IconCopyStyle },
