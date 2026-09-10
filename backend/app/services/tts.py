@@ -1,19 +1,74 @@
-"""Free narration voice. Tries edge-tts first (Microsoft's neural voices,
-no API key, but an unofficial endpoint that occasionally rejects requests
-from some networks) and falls back to espeak-ng (genuinely offline,
-always available, noticeably more robotic) if that fails.
+"""Narration voice, cheapest-to-priciest fallback chain: ElevenLabs (a real
+premium narrator voice, only when ELEVENLABS_API_KEY is set — costs money
+per character) -> edge-tts (Microsoft's neural voices, free, no API key,
+but an unofficial endpoint that occasionally rejects requests from some
+networks) -> espeak-ng (genuinely offline, always available, noticeably
+more robotic).
 
-Either path returns {"audio_path": str, "words": [{"word","start","end"}]}
+Every path returns {"audio_path": str, "words": [{"word","start","end"}]}
 in the same shape subtitles.build_ass already expects."""
 import asyncio
+import base64
 import logging
 import subprocess
 
+import httpx
+
+from app.core.config import get_settings
 from app.services import ffmpeg_utils
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 DEFAULT_VOICE = "en-US-GuyNeural"
+
+ELEVENLABS_TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/with-timestamps"
+
+
+def _words_from_character_alignment(characters: list[str], starts: list[float], ends: list[float]) -> list[dict]:
+    """ElevenLabs' timestamped endpoint gives per-character timing, not
+    per-word — group consecutive non-whitespace characters into words,
+    taking the first character's start and the last character's end."""
+    words: list[dict] = []
+    current_chars: list[str] = []
+    current_start = None
+    current_end = None
+    for ch, start, end in zip(characters, starts, ends):
+        if ch.isspace():
+            if current_chars:
+                words.append({"word": "".join(current_chars), "start": current_start, "end": current_end})
+                current_chars = []
+                current_start = None
+            continue
+        if current_start is None:
+            current_start = start
+        current_chars.append(ch)
+        current_end = end
+    if current_chars:
+        words.append({"word": "".join(current_chars), "start": current_start, "end": current_end})
+    return words
+
+
+def _elevenlabs_tts(text: str, out_path: str, voice_id: str) -> list[dict]:
+    response = httpx.post(
+        ELEVENLABS_TTS_URL.format(voice_id=voice_id),
+        headers={"xi-api-key": settings.ELEVENLABS_API_KEY, "Content-Type": "application/json"},
+        json={"text": text, "model_id": "eleven_multilingual_v2"},
+        timeout=60,
+    )
+    response.raise_for_status()
+    data = response.json()
+
+    with open(out_path, "wb") as f:
+        f.write(base64.b64decode(data["audio_base64"]))
+
+    alignment = data["alignment"]
+    words = _words_from_character_alignment(
+        alignment["characters"], alignment["character_start_times_seconds"], alignment["character_end_times_seconds"]
+    )
+    if not words:
+        raise RuntimeError("elevenlabs returned no timing data")
+    return words
 
 
 async def _edge_tts_async(text: str, out_path: str, voice: str) -> list[dict]:
@@ -68,6 +123,13 @@ def _espeak_fallback(text: str, out_path: str) -> list[dict]:
 
 
 def synthesize(text: str, out_path: str, voice: str = DEFAULT_VOICE) -> dict:
+    if settings.ELEVENLABS_API_KEY:
+        try:
+            words = _elevenlabs_tts(text, out_path, settings.ELEVENLABS_VOICE_ID)
+            return {"audio_path": out_path, "words": words, "engine": "elevenlabs"}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("elevenlabs failed (%s), falling back to edge-tts", exc)
+
     try:
         words = asyncio.run(_edge_tts_async(text, out_path, voice))
         return {"audio_path": out_path, "words": words, "engine": "edge-tts"}

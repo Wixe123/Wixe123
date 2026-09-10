@@ -33,7 +33,7 @@ Concretely:
 | Live YouTube Analytics (views, watch time, subscribers, likes, per-clip performance) | Implemented via the YouTube Analytics API (`yt-analytics.readonly` scope) — see the Analytics page. Channels connected before this feature was added need to hit "Reconnect" in Settings once to grant the new permission. |
 | Dashboard (today's stats, queue, storage/API usage) | Implemented |
 | Mobile / iPhone use | Implemented as a responsive web app — collapsible sidebar becomes a bottom tab bar on small screens, tables scroll horizontally, and it's installable to the iOS home screen ("Add to Home Screen" in Safari) via `manifest.json` + Apple touch icons for an app-like feel. This is Safari-based, not a native Swift app. |
-| Faceless explainer video generation | Implemented — writes a from-scratch Vox-style Short (topic + script via Claude, narration via `edge-tts`/`espeak-ng`, charts/Wikimedia photos/text callouts, captions) instead of cutting a clip from your own footage. Requires `ANTHROPIC_API_KEY`. See below. |
+| Faceless explainer video generation | Implemented — writes a from-scratch Vox-style Short (topic + script via Claude, narration via `edge-tts`/`espeak-ng` or a premium ElevenLabs voice, charts/comparisons/Wikimedia photos/text callouts, captions) instead of cutting a clip from your own footage. Requires `ANTHROPIC_API_KEY`. See below. |
 | GPU acceleration / 50 videos-per-day throughput | **Not provisioned here.** The pipeline is GPU-ready (`faster-whisper` and ffmpeg both use CUDA when available) — running it at that volume is a matter of running more Celery workers on GPU-backed machines, which is an infra/ops decision for your own cloud account, not something a repo can pre-package.
 | Cloud deployment (Terraform/GCP/AWS) | Not included — `docker-compose.yml` covers local/single-VM deployment. Point it at a GPU box and it will use the GPU. |
 
@@ -72,7 +72,8 @@ docker compose up --build
   as an authorized redirect URI.
 - `SECRET_KEY` — random string for JWT signing.
 - `FERNET_KEY` — random 32-byte urlsafe-base64 key (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`) used to encrypt stored OAuth refresh tokens at rest.
-- `ANTHROPIC_API_KEY` (optional) — enables LLM-generated titles/descriptions/hashtags instead of the template fallback.
+- `ANTHROPIC_API_KEY` (optional) — enables LLM-generated titles/descriptions/hashtags instead of the template fallback, and is required for faceless video topic/script generation.
+- `ELEVENLABS_API_KEY` (optional) — a real premium narrator voice for faceless videos instead of the free `edge-tts`/`espeak-ng` chain. Costs money per character generated; see [elevenlabs.io/pricing](https://elevenlabs.io/pricing). `ELEVENLABS_VOICE_ID` picks the voice (defaults to a documentary-style narrator; browse voices in your ElevenLabs account for others — some require a paid Creator+ tier).
 
 You are responsible for complying with the YouTube API Services Terms of
 Service and YouTube's Community Guidelines for anything this app uploads.
@@ -172,9 +173,11 @@ clip cut from a longer video:
    beats — one or two sentences of narration each, paired with a visual:
    a chart (only when the script has real numbers to plot), a before/after
    comparison, a photo/map search query, or a text callout.
-3. Narration is synthesized with `edge-tts` (free, no API key), falling
-   back to offline `espeak-ng` if that endpoint is ever unreachable from
-   your network.
+3. Narration is synthesized with, in order: a real ElevenLabs voice if
+   `ELEVENLABS_API_KEY` is set (costs money per character, but sounds like
+   an actual narrator instead of a synthesized voice), otherwise `edge-tts`
+   (free, no API key), falling back further to offline `espeak-ng` if that
+   endpoint is ever unreachable from your network.
 4. Each beat's visual is rendered in Vox's own look (near-black
    background, a single yellow accent, white text) — a `matplotlib`
    chart, a split-screen before/after comparison (two licensed Wikimedia

@@ -24,6 +24,16 @@ class Settings(BaseSettings):
 
     ANTHROPIC_API_KEY: str = ""
 
+    # Optional premium narration for faceless videos. When set, tts.py tries
+    # this before edge-tts/espeak-ng — a real ElevenLabs voice instead of a
+    # free neural/offline one. Costs money per character generated; unset
+    # just keeps the existing free fallback chain. Voice defaults to
+    # "George - Warm, Captivating Storyteller" (a premade narrative-story
+    # voice available on ElevenLabs' free tier), overridable per-account —
+    # some premade voices (e.g. "Dean") require a paid Creator+ tier.
+    ELEVENLABS_API_KEY: str = ""
+    ELEVENLABS_VOICE_ID: str = "JBFqnCBsd6RMkjVDRZzb"
+
     # Path (inside the container) to a Netscape-format cookies.txt exported
     # from a real logged-in browser session. YouTube increasingly blocks
     # unauthenticated automated requests with "Please sign in" / "confirm
