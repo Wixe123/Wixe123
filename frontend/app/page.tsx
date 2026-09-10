@@ -3,9 +3,10 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import AppShell from "@/components/AppShell";
+import ClipCard from "@/components/ClipCard";
 import { IconAlertTriangle, IconCheck } from "@/components/icons";
 import { api } from "@/lib/api";
-import type { JobType, ProcessingJob } from "@/lib/types";
+import type { Clip, JobType, ProcessingJob, UserSettings } from "@/lib/types";
 
 interface Stage {
   type: JobType;
@@ -48,18 +49,38 @@ interface Bucket {
   failed: ProcessingJob | null;
 }
 
-export default function AgentWorldPage() {
+export default function ChannelPage() {
+  const [settings, setSettings] = useState<UserSettings | null>(null);
+  const [youtube, setYoutube] = useState<{ connected: boolean; channel_title?: string } | null>(null);
+  const [settingsError, setSettingsError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [generatingFaceless, setGeneratingFaceless] = useState(false);
+  const [facelessMessage, setFacelessMessage] = useState("");
+
+  const [reviewClips, setReviewClips] = useState<Clip[]>([]);
   const [jobs, setJobs] = useState<ProcessingJob[]>([]);
-  const [error, setError] = useState("");
+  const [pipelineError, setPipelineError] = useState("");
   const [flash, setFlash] = useState<Record<string, boolean>>({});
   const prevSuccessIds = useRef<Set<string>>(new Set());
 
-  async function load() {
+  async function loadSettings() {
     try {
-      const data = await api.listJobs();
+      const [s, y] = await Promise.all([api.getSettings(), api.youtubeStatus()]);
+      setSettings(s);
+      setYoutube(y);
+      setSettingsError("");
+    } catch (e) {
+      setSettingsError((e as Error).message);
+    }
+  }
+
+  async function loadPipeline() {
+    try {
+      const [clips, jobList] = await Promise.all([api.listClips("ready_for_review"), api.listJobs()]);
 
       const newlyDone: Record<string, boolean> = {};
-      for (const j of data) {
+      for (const j of jobList) {
         if (j.status === "success" && !prevSuccessIds.current.has(j.id)) {
           newlyDone[j.job_type] = true;
         }
@@ -74,21 +95,58 @@ export default function AgentWorldPage() {
           });
         }, 2200);
       }
-      prevSuccessIds.current = new Set(data.filter((j) => j.status === "success").map((j) => j.id));
+      prevSuccessIds.current = new Set(jobList.filter((j) => j.status === "success").map((j) => j.id));
 
-      setJobs(data);
-      setError("");
+      setReviewClips(clips);
+      setJobs(jobList);
+      setPipelineError("");
     } catch (e) {
-      setError((e as Error).message);
+      setPipelineError((e as Error).message);
     }
   }
 
   useEffect(() => {
-    load();
-    const interval = setInterval(load, 3000);
+    loadSettings();
+  }, []);
+
+  useEffect(() => {
+    loadPipeline();
+    const interval = setInterval(loadPipeline, 3000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function save(patch: Partial<UserSettings>) {
+    if (!settings) return;
+    setSaving(true);
+    setSaved(false);
+    try {
+      const updated = await api.updateSettings(patch);
+      setSettings(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function connectYoutube() {
+    const { auth_url } = await api.youtubeConnectUrl();
+    window.location.href = auth_url;
+  }
+
+  async function generateFaceless() {
+    setGeneratingFaceless(true);
+    setFacelessMessage("");
+    try {
+      await api.generateFacelessVideo();
+      setFacelessMessage("Queued — watch the agents below for progress.");
+    } catch (e) {
+      setFacelessMessage((e as Error).message);
+    } finally {
+      setGeneratingFaceless(false);
+    }
+  }
 
   function bucketFor(type: JobType): Bucket {
     const forType = jobs.filter((j) => j.job_type === type);
@@ -105,14 +163,115 @@ export default function AgentWorldPage() {
   return (
     <AppShell>
       <div className="mb-6">
-        <h1 className="text-3xl font-extralight tracking-tight">Agent world</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Where your ShortsForge pipeline lives — live status, not a diagram.
-        </p>
+        <h1 className="text-3xl font-extralight tracking-tight">My faceless channel</h1>
+        <p className="mt-1 text-sm text-gray-500">Set it up once — the agents below keep it running.</p>
       </div>
 
-      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+      {settingsError && <p className="mb-4 text-sm text-red-400">{settingsError}</p>}
 
+      <section className="card mb-6 p-6">
+        <h2 className="mb-4 text-base font-light tracking-tight">YouTube channel</h2>
+        {youtube?.connected ? (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-emerald-400">Connected: {youtube.channel_title}</p>
+            <button className="btn-secondary" onClick={connectYoutube}>
+              Reconnect
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-400">Connect your channel to enable uploads and scheduling.</p>
+            <button className="btn-primary" onClick={connectYoutube}>
+              Connect YouTube
+            </button>
+          </div>
+        )}
+      </section>
+
+      <section className="card mb-6 p-6">
+        <h2 className="mb-1 text-base font-light tracking-tight">Channel setup</h2>
+        <p className="mb-4 text-xs text-gray-500">
+          Pick a niche and the agents write a from-scratch Vox-style explainer Short — topic, narration,
+          charts/photos/callouts — no footage of your own required.
+        </p>
+        {!settings ? (
+          <p className="text-sm text-gray-500">Loading…</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="text-sm text-gray-400 sm:col-span-2">
+              Channel niche
+              <input
+                className="input mt-1"
+                placeholder="e.g. space exploration, ancient history, personal finance"
+                defaultValue={settings.faceless_niche ?? ""}
+                onBlur={(e) => save({ faceless_niche: e.target.value || null })}
+              />
+              <span className="text-xs text-gray-500">Required before a video can be generated.</span>
+            </label>
+
+            <label className="flex items-center gap-2 text-sm text-gray-400">
+              <input
+                type="checkbox"
+                defaultChecked={settings.faceless_auto_upload}
+                onChange={(e) => save({ faceless_auto_upload: e.target.checked })}
+              />
+              Auto-upload generated videos instead of holding them for review
+            </label>
+
+            <div>
+              <label className="flex items-center gap-2 text-sm text-gray-400">
+                <input
+                  type="checkbox"
+                  checked={settings.posting_cadence_per_day !== null}
+                  onChange={(e) => save({ posting_cadence_per_day: e.target.checked ? 2 : null })}
+                />
+                Spread uploads out instead of posting a whole batch at once
+              </label>
+              {settings.posting_cadence_per_day !== null && (
+                <label className="mt-2 block text-sm text-gray-400">
+                  Shorts per day ({settings.posting_cadence_per_day})
+                  <input
+                    type="range"
+                    min={1}
+                    max={12}
+                    step={1}
+                    className="mt-2 w-full"
+                    defaultValue={settings.posting_cadence_per_day}
+                    onChange={(e) => save({ posting_cadence_per_day: Number(e.target.value) })}
+                  />
+                </label>
+              )}
+            </div>
+
+            <div className="sm:col-span-2">
+              <button
+                className="btn-primary"
+                disabled={!settings.faceless_niche || generatingFaceless}
+                onClick={generateFaceless}
+              >
+                {generatingFaceless ? "Queuing…" : "Generate one now"}
+              </button>
+              {facelessMessage && <p className="mt-2 text-xs text-gray-500">{facelessMessage}</p>}
+              <p className="mt-2 text-xs text-gray-500">{saving ? "Saving…" : saved ? "Saved." : ""}</p>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {pipelineError && <p className="mb-4 text-sm text-red-400">{pipelineError}</p>}
+
+      {reviewClips.length > 0 && (
+        <div className="mb-10">
+          <span className="eyebrow mb-4 block">Needs your review</span>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {reviewClips.map((clip) => (
+              <ClipCard key={clip.id} clip={clip} onChange={loadPipeline} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <span className="eyebrow mb-4 block">Agent world</span>
       <div className="card relative overflow-hidden p-8 md:p-16">
         <div
           className="pointer-events-none absolute inset-0"

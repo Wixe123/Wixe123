@@ -1,33 +1,11 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, clearToken, getToken } from "@/lib/api";
-import {
-  IconCopyStyle,
-  IconFlame,
-  IconLogOut,
-  IconPalette,
-  IconQueue,
-  IconSettings,
-  IconTrendingUp,
-  IconUpload,
-  IconWorld,
-} from "@/components/icons";
+import { IconLogOut } from "@/components/icons";
 import type { User } from "@/lib/types";
-
-const NAV_ITEMS = [
-  { href: "/", label: "Agent World", Icon: IconWorld },
-  { href: "/upload", label: "Upload", Icon: IconUpload },
-  { href: "/queue", label: "Queue", Icon: IconQueue },
-  { href: "/trending", label: "Trending", Icon: IconFlame },
-  { href: "/analytics", label: "Analytics", Icon: IconTrendingUp },
-  { href: "/style", label: "Style Analyzer", Icon: IconCopyStyle },
-  { href: "/branding", label: "Branding", Icon: IconPalette },
-  { href: "/settings", label: "Settings", Icon: IconSettings },
-];
 
 function Logo({ size = 30 }: { size?: number }) {
   return (
@@ -42,7 +20,6 @@ function Logo({ size = 30 }: { size?: number }) {
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -104,30 +81,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <Logo />
           <span className="text-[15px] font-light tracking-wide text-gray-100">ShortsForge</span>
         </div>
-        <nav className="flex flex-1 flex-col gap-0.5">
-          {NAV_ITEMS.map((item) => {
-            const active = pathname === item.href;
-            return (
-              <Link key={item.href} href={item.href} className="relative">
-                {active && (
-                  <motion.div
-                    layoutId="nav-active-desktop"
-                    className="absolute inset-y-0 left-0 w-px bg-brand-400"
-                    transition={{ type: "spring", stiffness: 500, damping: 40 }}
-                  />
-                )}
-                <span
-                  className={`relative flex items-center gap-3 py-2.5 pl-4 text-[13px] font-normal tracking-wide transition-colors ${
-                    active ? "text-brand-300" : "text-gray-500 hover:text-gray-200"
-                  }`}
-                >
-                  <item.Icon className="h-[17px] w-[17px]" strokeWidth={1.4} />
-                  {item.label}
-                </span>
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="flex-1" />
         {user && (
           <div className="flex items-center gap-3 border-t border-white/[0.06] pt-4">
             {user.avatar_url ? (
@@ -152,44 +106,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         )}
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-5 pb-24 md:p-12 md:pb-12">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={pathname}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25, ease: "easeOut" }}
-            className="mx-auto max-w-5xl"
-          >
-            {children}
-          </motion.div>
-        </AnimatePresence>
+      <main className="flex-1 overflow-y-auto p-5 pb-8 md:p-12">
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+          className="mx-auto max-w-5xl"
+        >
+          {children}
+        </motion.div>
       </main>
-
-      {/* Mobile bottom tab bar */}
-      <nav
-        className="fixed inset-x-0 bottom-0 z-20 flex border-t border-white/[0.06] bg-base-950/90 backdrop-blur-md md:hidden"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-      >
-        {NAV_ITEMS.map((item) => {
-          const active = pathname === item.href;
-          return (
-            <Link key={item.href} href={item.href} className="relative flex flex-1 flex-col items-center gap-1 py-2.5">
-              {active && (
-                <motion.div
-                  layoutId="nav-active-mobile"
-                  className="absolute top-0 h-px w-8 bg-brand-400"
-                  transition={{ type: "spring", stiffness: 500, damping: 40 }}
-                />
-              )}
-              <item.Icon className={`h-5 w-5 ${active ? "text-brand-300" : "text-gray-500"}`} strokeWidth={1.4} />
-              <span className={`text-[10px] font-normal ${active ? "text-brand-300" : "text-gray-500"}`}>
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
-      </nav>
     </div>
   );
 }
