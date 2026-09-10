@@ -77,6 +77,7 @@ class JobOut(BaseModel):
     error_message: str
     created_at: datetime
     updated_at: datetime
+    title: str | None = None
 
 
 class AnalyticsOverview(BaseModel):
@@ -122,6 +123,28 @@ class TopVideo(BaseModel):
     views: int
     watch_time_minutes: float
     likes: int
+
+
+class YouTubeComment(BaseModel):
+    comment_id: str
+    thread_id: str
+    video_id: str
+    author: str
+    author_avatar: str
+    text: str
+    like_count: int
+    published_at: str
+    reply_count: int
+    can_reply: bool
+
+
+class CommentReplyRequest(BaseModel):
+    text: str
+
+
+class CommentReplyOut(BaseModel):
+    comment_id: str
+    text: str
 
 
 class DashboardStats(BaseModel):

@@ -243,6 +243,16 @@ export const IconUsers = (p: IconProps) =>
     p
   );
 
+export const IconWorld = (p: IconProps) =>
+  base(
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18" />
+      <path d="M12 3c2.6 2.6 4 5.7 4 9s-1.4 6.4-4 9c-2.6-2.6-4-5.7-4-9s1.4-6.4 4-9Z" />
+    </>,
+    p
+  );
+
 export const IconFlame = (p: IconProps) =>
   base(
     <path d="M12 2.5c1 2.5-1.5 3.8-1.5 6 0 1.2 1 2 2 2 1.3 0 2-1.1 2-2.2 2.2 1.6 3.5 4.1 3.5 6.7 0 4-3.1 7-6.5 7S5 19 5 15c0-3.4 2-5.7 3.3-7.3.5-.6 1.1-1.3 1.4-2.1.4-1 .4-2 .3-3.1Z" />,

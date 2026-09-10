@@ -13,7 +13,7 @@ export type ClipStatus =
 
 export type Visibility = "public" | "unlisted" | "private" | "draft";
 export type JobStatus = "queued" | "running" | "paused" | "success" | "failed" | "cancelled";
-export type JobType = "analyze_video" | "render_clip" | "upload_clip";
+export type JobType = "analyze_video" | "render_clip" | "upload_clip" | "generate_faceless_video";
 
 export interface User {
   id: string;
@@ -68,6 +68,20 @@ export interface ProcessingJob {
   error_message: string;
   created_at: string;
   updated_at: string;
+  title: string | null;
+}
+
+export interface YouTubeComment {
+  comment_id: string;
+  thread_id: string;
+  video_id: string;
+  author: string;
+  author_avatar: string;
+  text: string;
+  like_count: number;
+  published_at: string;
+  reply_count: number;
+  can_reply: boolean;
 }
 
 export interface AnalyticsOverview {

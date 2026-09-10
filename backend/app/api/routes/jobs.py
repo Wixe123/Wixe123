@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.models import JobStatus, ProcessingJob, User, Video
+from app.db.models import Clip, JobStatus, ProcessingJob, User, Video
 from app.db.session import get_db
 from app.schemas.schemas import JobOut
 from app.workers.celery_app import celery_app
@@ -18,12 +18,30 @@ def _user_job_query(db: Session, user: User):
     )
 
 
+def _with_titles(db: Session, jobs: list[ProcessingJob]) -> list[JobOut]:
+    """Hydrates each job's display title from its clip (more specific) or
+    video, so callers (the queue page, the agent-world view) can show what a
+    job is actually working on without a second round-trip per job."""
+    video_ids = {j.video_id for j in jobs if j.video_id}
+    clip_ids = {j.clip_id for j in jobs if j.clip_id}
+    video_titles = dict(db.query(Video.id, Video.title).filter(Video.id.in_(video_ids)).all()) if video_ids else {}
+    clip_titles = dict(db.query(Clip.id, Clip.title).filter(Clip.id.in_(clip_ids)).all()) if clip_ids else {}
+
+    out = []
+    for j in jobs:
+        item = JobOut.model_validate(j)
+        item.title = (clip_titles.get(j.clip_id) or "").strip() or (video_titles.get(j.video_id) or "").strip() or None
+        out.append(item)
+    return out
+
+
 @router.get("", response_model=list[JobOut])
 def list_jobs(status: JobStatus | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     query = _user_job_query(db, user)
     if status:
         query = query.filter(ProcessingJob.status == status)
-    return query.order_by(ProcessingJob.created_at.desc()).limit(200).all()
+    jobs = query.order_by(ProcessingJob.created_at.desc()).limit(200).all()
+    return _with_titles(db, jobs)
 
 
 def _owned_job(job_id: str, user: User, db: Session) -> ProcessingJob:

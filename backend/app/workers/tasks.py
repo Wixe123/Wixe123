@@ -556,6 +556,14 @@ def generate_faceless_video_task(self, user_id: str, job_id: str | None = None):
         db.add(video)
         db.commit()
         db.refresh(video)
+        if job:
+            # The job is created before any Video exists (there's nothing to link
+            # it to yet), so it's born with video_id=None. list_jobs() inner-joins
+            # ProcessingJob to Video to scope results to the requesting user, which
+            # silently drops a still-None video_id job from every query. Backfill it
+            # now so the job becomes visible for the remaining ~80% of its run.
+            job.video_id = video.id
+            db.commit()
         _mark(db, job, JobStatus.RUNNING, progress=0.2)
 
         work_dir = storage.clips_dir(video.id)

@@ -14,6 +14,7 @@ import type {
   Video,
   WatchedChannel,
   WatchedChannelDetail,
+  YouTubeComment,
 } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -102,6 +103,13 @@ export const api = {
   analyticsClips: (days = 28) => request<ClipPerformance[]>(`/api/analytics/clips?days=${days}`),
   analyticsTrend: (days = 28) => request<TrendPoint[]>(`/api/analytics/trend?days=${days}`),
   analyticsTopVideos: (days = 28) => request<TopVideo[]>(`/api/analytics/top-videos?days=${days}`),
+  analyticsComments: (maxResults = 25) =>
+    request<YouTubeComment[]>(`/api/analytics/comments?max_results=${maxResults}`),
+  replyToComment: (commentId: string, text: string) =>
+    request<{ comment_id: string; text: string }>(`/api/analytics/comments/${commentId}/reply`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
 
   listBrandingPresets: () => request<BrandingPreset[]>("/api/branding"),
   createBrandingPreset: (payload: Partial<BrandingPreset>) =>

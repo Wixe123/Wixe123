@@ -7,9 +7,23 @@ from app.api.deps import get_current_user
 from app.core.security import decrypt_secret
 from app.db.models import Clip, ClipStatus, User, Video
 from app.db.session import get_db
-from app.schemas.schemas import AnalyticsOverview, ClipPerformance, TopVideo, TrendPoint
+from app.schemas.schemas import (
+    AnalyticsOverview,
+    ClipPerformance,
+    CommentReplyOut,
+    CommentReplyRequest,
+    TopVideo,
+    TrendPoint,
+    YouTubeComment,
+)
 from app.services import youtube_analytics
-from app.services.youtube_client import YOUTUBE_SCOPES, credentials_from_refresh_token, get_video_titles
+from app.services.youtube_client import (
+    YOUTUBE_SCOPES,
+    credentials_from_refresh_token,
+    get_video_titles,
+    list_recent_comments,
+    reply_to_comment,
+)
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -133,6 +147,34 @@ def trend(days: int = 28, user: User = Depends(get_current_user)):
         )
         for row in rows
     ]
+
+
+@router.get("/comments", response_model=list[YouTubeComment])
+def comments(max_results: int = 25, user: User = Depends(get_current_user)):
+    credentials = _credentials_for(user)
+    try:
+        return list_recent_comments(credentials, max_results=max_results)
+    except HttpError as exc:
+        raise HTTPException(
+            502,
+            "Could not fetch YouTube comments. If you connected your channel before comment "
+            f"support was added, reconnect it in Settings to grant the new permission. ({exc})",
+        ) from exc
+
+
+@router.post("/comments/{comment_id}/reply", response_model=CommentReplyOut)
+def reply_comment(comment_id: str, payload: CommentReplyRequest, user: User = Depends(get_current_user)):
+    credentials = _credentials_for(user)
+    if not payload.text.strip():
+        raise HTTPException(400, "Reply text cannot be empty.")
+    try:
+        return reply_to_comment(credentials, comment_id, payload.text.strip())
+    except HttpError as exc:
+        raise HTTPException(
+            502,
+            "Could not post reply. If you connected your channel before comment support was "
+            f"added, reconnect it in Settings to grant the new permission. ({exc})",
+        ) from exc
 
 
 @router.get("/top-videos", response_model=list[TopVideo])

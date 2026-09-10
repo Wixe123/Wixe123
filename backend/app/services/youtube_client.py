@@ -16,7 +16,11 @@ LOGIN_SCOPES = ["openid", "https://www.googleapis.com/auth/userinfo.email",
                 "https://www.googleapis.com/auth/userinfo.profile"]
 YOUTUBE_SCOPES = ["https://www.googleapis.com/auth/youtube.upload",
                   "https://www.googleapis.com/auth/youtube.readonly",
-                  "https://www.googleapis.com/auth/yt-analytics.readonly"]
+                  "https://www.googleapis.com/auth/yt-analytics.readonly",
+                  # Posting/replying to comments needs force-ssl (readonly only
+                  # covers listing); accounts connected before this was added
+                  # need to reconnect once to grant it, same as analytics below.
+                  "https://www.googleapis.com/auth/youtube.force-ssl"]
 
 CLIENT_CONFIG_TEMPLATE = {
     "web": {
@@ -139,6 +143,54 @@ def get_video_titles(credentials: Credentials, video_ids: list[str]) -> dict[str
             thumb = thumbnails.get("medium") or thumbnails.get("default") or {}
             out[item["id"]] = {"title": snippet.get("title", ""), "thumbnail": thumb.get("url", "")}
     return out
+
+
+def list_recent_comments(credentials: Credentials, max_results: int = 25) -> list[dict]:
+    """Most recent top-level comment threads across the whole channel (any
+    video), newest first — the Data API's channel-wide comment feed, not a
+    per-video one. Each item includes enough to display + reply to it."""
+    channel = get_my_channel(credentials)
+    if not channel:
+        return []
+
+    youtube = build("youtube", "v3", credentials=credentials)
+    resp = youtube.commentThreads().list(
+        part="snippet",
+        allThreadsRelatedToChannelId=channel["id"],
+        order="time",
+        maxResults=max_results,
+        textFormat="plainText",
+    ).execute()
+
+    comments = []
+    for item in resp.get("items", []):
+        top = item["snippet"]["topLevelComment"]["snippet"]
+        comments.append(
+            {
+                "comment_id": item["snippet"]["topLevelComment"]["id"],
+                "thread_id": item["id"],
+                "video_id": item["snippet"].get("videoId", ""),
+                "author": top.get("authorDisplayName", ""),
+                "author_avatar": top.get("authorProfileImageUrl", ""),
+                "text": top.get("textDisplay", ""),
+                "like_count": top.get("likeCount", 0),
+                "published_at": top.get("publishedAt", ""),
+                "reply_count": item["snippet"].get("totalReplyCount", 0),
+                "can_reply": item["snippet"].get("canReply", True),
+            }
+        )
+    return comments
+
+
+def reply_to_comment(credentials: Credentials, parent_comment_id: str, text: str) -> dict:
+    """Posts a reply under an existing top-level comment (or another reply),
+    as the channel owner. Returns the new reply's id + text."""
+    youtube = build("youtube", "v3", credentials=credentials)
+    resp = youtube.comments().insert(
+        part="snippet",
+        body={"snippet": {"parentId": parent_comment_id, "textOriginal": text}},
+    ).execute()
+    return {"comment_id": resp["id"], "text": resp["snippet"].get("textDisplay", text)}
 
 
 def upload_video(
