@@ -6,6 +6,7 @@ from app.api.deps import get_current_user, get_or_create_settings
 from app.db.models import Clip, ClipStatus, JobType, ProcessingJob, User, Video
 from app.db.session import get_db
 from app.schemas.schemas import ClipOut, ClipUpdate
+from app.services.scheduling import next_scheduled_slot
 from app.workers.tasks import render_clip_task, upload_clip_task
 
 router = APIRouter(prefix="/api/clips", tags=["clips"])
@@ -84,6 +85,12 @@ def upload_clip(clip_id: str, user: User = Depends(get_current_user), db: Sessio
 
 
 def _enqueue_upload(clip: Clip, db: Session) -> Clip:
+    if clip.scheduled_at is None:
+        video = db.get(Video, clip.video_id)
+        user_settings = get_or_create_settings(db, db.get(User, video.owner_id))
+        if user_settings.posting_cadence_per_day:
+            clip.scheduled_at = next_scheduled_slot(db, video.owner_id, user_settings.posting_cadence_per_day)
+            db.commit()
     job = ProcessingJob(job_type=JobType.UPLOAD_CLIP, video_id=clip.video_id, clip_id=clip.id)
     db.add(job)
     db.commit()

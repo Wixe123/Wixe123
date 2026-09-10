@@ -299,6 +299,35 @@ export default function SettingsPage() {
               </label>
             )}
           </div>
+          <div>
+            <label className="flex items-center gap-2 text-sm text-gray-400">
+              <input
+                type="checkbox"
+                checked={settings.posting_cadence_per_day !== null}
+                onChange={(e) => save({ posting_cadence_per_day: e.target.checked ? 2 : null })}
+              />
+              Spread posts out instead of publishing a whole batch at once
+            </label>
+            {settings.posting_cadence_per_day !== null && (
+              <label className="mt-2 block text-sm text-gray-400">
+                Shorts per day ({settings.posting_cadence_per_day})
+                <input
+                  type="range"
+                  min={1}
+                  max={12}
+                  step={1}
+                  className="mt-2 w-full"
+                  defaultValue={settings.posting_cadence_per_day}
+                  onChange={(e) => save({ posting_cadence_per_day: Number(e.target.value) })}
+                />
+                <span className="text-xs text-gray-500">
+                  If you upload a backlog of videos at once, approved clips get scheduled at this pace instead of
+                  all going public immediately. Clips still upload right away — YouTube just holds each one
+                  private until its scheduled time.
+                </span>
+              </label>
+            )}
+          </div>
         </div>
       </section>
 

@@ -30,6 +30,7 @@ from app.services.algorithm_digest import build_digest_email, fetch_recent_artic
 from app.services.clip_scoring import find_candidates
 from app.services.email_utils import send_email
 from app.services.metadata_ai import generate_metadata
+from app.services.scheduling import next_scheduled_slot
 from app.services.style_analysis import analyze_style
 from app.services.transcription import transcribe
 from app.services.youtube_client import YOUTUBE_SCOPES
@@ -253,6 +254,8 @@ def render_clip_task(self, clip_id: str, job_id: str | None = None):
         threshold = user_settings.auto_approve_score_threshold if user_settings else None
         if threshold is not None and clip.score >= threshold:
             clip.status = ClipStatus.APPROVED
+            if user_settings and user_settings.posting_cadence_per_day:
+                clip.scheduled_at = next_scheduled_slot(db, video.owner_id, user_settings.posting_cadence_per_day)
             db.commit()
             upload_job = ProcessingJob(job_type=JobType.UPLOAD_CLIP, video_id=clip.video_id, clip_id=clip.id)
             db.add(upload_job)

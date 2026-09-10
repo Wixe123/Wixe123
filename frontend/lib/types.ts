@@ -203,4 +203,5 @@ export interface UserSettings {
   active_style_profile_id: string | null;
   auto_approve_score_threshold: number | null;
   auto_import_from_channel: boolean;
+  posting_cadence_per_day: number | null;
 }

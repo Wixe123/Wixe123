@@ -182,6 +182,7 @@ class UserSettingsOut(BaseModel):
     active_style_profile_id: str | None
     auto_approve_score_threshold: float | None
     auto_import_from_channel: bool
+    posting_cadence_per_day: int | None
 
 
 class StyleProfileOut(BaseModel):
@@ -258,3 +259,4 @@ class UserSettingsIn(BaseModel):
     active_style_profile_id: str | None = None
     auto_approve_score_threshold: float | None = None
     auto_import_from_channel: bool | None = None
+    posting_cadence_per_day: int | None = None

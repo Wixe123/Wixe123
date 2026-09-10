@@ -230,6 +230,11 @@ class UserSettings(Base):
     # them, instead of requiring a manual upload/URL-import each time.
     auto_import_from_channel: Mapped[bool] = mapped_column(Boolean, default=False)
     last_channel_check_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # When set, approved clips get an auto-assigned scheduled_at spaced to
+    # publish at most this many per day, instead of all going out the
+    # moment they're approved (see app/services/scheduling.py). None/unset
+    # means immediate publish, same as before.
+    posting_cadence_per_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="settings")
 
