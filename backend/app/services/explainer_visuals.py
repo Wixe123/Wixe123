@@ -1,8 +1,12 @@
 """Vox-style visuals for a generated explainer beat: a real photo/map from
 Wikimedia Commons (license-filtered to public domain / CC), a chart
-rendered from real numbers the script provided, or a big text callout.
-Nothing here invents data — charts only ever plot numbers the script
-itself supplied."""
+rendered from real numbers the script provided, a before/after comparison,
+or a big text callout. Nothing here invents data — charts and comparisons
+only ever plot numbers/labels the script itself supplied.
+
+The palette below matches Vox's own explainer look: near-black background,
+a single bright yellow accent, white body text — rather than a generic
+multi-color infographic palette."""
 import logging
 import os
 import urllib.parse
@@ -11,13 +15,18 @@ import urllib.request
 import matplotlib
 
 matplotlib.use("Agg")
+import matplotlib.image as mpimg  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-PALETTE = ["#f3b54c", "#6fa8dc", "#8fd4a0", "#e2685a", "#c9a0e0"]
-BG = "#0f1220"
-INK = "#ece7da"
+BG = "#070707"
+INK = "#FFFFFF"
+ACCENT = "#FFC600"
+# Bar/line colors: accent yellow first, then tints/neutrals of the same
+# family so multi-series charts stay legible without breaking the
+# black/yellow/white look.
+PALETTE = [ACCENT, "#FFFFFF", "#B3B3B3", "#FFE066", "#8C6D00"]
 
 # Wikimedia licenses permissive enough to reuse without asking anyone —
 # anything else (or missing metadata) is skipped rather than risking a
@@ -73,6 +82,51 @@ def render_callout(text: str, out_path: str, width_px: int = 1080, height_px: in
         0.5, 0.5, text, ha="center", va="center", color=PALETTE[0],
         fontsize=54, fontweight="bold", wrap=True, transform=ax.transAxes,
     )
+    fig.savefig(out_path, facecolor=fig.get_facecolor())
+    plt.close(fig)
+    return out_path
+
+
+def render_comparison(comparison: dict, out_path: str, work_dir: str, index: int, width_px: int = 1080, height_px: int = 1920) -> str:
+    """A Vox-style split-screen before/after: two photos (when both sides
+    resolve to a real, license-clear Wikimedia image) or, failing that, two
+    short text values/labels — always divided by a bold accent line, with
+    a plain "before" label on the left and an emphasized "after" label on
+    the right, matching Vox's own before/after bumper look."""
+    left_label = (comparison.get("left_label") or "Before").strip()
+    right_label = (comparison.get("right_label") or "After").strip()
+    left_value = comparison.get("left_value") or ""
+    right_value = comparison.get("right_value") or ""
+
+    left_image_path = right_image_path = None
+    if comparison.get("left_query") and comparison.get("right_query"):
+        candidate_left = os.path.join(work_dir, f"beat_{index}_cmp_left.jpg")
+        candidate_right = os.path.join(work_dir, f"beat_{index}_cmp_right.jpg")
+        left_image_path = search_wikimedia_image(comparison["left_query"], candidate_left)
+        right_image_path = search_wikimedia_image(comparison["right_query"], candidate_right)
+
+    fig, ax = plt.subplots(figsize=(width_px / 200, height_px / 200), dpi=200)
+    fig.patch.set_facecolor(BG)
+    ax.set_facecolor(BG)
+    ax.axis("off")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+
+    if left_image_path and right_image_path:
+        ax.imshow(mpimg.imread(left_image_path), extent=(0, 0.5, 0, 1), aspect="auto", zorder=1)
+        ax.imshow(mpimg.imread(right_image_path), extent=(0.5, 1, 0, 1), aspect="auto", zorder=1)
+    else:
+        ax.text(0.25, 0.55, left_value or left_label, ha="center", va="center", color=INK,
+                 fontsize=44, fontweight="bold", wrap=True, zorder=2)
+        ax.text(0.75, 0.55, right_value or right_label, ha="center", va="center", color=ACCENT,
+                 fontsize=44, fontweight="bold", wrap=True, zorder=2)
+
+    ax.axvline(0.5, color=ACCENT, linewidth=5, zorder=3)
+    ax.text(0.25, 0.07, left_label.upper(), ha="center", va="center", color=INK,
+             fontsize=22, fontweight="bold", zorder=4)
+    ax.text(0.75, 0.07, right_label.upper(), ha="center", va="center", color=ACCENT,
+             fontsize=26, fontweight="bold", style="italic", zorder=4)
+
     fig.savefig(out_path, facecolor=fig.get_facecolor())
     plt.close(fig)
     return out_path
@@ -152,6 +206,11 @@ def resolve_beat_visual(beat: dict, work_dir: str, index: int) -> tuple[str, str
         found = search_wikimedia_image(visual["query"], path)
         if found:
             return "photo", found
+
+    if vtype == "comparison" and visual.get("left_label") and visual.get("right_label"):
+        path = os.path.join(work_dir, f"beat_{index}_comparison.png")
+        render_comparison(visual, path, work_dir, index)
+        return "static", path
 
     text = visual.get("text") or beat.get("narration", "")[:80]
     path = os.path.join(work_dir, f"beat_{index}_callout.png")

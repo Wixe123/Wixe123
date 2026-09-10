@@ -101,3 +101,80 @@ def test_resolve_beat_visual_returns_photo_when_image_found(tmp_path, monkeypatc
 
     assert kind == "photo"
     assert os.path.exists(path)
+
+
+def test_render_comparison_falls_back_to_text_when_no_queries(tmp_path):
+    out_path = str(tmp_path / "cmp.png")
+    explainer_visuals.render_comparison(
+        {"left_label": "Before", "right_label": "After", "left_value": "12B mi", "right_value": "15B mi"},
+        out_path,
+        str(tmp_path),
+        0,
+    )
+    assert os.path.exists(out_path)
+    assert os.path.getsize(out_path) > 0
+
+
+def test_render_comparison_uses_photos_when_both_sides_resolve(tmp_path, monkeypatch):
+    import numpy as np
+
+    fake_image = np.zeros((10, 10, 3), dtype="uint8")
+
+    def fake_search(query, out_path, timeout=15):
+        with open(out_path, "wb") as f:
+            f.write(b"fake-jpeg-bytes")
+        return out_path
+
+    monkeypatch.setattr(explainer_visuals, "search_wikimedia_image", fake_search)
+    monkeypatch.setattr(explainer_visuals.mpimg, "imread", lambda path: fake_image)
+
+    out_path = str(tmp_path / "cmp_photo.png")
+    explainer_visuals.render_comparison(
+        {"left_label": "1977", "right_label": "Now", "left_query": "Voyager 1 launch", "right_query": "Voyager 1 today"},
+        out_path,
+        str(tmp_path),
+        1,
+    )
+    assert os.path.exists(out_path)
+
+
+def test_render_comparison_falls_back_to_text_when_only_one_photo_resolves(tmp_path, monkeypatch):
+    def fake_search(query, out_path, timeout=15):
+        if "left" in query:
+            with open(out_path, "wb") as f:
+                f.write(b"fake-jpeg-bytes")
+            return out_path
+        return None
+
+    monkeypatch.setattr(explainer_visuals, "search_wikimedia_image", fake_search)
+
+    out_path = str(tmp_path / "cmp_partial.png")
+    explainer_visuals.render_comparison(
+        {"left_label": "Before", "right_label": "After", "left_query": "left query", "right_query": "right query"},
+        out_path,
+        str(tmp_path),
+        2,
+    )
+    assert os.path.exists(out_path)
+
+
+def test_resolve_beat_visual_dispatches_comparison(tmp_path):
+    beat = {
+        "narration": "x",
+        "visual": {"type": "comparison", "left_label": "Before", "right_label": "After", "left_value": "A", "right_value": "B"},
+    }
+
+    kind, path = explainer_visuals.resolve_beat_visual(beat, str(tmp_path), 0)
+
+    assert kind == "static"
+    assert path.endswith("_comparison.png")
+    assert os.path.exists(path)
+
+
+def test_resolve_beat_visual_falls_back_to_callout_when_comparison_missing_labels(tmp_path):
+    beat = {"narration": "Some fact.", "visual": {"type": "comparison"}}
+
+    kind, path = explainer_visuals.resolve_beat_visual(beat, str(tmp_path), 0)
+
+    assert kind == "static"
+    assert path.endswith("_callout.png")

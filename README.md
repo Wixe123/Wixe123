@@ -170,15 +170,18 @@ clip cut from a longer video:
 2. Claude picks one specific, narrow topic within that niche (avoiding
    recently-covered topics) and writes a 45-65 second script broken into
    beats — one or two sentences of narration each, paired with a visual:
-   a chart (only when the script has real numbers to plot), a photo/map
-   search query, or a text callout.
+   a chart (only when the script has real numbers to plot), a before/after
+   comparison, a photo/map search query, or a text callout.
 3. Narration is synthesized with `edge-tts` (free, no API key), falling
    back to offline `espeak-ng` if that endpoint is ever unreachable from
    your network.
-4. Each beat's visual is rendered — a `matplotlib` chart, a licensed
-   photo from Wikimedia Commons (public domain/CC only), or a big text
-   callout — and given a slow Ken Burns pan/zoom for its share of the
-   narration's runtime.
+4. Each beat's visual is rendered in Vox's own look (near-black
+   background, a single yellow accent, white text) — a `matplotlib`
+   chart, a split-screen before/after comparison (two licensed Wikimedia
+   photos when both sides resolve to one, otherwise two short labels/
+   values either side of the divider), a licensed photo from Wikimedia
+   Commons (public domain/CC only), or a big text callout — and given a
+   slow Ken Burns pan/zoom for its share of the narration's runtime.
 5. Segments are stitched together, muxed with the narration, and captions
    + your default watermark are burned in — landing as a normal
    Video + Clip that flows through the same review/approve/upload path

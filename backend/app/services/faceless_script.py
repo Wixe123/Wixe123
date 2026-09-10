@@ -26,6 +26,12 @@ def generate_script(niche: str, recent_topics: list[str]) -> dict:
       - "image": {"type": "image", "query": "<wikimedia commons search query>"}
       - "chart": {"type": "chart", "chart_type": "bar"|"line", "title": str,
                   "labels": [str], "values": [number], "unit": str}
+      - "comparison": {"type": "comparison", "left_label": str, "right_label": str,
+                        "left_value": str, "right_value": str,
+                        "left_query": str, "right_query": str}
+        (left_query/right_query are optional wikimedia searches for a real
+        photo per side; left_value/right_value are optional short numbers
+        or phrases to show when there's no photo)
       - "callout": {"type": "callout", "text": str}
     """
     if not settings.ANTHROPIC_API_KEY:
@@ -56,6 +62,11 @@ def generate_script(niche: str, recent_topics: list[str]) -> dict:
         "- Break the script into 5-9 beats. Each beat is one or two sentences of "
         "narration plus ONE visual for what's on screen while it plays.\n"
         "- Use a 'chart' visual only when you have real comparable numbers to plot.\n"
+        "- Use a 'comparison' visual for a clear before/after or head-to-head "
+        "contrast (two time periods, two options, two outcomes) — give short "
+        "left/right labels and, if you have them, short left/right values (a "
+        "number or a few words). Only add left_query/right_query when a real, "
+        "specific photo for each side would exist on Wikimedia Commons.\n"
         "- Use a 'callout' visual for a single striking phrase or number, no chart needed.\n"
         "- Use an 'image' visual otherwise, with a specific, literal search query "
         "for a real photo/map that would exist on Wikimedia Commons (e.g. a place, "
@@ -69,6 +80,8 @@ def generate_script(niche: str, recent_topics: list[str]) -> dict:
         '      "visual": {"type": "image", "query": "string"}\n'
         "        | {\"type\": \"chart\", \"chart_type\": \"bar\"|\"line\", \"title\": \"string\", "
         '"labels": ["string"], "values": [number], "unit": "string"}\n'
+        "        | {\"type\": \"comparison\", \"left_label\": \"string\", \"right_label\": \"string\", "
+        '"left_value": "string", "right_value": "string", "left_query": "string", "right_query": "string"}\n'
         '        | {"type": "callout", "text": "string"}\n'
         "    }\n"
         "  ]\n"
