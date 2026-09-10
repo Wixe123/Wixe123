@@ -9,6 +9,7 @@ from app.api.routes import (
     branding,
     clips,
     dashboard,
+    faceless,
     jobs,
     settings as settings_route,
     style,
@@ -42,6 +43,7 @@ app.include_router(analytics.router)
 app.include_router(style.router)
 app.include_router(watched_channels.router)
 app.include_router(trending.router)
+app.include_router(faceless.router)
 
 
 @app.get("/api/health")

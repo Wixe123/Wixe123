@@ -12,6 +12,7 @@ from app.db.models import (
     BrandingPreset,
     Clip,
     ClipStatus,
+    FacelessTopic,
     JobStatus,
     JobType,
     ProcessingJob,
@@ -25,10 +26,11 @@ from app.db.models import (
     WatchedChannel,
 )
 from app.db.session import SessionLocal
-from app.services import ffmpeg_utils, storage, subtitles, video_import, youtube_client
+from app.services import explainer_visuals, ffmpeg_utils, storage, subtitles, tts, video_import, youtube_client
 from app.services.algorithm_digest import build_digest_email, fetch_recent_articles
 from app.services.clip_scoring import find_candidates
 from app.services.email_utils import send_email
+from app.services.faceless_script import full_narration_text, generate_script
 from app.services.metadata_ai import generate_metadata
 from app.services.scheduling import next_scheduled_slot
 from app.services.style_analysis import analyze_style
@@ -68,6 +70,38 @@ def _is_transient(exc: Exception) -> bool:
 
 def _retry_backoff_seconds(retries: int) -> int:
     return min(2**retries * 15, 300)
+
+
+def _maybe_auto_approve_and_upload(db, clip: Clip, owner_id: str, user_settings: UserSettings | None, should_approve: bool) -> None:
+    """Shared by render_clip_task (should_approve = score clears
+    auto_approve_score_threshold) and generate_faceless_video_task
+    (should_approve = the faceless_auto_upload toggle) — both just collapse
+    their own approval rule to a bool before calling in here."""
+    if not should_approve:
+        return
+
+    clip.status = ClipStatus.APPROVED
+    if user_settings and user_settings.posting_cadence_per_day:
+        clip.scheduled_at = next_scheduled_slot(db, owner_id, user_settings.posting_cadence_per_day)
+    db.commit()
+    upload_job = ProcessingJob(job_type=JobType.UPLOAD_CLIP, video_id=clip.video_id, clip_id=clip.id)
+    db.add(upload_job)
+    db.commit()
+    upload_clip_task.delay(clip.id, upload_job.id)
+
+
+def _beat_durations(beats: list[dict], total_duration: float) -> list[float]:
+    """Splits the narration's real (measured) audio duration across beats
+    proportional to each beat's word count, then rescales so the segments
+    still sum to exactly total_duration after a floor is applied to very
+    short beats — keeps assemble_explainer_video's background footage from
+    running out before the narration does."""
+    word_counts = [max(len((b.get("narration") or "").split()), 1) for b in beats]
+    total_words = sum(word_counts)
+    min_duration = 1.2
+    durations = [max(total_duration * wc / total_words, min_duration) for wc in word_counts]
+    scale = total_duration / sum(durations)
+    return [d * scale for d in durations]
 
 
 @celery_app.task(bind=True, max_retries=2)
@@ -252,15 +286,8 @@ def render_clip_task(self, clip_id: str, job_id: str | None = None):
         db.commit()
 
         threshold = user_settings.auto_approve_score_threshold if user_settings else None
-        if threshold is not None and clip.score >= threshold:
-            clip.status = ClipStatus.APPROVED
-            if user_settings and user_settings.posting_cadence_per_day:
-                clip.scheduled_at = next_scheduled_slot(db, video.owner_id, user_settings.posting_cadence_per_day)
-            db.commit()
-            upload_job = ProcessingJob(job_type=JobType.UPLOAD_CLIP, video_id=clip.video_id, clip_id=clip.id)
-            db.add(upload_job)
-            db.commit()
-            upload_clip_task.delay(clip.id, upload_job.id)
+        should_approve = threshold is not None and clip.score >= threshold
+        _maybe_auto_approve_and_upload(db, clip, video.owner_id, user_settings, should_approve)
 
         _mark(db, job, JobStatus.SUCCESS, progress=1.0)
     except Exception as exc:  # noqa: BLE001
@@ -493,5 +520,128 @@ def check_channels_for_new_videos_task():
                 # One user's channel check failing (expired token, API
                 # error, etc.) shouldn't stop the rest from being checked.
                 logger.exception("Channel check failed for user %s", user_settings.user_id)
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, max_retries=1)
+def generate_faceless_video_task(self, user_id: str, job_id: str | None = None):
+    """Writes a fresh Vox-style explainer Short from scratch: a topic +
+    script (Claude), narration (edge-tts/espeak), per-beat visuals (charts,
+    Wikimedia photos, or callouts), assembled with captions into one video.
+    Lands as a normal Video+Clip so it flows through the same review/
+    approve/upload path as a clip cut from real footage."""
+    db = SessionLocal()
+    video = None
+    try:
+        user_settings = db.query(UserSettings).filter_by(user_id=user_id).first()
+        job = _job(db, job_id)
+        _mark(db, job, JobStatus.RUNNING, progress=0.05)
+
+        if not user_settings or not user_settings.faceless_niche:
+            raise RuntimeError("Set a niche in Settings first.")
+
+        recent_topics = [
+            t.topic
+            for t in db.query(FacelessTopic)
+            .filter_by(user_id=user_id)
+            .order_by(FacelessTopic.created_at.desc())
+            .limit(20)
+            .all()
+        ]
+        script = generate_script(user_settings.faceless_niche, recent_topics)
+        beats = script["beats"]
+
+        video = Video(owner_id=user_id, title=script["topic"], source_type="faceless_generated", status=VideoStatus.ANALYZING)
+        db.add(video)
+        db.commit()
+        db.refresh(video)
+        _mark(db, job, JobStatus.RUNNING, progress=0.2)
+
+        work_dir = storage.clips_dir(video.id)
+        narration_path = os.path.join(work_dir, "narration.wav")
+        narration_text = full_narration_text(beats)
+        tts_result = tts.synthesize(narration_text, narration_path)
+        words = tts_result["words"]
+        _mark(db, job, JobStatus.RUNNING, progress=0.45)
+
+        total_duration = ffmpeg_utils.get_duration_seconds(narration_path)
+        durations = _beat_durations(beats, total_duration)
+        beat_segments = [
+            (explainer_visuals.resolve_beat_visual(beat, work_dir, i)[1], duration)
+            for i, (beat, duration) in enumerate(zip(beats, durations))
+        ]
+        _mark(db, job, JobStatus.RUNNING, progress=0.65)
+
+        default_style = {}
+        if user_settings:
+            default_style = {
+                "font": user_settings.subtitle_font,
+                "color": user_settings.subtitle_color,
+                "highlight_color": user_settings.subtitle_highlight_color,
+                "stroke_color": user_settings.subtitle_stroke_color,
+                "position": user_settings.subtitle_position,
+                "emoji_enabled": user_settings.subtitle_emoji_enabled,
+            }
+        ass_path = os.path.join(work_dir, f"{video.id}.ass")
+        subtitles.build_ass(words, 0, total_duration, default_style, ass_path)
+
+        watermark_path = None
+        if user_settings.default_branding_preset_id:
+            preset = db.get(BrandingPreset, user_settings.default_branding_preset_id)
+            if preset and preset.watermark_path and os.path.exists(preset.watermark_path):
+                watermark_path = preset.watermark_path
+
+        quality = user_settings.export_quality
+        out_path = os.path.join(work_dir, f"{video.id}.mp4")
+        ffmpeg_utils.assemble_explainer_video(
+            beat_segments, narration_path, out_path, ass_path, watermark_path, work_dir, quality=quality,
+        )
+        _mark(db, job, JobStatus.RUNNING, progress=0.85)
+
+        thumb_path = os.path.join(work_dir, f"{video.id}_thumb.jpg")
+        ffmpeg_utils.generate_thumbnail(out_path, thumb_path)
+
+        video.file_path = out_path
+        video.duration_seconds = total_duration
+        video.size_bytes = storage.path_size_bytes(out_path)
+        video.status = VideoStatus.ANALYZED
+        db.add(FacelessTopic(user_id=user_id, topic=script["topic"]))
+        db.commit()
+
+        meta = generate_metadata(narration_text, [])
+        clip = Clip(
+            video_id=video.id,
+            start_seconds=0,
+            end_seconds=total_duration,
+            score=0,
+            status=ClipStatus.READY_FOR_REVIEW,
+            file_path=out_path,
+            thumbnail_path=thumb_path,
+            title=meta.get("title") or script["topic"],
+            description=meta.get("description", ""),
+            hashtags=meta.get("hashtags", []),
+            keywords=meta.get("keywords", []),
+            seo_score=meta.get("seo_score", 0),
+            visibility=user_settings.default_visibility,
+            subtitle_style=default_style,
+            branding_preset_id=user_settings.default_branding_preset_id,
+        )
+        db.add(clip)
+        db.commit()
+        db.refresh(clip)
+
+        _maybe_auto_approve_and_upload(db, clip, user_id, user_settings, user_settings.faceless_auto_upload)
+
+        _mark(db, job, JobStatus.SUCCESS, progress=1.0)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("generate_faceless_video_task failed (attempt %s)", self.request.retries)
+        if _is_transient(exc) and self.request.retries < self.max_retries:
+            raise self.retry(exc=exc, countdown=_retry_backoff_seconds(self.request.retries))
+        if video:
+            video.status = VideoStatus.FAILED
+            video.error_message = str(exc)
+            db.commit()
+        _mark(db, _job(db, job_id), JobStatus.FAILED, error=str(exc))
     finally:
         db.close()

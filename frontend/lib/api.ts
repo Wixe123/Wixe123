@@ -120,6 +120,9 @@ export const api = {
   updateSettings: (payload: Partial<UserSettings>) =>
     request<UserSettings>("/api/settings", { method: "PUT", body: JSON.stringify(payload) }),
 
+  generateFacelessVideo: () =>
+    request<{ status: string; job_id: string }>("/api/faceless/generate", { method: "POST" }),
+
   listStyleProfiles: () => request<StyleProfile[]>("/api/style-profiles"),
   createStyleProfile: (source_url: string, creator_label: string) =>
     request<StyleProfile>("/api/style-profiles", {

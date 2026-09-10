@@ -2,6 +2,7 @@
 mocking — this is the part of the pipeline that actually touches media."""
 import json
 import logging
+import os
 import subprocess
 
 import cv2
@@ -268,6 +269,90 @@ def render_clip(
     cmd += [
         "-c:v", "libx264", "-preset", "veryfast", "-b:v", preset["bitrate"],
         "-c:a", "aac", "-b:a", "192k",
+        out_path,
+    ]
+    _run(cmd)
+
+
+def _render_beat_segment(image_path: str, duration: float, out_path: str, target_w: int, target_h: int) -> None:
+    """A slow Ken Burns pan/zoom over one still image (a chart, a stat
+    callout, or a real photo) for exactly `duration` seconds — the
+    background for one script "beat" in a generated explainer video."""
+    work_w, work_h = target_w * 2, target_h * 2
+    cmd = [
+        "ffmpeg", "-y", "-loop", "1", "-i", image_path, "-t", str(duration),
+        "-vf",
+        f"scale={work_w}:{work_h}:force_original_aspect_ratio=increase,"
+        f"crop={work_w}:{work_h},"
+        "zoompan=z='min(zoom+0.0015,1.15)':d=1:"
+        f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={target_w}x{target_h}:fps=30,format=yuv420p",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        out_path,
+    ]
+    _run(cmd)
+
+
+def _concat_segments(segment_paths: list[str], out_path: str) -> None:
+    list_file = out_path + ".txt"
+    with open(list_file, "w") as f:
+        for p in segment_paths:
+            f.write(f"file '{p}'\n")
+    cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_file, "-c", "copy", out_path]
+    _run(cmd)
+
+
+def assemble_explainer_video(
+    beat_segments: list[tuple[str, float]],
+    narration_path: str,
+    out_path: str,
+    subtitle_ass_path: str | None,
+    watermark_path: str | None,
+    work_dir: str,
+    quality: str = "1080p",
+) -> None:
+    """Builds a from-scratch Vox-style Short: a Ken Burns pass over each
+    beat's still (chart/callout/photo) for exactly that beat's duration,
+    concatenated back-to-back to match the narration's total length, with
+    narration audio muxed in and captions/watermark burned on top."""
+    preset = QUALITY_PRESETS.get(quality, QUALITY_PRESETS["1080p"])
+    target_w, target_h = preset["width"], preset["height"]
+
+    if not beat_segments:
+        raise RuntimeError("No beat visuals to assemble a video from.")
+
+    segment_paths = []
+    for i, (image_path, duration) in enumerate(beat_segments):
+        seg_path = os.path.join(work_dir, f"seg_{i}.mp4")
+        _render_beat_segment(image_path, max(duration, 0.5), seg_path, target_w, target_h)
+        segment_paths.append(seg_path)
+
+    concat_path = os.path.join(work_dir, "bg_concat.mp4")
+    _concat_segments(segment_paths, concat_path)
+
+    video_filters = ["eq=contrast=1.05:saturation=1.1"]
+    if subtitle_ass_path:
+        escaped = subtitle_ass_path.replace(":", "\\:")
+        video_filters.append(f"subtitles='{escaped}'")
+
+    cmd = ["ffmpeg", "-y", "-i", concat_path, "-i", narration_path]
+    if watermark_path:
+        cmd += ["-i", watermark_path]
+
+    chains = [f"[0:v]{','.join(video_filters)}[vbase]"]
+    video_out_label = "[vbase]"
+    if watermark_path:
+        chains.append(f"{video_out_label}[2:v]overlay=W-w-24:H-h-24[voverlay]")
+        video_out_label = "[voverlay]"
+    chains.append(
+        "[1:a]acompressor=threshold=-18dB:ratio=3:attack=5:release=50,loudnorm=I=-16:TP=-1.5:LRA=11[abase]"
+    )
+
+    cmd += [
+        "-filter_complex", ";".join(chains),
+        "-map", video_out_label, "-map", "[abase]",
+        "-c:v", "libx264", "-preset", "veryfast", "-b:v", preset["bitrate"],
+        "-c:a", "aac", "-b:a", "192k",
+        "-shortest",
         out_path,
     ]
     _run(cmd)

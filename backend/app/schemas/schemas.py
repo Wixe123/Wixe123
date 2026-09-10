@@ -183,6 +183,8 @@ class UserSettingsOut(BaseModel):
     auto_approve_score_threshold: float | None
     auto_import_from_channel: bool
     posting_cadence_per_day: int | None
+    faceless_niche: str | None
+    faceless_auto_upload: bool
 
 
 class StyleProfileOut(BaseModel):
@@ -260,3 +262,5 @@ class UserSettingsIn(BaseModel):
     auto_approve_score_threshold: float | None = None
     auto_import_from_channel: bool | None = None
     posting_cadence_per_day: int | None = None
+    faceless_niche: str | None = None
+    faceless_auto_upload: bool | None = None

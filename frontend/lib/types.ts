@@ -204,4 +204,6 @@ export interface UserSettings {
   auto_approve_score_threshold: number | null;
   auto_import_from_channel: boolean;
   posting_cadence_per_day: number | null;
+  faceless_niche: string | null;
+  faceless_auto_upload: boolean;
 }

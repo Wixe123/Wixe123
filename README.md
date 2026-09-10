@@ -33,6 +33,7 @@ Concretely:
 | Live YouTube Analytics (views, watch time, subscribers, likes, per-clip performance) | Implemented via the YouTube Analytics API (`yt-analytics.readonly` scope) — see the Analytics page. Channels connected before this feature was added need to hit "Reconnect" in Settings once to grant the new permission. |
 | Dashboard (today's stats, queue, storage/API usage) | Implemented |
 | Mobile / iPhone use | Implemented as a responsive web app — collapsible sidebar becomes a bottom tab bar on small screens, tables scroll horizontally, and it's installable to the iOS home screen ("Add to Home Screen" in Safari) via `manifest.json` + Apple touch icons for an app-like feel. This is Safari-based, not a native Swift app. |
+| Faceless explainer video generation | Implemented — writes a from-scratch Vox-style Short (topic + script via Claude, narration via `edge-tts`/`espeak-ng`, charts/Wikimedia photos/text callouts, captions) instead of cutting a clip from your own footage. Requires `ANTHROPIC_API_KEY`. See below. |
 | GPU acceleration / 50 videos-per-day throughput | **Not provisioned here.** The pipeline is GPU-ready (`faster-whisper` and ffmpeg both use CUDA when available) — running it at that volume is a matter of running more Celery workers on GPU-backed machines, which is an infra/ops decision for your own cloud account, not something a repo can pre-package.
 | Cloud deployment (Terraform/GCP/AWS) | Not included — `docker-compose.yml` covers local/single-VM deployment. Point it at a GPU box and it will use the GPU. |
 
@@ -158,6 +159,37 @@ Analyzer page instead to learn from other creators' technique without
 touching their actual content.
 
 Like the digest, this only runs on days your Docker stack is up.
+
+### Faceless explainer videos
+
+Settings → **Faceless videos** lets you generate a Short from scratch,
+with no source footage of your own required — a Vox-style explainer, not a
+clip cut from a longer video:
+
+1. Set a **channel niche** (e.g. "space exploration", "ancient history").
+2. Claude picks one specific, narrow topic within that niche (avoiding
+   recently-covered topics) and writes a 45-65 second script broken into
+   beats — one or two sentences of narration each, paired with a visual:
+   a chart (only when the script has real numbers to plot), a photo/map
+   search query, or a text callout.
+3. Narration is synthesized with `edge-tts` (free, no API key), falling
+   back to offline `espeak-ng` if that endpoint is ever unreachable from
+   your network.
+4. Each beat's visual is rendered — a `matplotlib` chart, a licensed
+   photo from Wikimedia Commons (public domain/CC only), or a big text
+   callout — and given a slow Ken Burns pan/zoom for its share of the
+   narration's runtime.
+5. Segments are stitched together, muxed with the narration, and captions
+   + your default watermark are burned in — landing as a normal
+   Video + Clip that flows through the same review/approve/upload path
+   as any other clip, including **auto-upload** if you flip that toggle.
+
+Click **Generate one now** to trigger a run on demand — there's no
+automatic recurring schedule for this yet, so it stays a deliberate,
+per-click action rather than something silently generating content on its
+own. Requires `ANTHROPIC_API_KEY` (used for both topic/script writing and,
+optionally, metadata generation) — there's no template fallback for
+picking a real topic and writing accurate narration.
 
 ## Using it from your iPhone
 

@@ -70,6 +70,7 @@ class JobType(str, enum.Enum):
     ANALYZE_VIDEO = "analyze_video"
     RENDER_CLIP = "render_clip"
     UPLOAD_CLIP = "upload_clip"
+    GENERATE_FACELESS_VIDEO = "generate_faceless_video"
 
 
 class User(Base):
@@ -235,6 +236,14 @@ class UserSettings(Base):
     # moment they're approved (see app/services/scheduling.py). None/unset
     # means immediate publish, same as before.
     posting_cadence_per_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # A from-scratch script+narration+visuals Short instead of a clip cut
+    # from your own footage (see generate_faceless_video_task). None/empty
+    # means the feature is off — nothing generates on its own.
+    faceless_niche: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Generated Shorts are a single deliberately-made video, not one of
+    # several scored candidates — so unlike auto_approve_score_threshold,
+    # this is a plain on/off rather than a score to clear.
+    faceless_auto_upload: Mapped[bool] = mapped_column(Boolean, default=False)
 
     user: Mapped[User] = relationship(back_populates="settings")
 
@@ -313,3 +322,15 @@ class TrendingClip(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     watched_channel: Mapped[WatchedChannel] = relationship(back_populates="trending_clips")
+
+
+class FacelessTopic(Base):
+    """One topic a generated explainer Short has already covered, kept
+    just so the next generation run can avoid repeating it."""
+
+    __tablename__ = "faceless_topics"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    topic: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

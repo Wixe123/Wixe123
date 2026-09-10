@@ -12,6 +12,8 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [generatingFaceless, setGeneratingFaceless] = useState(false);
+  const [facelessMessage, setFacelessMessage] = useState("");
 
   async function load() {
     try {
@@ -50,6 +52,19 @@ export default function SettingsPage() {
   async function connectYoutube() {
     const { auth_url } = await api.youtubeConnectUrl();
     window.location.href = auth_url;
+  }
+
+  async function generateFaceless() {
+    setGeneratingFaceless(true);
+    setFacelessMessage("");
+    try {
+      await api.generateFacelessVideo();
+      setFacelessMessage("Queued — check the Jobs page for progress.");
+    } catch (e) {
+      setFacelessMessage((e as Error).message);
+    } finally {
+      setGeneratingFaceless(false);
+    }
   }
 
   if (!settings) {
@@ -327,6 +342,44 @@ export default function SettingsPage() {
                 </span>
               </label>
             )}
+          </div>
+        </div>
+      </section>
+
+      <section className="card mb-6 p-6">
+        <h2 className="mb-1 text-base font-light tracking-tight">Faceless videos</h2>
+        <p className="mb-4 text-xs text-gray-500">
+          Generate a from-scratch Vox-style explainer Short: a picked topic, written narration, and
+          matching charts/photos/callouts — no source footage of your own required.
+        </p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className="text-sm text-gray-400 sm:col-span-2">
+            Channel niche
+            <input
+              className="input mt-1"
+              placeholder="e.g. space exploration, ancient history, personal finance"
+              defaultValue={settings.faceless_niche ?? ""}
+              onBlur={(e) => save({ faceless_niche: e.target.value || null })}
+            />
+            <span className="text-xs text-gray-500">Required before a video can be generated.</span>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-400">
+            <input
+              type="checkbox"
+              defaultChecked={settings.faceless_auto_upload}
+              onChange={(e) => save({ faceless_auto_upload: e.target.checked })}
+            />
+            Auto-upload generated videos instead of holding them for review
+          </label>
+          <div>
+            <button
+              className="btn-primary"
+              disabled={!settings.faceless_niche || generatingFaceless}
+              onClick={generateFaceless}
+            >
+              {generatingFaceless ? "Queuing…" : "Generate one now"}
+            </button>
+            {facelessMessage && <p className="mt-2 text-xs text-gray-500">{facelessMessage}</p>}
           </div>
         </div>
       </section>
