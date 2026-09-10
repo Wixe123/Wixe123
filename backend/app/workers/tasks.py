@@ -573,16 +573,18 @@ def generate_faceless_video_task(self, user_id: str, job_id: str | None = None):
         ]
         _mark(db, job, JobStatus.RUNNING, progress=0.65)
 
-        default_style = {}
-        if user_settings:
-            default_style = {
-                "font": user_settings.subtitle_font,
-                "color": user_settings.subtitle_color,
-                "highlight_color": user_settings.subtitle_highlight_color,
-                "stroke_color": user_settings.subtitle_stroke_color,
-                "position": user_settings.subtitle_position,
-                "emoji_enabled": user_settings.subtitle_emoji_enabled,
-            }
+        default_style = {
+            "font": user_settings.subtitle_font,
+            "color": user_settings.subtitle_color,
+            "highlight_color": user_settings.subtitle_highlight_color,
+            "stroke_color": user_settings.subtitle_stroke_color,
+            # Always bottom here, regardless of the user's clip-cam caption
+            # preference: unlike a face-cam clip, a beat's whole frame is
+            # the visual (a chart or a big centered callout), so center/top
+            # captions would overlap it instead of sitting in empty space.
+            "position": "bottom",
+            "emoji_enabled": user_settings.subtitle_emoji_enabled,
+        }
         ass_path = os.path.join(work_dir, f"{video.id}.ass")
         subtitles.build_ass(words, 0, total_duration, default_style, ass_path)
 
