@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "vox-style-animation": {
+      "source": "cele-san/vox-style-animation",
+      "sourceType": "github",
+      "skillPath": "skills/vox-style-animation/SKILL.md",
+      "computedHash": "2a066daee0cc9efb37e095ba868f9726f95002670983134b7883b2016d725dbb"
+    }
+  }
+}
