@@ -36,6 +36,15 @@ ALLOWED_LICENSE_SUBSTRINGS = ("public domain", "cc0", "cc-by", "cc by")
 
 WIKIMEDIA_API = "https://commons.wikimedia.org/w/api.php"
 
+# generate_faceless_video_task always burns word-by-word captions along the
+# bottom of the frame (tasks.py hardcodes position="bottom" for these beat
+# visuals — the whole frame is the visual, so center/top captions would
+# overlap it instead). That caption strip occupies roughly the bottom 11%
+# of the canvas at the default font size/margins — every renderer below
+# must keep its own content out of this band or the two burn in on top of
+# each other.
+CAPTION_SAFE_BOTTOM_FRAC = 0.16
+
 
 def render_chart(chart: dict, out_path: str, width_px: int = 1080, height_px: int = 1920) -> str:
     labels = chart.get("labels") or []
@@ -67,6 +76,10 @@ def render_chart(chart: dict, out_path: str, width_px: int = 1080, height_px: in
         spine.set_visible(False)
 
     plt.tight_layout(pad=3)
+    # tight_layout alone packs the x-axis tick labels right up against the
+    # bottom edge — reserve the caption strip explicitly, after the fact,
+    # so they don't collide with the burned-in captions.
+    fig.subplots_adjust(bottom=max(fig.subplotpars.bottom, CAPTION_SAFE_BOTTOM_FRAC))
     fig.savefig(out_path, facecolor=fig.get_facecolor())
     plt.close(fig)
     return out_path
@@ -142,11 +155,16 @@ def render_callout(text: str, out_path: str, width_px: int = 1080, height_px: in
     # canvas that _fit_text's budgets are computed against — pin the axes
     # to the whole figure so fraction coordinates are true canvas pixels.
     ax.set_position((0, 0, 1, 1))
-    # 82% of the canvas width/height, leaving a real margin on every side
-    # so wrapped lines never touch — let alone run past — the frame edge.
+    # 82% of the canvas width, with a symmetric-looking 9% top margin but a
+    # taller bottom margin (CAPTION_SAFE_BOTTOM_FRAC) so the height budget's
+    # bottom edge clears the burned-in caption strip instead of running
+    # under it.
+    top_margin = 0.09
+    usable_height_frac = 1 - top_margin - CAPTION_SAFE_BOTTOM_FRAC
+    center_y = CAPTION_SAFE_BOTTOM_FRAC + usable_height_frac / 2
     _fit_text(
-        fig, ax, 0.5, 0.5, text,
-        max_width_px=width_px * 0.82, max_height_px=height_px * 0.82,
+        fig, ax, 0.5, center_y, text,
+        max_width_px=width_px * 0.82, max_height_px=height_px * usable_height_frac,
         color=PALETTE[0], fontweight="bold",
     )
     fig.savefig(out_path, facecolor=fig.get_facecolor())
@@ -205,13 +223,17 @@ def render_comparison(comparison: dict, out_path: str, work_dir: str, index: int
         )
 
     ax.axvline(0.5, color=ACCENT, linewidth=5, zorder=3)
+    # y is CAPTION_SAFE_BOTTOM_FRAC + half the label's own height budget, so
+    # this row sits just above the burned-in caption strip instead of
+    # inside it (it was fixed at 0.07 — deep inside that strip — before).
+    label_y = CAPTION_SAFE_BOTTOM_FRAC + 0.03
     _fit_text(
-        fig, ax, 0.25, 0.07, left_label.upper(),
+        fig, ax, 0.25, label_y, left_label.upper(),
         max_width_px=width_px * 0.42, max_height_px=height_px * 0.06,
         max_fontsize=22, min_fontsize=12, color=INK, fontweight="bold", zorder=4,
     )
     _fit_text(
-        fig, ax, 0.75, 0.07, right_label.upper(),
+        fig, ax, 0.75, label_y, right_label.upper(),
         max_width_px=width_px * 0.42, max_height_px=height_px * 0.06,
         max_fontsize=26, min_fontsize=12, color=ACCENT, fontweight="bold", style="italic", zorder=4,
     )
