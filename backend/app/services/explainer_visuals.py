@@ -9,6 +9,7 @@ a single bright yellow accent, white body text — rather than a generic
 multi-color infographic palette."""
 import logging
 import os
+import textwrap
 import urllib.parse
 import urllib.request
 
@@ -71,6 +72,64 @@ def render_chart(chart: dict, out_path: str, width_px: int = 1080, height_px: in
     return out_path
 
 
+def _fit_text(
+    fig,
+    ax,
+    x: float,
+    y: float,
+    text: str,
+    max_width_px: float,
+    max_height_px: float,
+    max_fontsize: int = 54,
+    min_fontsize: int = 20,
+    **text_kwargs,
+):
+    """Draws `text` centered at (x, y) in axes-fraction coords, wrapped and
+    shrunk until its actual rendered bounding box fits within
+    max_width_px/max_height_px. matplotlib's own `wrap=True` only wraps at
+    whitespace using a rough estimate and never shrinks the font, so long
+    text just runs off the edges or into a neighboring column — this
+    measures the real rendered extent via the canvas renderer and
+    iterates, which is the only reliable way to guarantee a fit.
+
+    The average character width is measured directly at each candidate
+    fontsize (rendering the whole text unwrapped, off to the side) rather
+    than assumed from a fontsize multiplier — a fixed multiplier was tried
+    first and was off by ~2.3x for this bold font, which meant the wrap
+    width was always too generous and the loop never converged."""
+    fontsize = max_fontsize
+    artist = None
+    renderer = fig.canvas.get_renderer()
+    while fontsize >= min_fontsize:
+        if artist is not None:
+            artist.remove()
+
+        probe = ax.text(
+            2, 2, text, fontsize=fontsize, transform=ax.transAxes, **text_kwargs,
+        )
+        fig.canvas.draw()
+        probe_bbox = probe.get_window_extent(renderer=renderer)
+        probe.remove()
+        avg_char_width = max(1.0, probe_bbox.width / max(1, len(text)))
+        chars_per_line = max(1, int(max_width_px / avg_char_width))
+
+        # Never force-break inside a word — a hard mid-word split (e.g.
+        # "Plante"/"d expl"/"osives") technically fits the pixel budget but
+        # reads as broken; wrapping only at whitespace and continuing to
+        # shrink the font until whole words fit is what actually looks right.
+        wrapped = "\n".join(textwrap.wrap(text, width=chars_per_line, break_long_words=False, break_on_hyphens=False)) or text
+        artist = ax.text(
+            x, y, wrapped, ha="center", va="center", fontsize=fontsize,
+            transform=ax.transAxes, **text_kwargs,
+        )
+        fig.canvas.draw()
+        bbox = artist.get_window_extent(renderer=renderer)
+        if bbox.width <= max_width_px and bbox.height <= max_height_px:
+            return artist
+        fontsize -= 2
+    return artist
+
+
 def render_callout(text: str, out_path: str, width_px: int = 1080, height_px: int = 1920) -> str:
     """A big centered text card for a single striking phrase/number — no
     photo or chart needed for the point to land."""
@@ -78,9 +137,17 @@ def render_callout(text: str, out_path: str, width_px: int = 1080, height_px: in
     fig.patch.set_facecolor(BG)
     ax.set_facecolor(BG)
     ax.axis("off")
-    ax.text(
-        0.5, 0.5, text, ha="center", va="center", color=PALETTE[0],
-        fontsize=54, fontweight="bold", wrap=True, transform=ax.transAxes,
+    # Matplotlib's default subplot leaves ~12% margins on every side, so
+    # axes-fraction 0..1 would NOT line up with the full width_px/height_px
+    # canvas that _fit_text's budgets are computed against — pin the axes
+    # to the whole figure so fraction coordinates are true canvas pixels.
+    ax.set_position((0, 0, 1, 1))
+    # 82% of the canvas width/height, leaving a real margin on every side
+    # so wrapped lines never touch — let alone run past — the frame edge.
+    _fit_text(
+        fig, ax, 0.5, 0.5, text,
+        max_width_px=width_px * 0.82, max_height_px=height_px * 0.82,
+        color=PALETTE[0], fontweight="bold",
     )
     fig.savefig(out_path, facecolor=fig.get_facecolor())
     plt.close(fig)
@@ -109,6 +176,11 @@ def render_comparison(comparison: dict, out_path: str, work_dir: str, index: int
     fig.patch.set_facecolor(BG)
     ax.set_facecolor(BG)
     ax.axis("off")
+    # See render_callout: without this, the default subplot margins mean
+    # axes-fraction/data coords (0..1) land well inside the canvas rather
+    # than at its true edges, so the 0.5 divider and the per-column width
+    # budgets below silently drift off their intended pixel positions.
+    ax.set_position((0, 0, 1, 1))
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
 
@@ -116,16 +188,33 @@ def render_comparison(comparison: dict, out_path: str, work_dir: str, index: int
         ax.imshow(mpimg.imread(left_image_path), extent=(0, 0.5, 0, 1), aspect="auto", zorder=1)
         ax.imshow(mpimg.imread(right_image_path), extent=(0.5, 1, 0, 1), aspect="auto", zorder=1)
     else:
-        ax.text(0.25, 0.55, left_value or left_label, ha="center", va="center", color=INK,
-                 fontsize=44, fontweight="bold", wrap=True, zorder=2)
-        ax.text(0.75, 0.55, right_value or right_label, ha="center", va="center", color=ACCENT,
-                 fontsize=44, fontweight="bold", wrap=True, zorder=2)
+        # Each half gets its own safe column (42% of the full canvas width,
+        # well clear of both the center divider and the outer edge) and a
+        # height budget that leaves the bottom label row untouched — the
+        # old fixed fontsize=44 + wrap=True routinely ran text across the
+        # divider into the other half, or into the label row below.
+        _fit_text(
+            fig, ax, 0.25, 0.55, left_value or left_label,
+            max_width_px=width_px * 0.42, max_height_px=height_px * 0.42,
+            max_fontsize=44, color=INK, fontweight="bold", zorder=2,
+        )
+        _fit_text(
+            fig, ax, 0.75, 0.55, right_value or right_label,
+            max_width_px=width_px * 0.42, max_height_px=height_px * 0.42,
+            max_fontsize=44, color=ACCENT, fontweight="bold", zorder=2,
+        )
 
     ax.axvline(0.5, color=ACCENT, linewidth=5, zorder=3)
-    ax.text(0.25, 0.07, left_label.upper(), ha="center", va="center", color=INK,
-             fontsize=22, fontweight="bold", zorder=4)
-    ax.text(0.75, 0.07, right_label.upper(), ha="center", va="center", color=ACCENT,
-             fontsize=26, fontweight="bold", style="italic", zorder=4)
+    _fit_text(
+        fig, ax, 0.25, 0.07, left_label.upper(),
+        max_width_px=width_px * 0.42, max_height_px=height_px * 0.06,
+        max_fontsize=22, min_fontsize=12, color=INK, fontweight="bold", zorder=4,
+    )
+    _fit_text(
+        fig, ax, 0.75, 0.07, right_label.upper(),
+        max_width_px=width_px * 0.42, max_height_px=height_px * 0.06,
+        max_fontsize=26, min_fontsize=12, color=ACCENT, fontweight="bold", style="italic", zorder=4,
+    )
 
     fig.savefig(out_path, facecolor=fig.get_facecolor())
     plt.close(fig)

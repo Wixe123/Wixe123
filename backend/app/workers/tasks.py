@@ -571,6 +571,10 @@ def generate_faceless_video_task(self, user_id: str, job_id: str | None = None):
         narration_text = full_narration_text(beats)
         tts_result = tts.synthesize(narration_text, narration_path)
         words = tts_result["words"]
+        # ELEVENLABS_API_KEY is unset for most users, so this silently runs
+        # edge-tts (or espeak-ng) instead — surfacing which engine actually
+        # spoke is the only way that's visible anywhere.
+        logger.info("faceless video %s narrated with %s", video.id, tts_result["engine"])
         _mark(db, job, JobStatus.RUNNING, progress=0.45)
 
         total_duration = ffmpeg_utils.get_duration_seconds(narration_path)
