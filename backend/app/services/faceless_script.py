@@ -93,7 +93,10 @@ def generate_script(niche: str, recent_topics: list[str]) -> dict:
             max_tokens=1500,
             messages=[{"role": "user", "content": prompt}],
         )
-        text = "".join(block.text for block in response.content if hasattr(block, "text"))
+        # Only real text blocks carry narration — other block types (e.g. thinking)
+        # can also expose a `.text` attribute that's None, which `hasattr` alone
+        # doesn't catch and would blow up the join below.
+        text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if not match:
             raise ScriptGenerationError("Model response didn't contain JSON.")
