@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background-color: #09090a;
+  color: #f2f1ee;
+}
+
+body {
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(60rem 34rem at 50% -12%, rgba(204, 166, 96, 0.10), transparent 60%),
+    radial-gradient(46rem 30rem at 100% 8%, rgba(255, 255, 255, 0.035), transparent 55%),
+    #09090a;
+}
+
+* {
+  scrollbar-color: #2a2a2e transparent;
+}
+
+input[type="checkbox"],
+input[type="range"] {
+  accent-color: #cca660;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 300;
+  letter-spacing: -0.01em;
+}
+
+.eyebrow {
+  @apply text-[11px] font-medium uppercase tracking-wider2 text-brand-400;
+}
+
+.card {
+  @apply rounded-xl2 border border-white/[0.07] bg-base-900/60 shadow-[0_1px_0_0_rgba(255,255,255,0.03)_inset] backdrop-blur-sm transition-colors;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center gap-2 rounded-md bg-gradient-to-b from-brand-300 to-brand-500 px-4 py-2 text-sm font-medium text-ink shadow-[0_1px_0_0_rgba(255,255,255,0.4)_inset,0_8px_20px_-8px_rgba(204,166,96,0.6)] transition hover:brightness-105 active:brightness-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center gap-2 rounded-md border border-white/[0.12] bg-transparent px-4 py-2 text-sm font-medium text-gray-200 transition hover:border-white/25 hover:bg-white/[0.04];
+}
+
+.btn-danger {
+  @apply inline-flex items-center justify-center gap-2 rounded-md border border-red-900/50 bg-transparent px-4 py-2 text-sm font-medium text-red-300/90 transition hover:border-red-700 hover:bg-red-500/10;
+}
+
+.input {
+  @apply w-full rounded-md border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-gray-100 outline-none transition placeholder:text-gray-500 focus:border-brand-400/60 focus:bg-white/[0.04] focus:ring-1 focus:ring-brand-400/30;
+}
+
+.badge {
+  @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ring-white/[0.08];
+}
+
+.icon-chip {
+  @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.02];
+}
+
+.hairline {
+  @apply border-white/[0.08];
+}
