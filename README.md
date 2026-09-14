@@ -44,9 +44,18 @@ frontend/   Next.js 14 (App Router) + TypeScript + Tailwind + Framer Motion
 backend/    FastAPI + SQLAlchemy + Alembic + Celery
             ffmpeg / faster-whisper / opencv-python for the media pipeline
             google-api-python-client for YouTube
+remotion/   Standalone Remotion project for rendering branded intro/outro
+            cards (see remotion/README.md) — optional, not wired into the
+            backend pipeline
 postgres    metadata (users, videos, clips, jobs, branding, settings)
 redis       Celery broker/result backend + job queue state
 ```
+
+YouTube upload itself (OAuth, metadata, thumbnail, playlist, scheduling)
+is already fully implemented — see "Required credentials" below and
+`backend/app/services/youtube_client.py`. There's no separate upload
+pipeline to build; connecting your own Google Cloud OAuth client in
+`.env` is what turns it on.
 
 Pipeline: `upload → transcribe → score & pick clips → render (pan-tracking
 reframe + color grade + subtitles + branding + silence removal + audio
