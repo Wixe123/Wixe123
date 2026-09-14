@@ -1,0 +1,22 @@
+{
+  "name": "shortsforge-remotion",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Remotion project for rendering branded ShortsForge intro/outro cards. Output MP4s are picked up by the existing ffmpeg pipeline (see backend/app/services/ffmpeg_utils.py) as an optional intro/outro clip.",
+  "scripts": {
+    "preview": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts ShortsForgeIntro out/intro.mp4",
+    "render:outro": "remotion render src/index.ts ShortsForgeOutro out/outro.mp4",
+    "upgrade": "remotion upgrade"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.190",
+    "@remotion/cli": "^4.0.190"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "typescript": "^5.5.4"
+  }
+}
