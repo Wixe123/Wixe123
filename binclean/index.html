@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>binclean – soptunnetvätt</title>
+<meta name="description" content="Vi tvättar din soptunna vid tomtgränsen. 125 kr per tunna, 240 kr för två. Boka en dag online.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <div class="logo">binclean</div>
+    <div class="navlinks"><a href="#boka">Boka</a></div>
+  </nav>
+
+  <header>
+    <h1>Rena soptunnor, utan att du lyfter ett finger.</h1>
+    <p>Vi tvättar ditt kärl med 80-gradigt vatten vid tomtgränsen, samma dag som sophämtningen. Du behöver inte vara hemma.</p>
+    <p class="price"><b>125 kr</b> per soptunna · <b>240 kr</b> för två · inkl. moms</p>
+    <div><a class="btn" href="#boka">Välj en dag</a></div>
+  </header>
+
+  <section id="boka">
+    <div class="cal-head">
+      <h2 id="month"></h2>
+      <div class="nav-btns">
+        <button class="iconbtn" id="prev" aria-label="Föregående månad">‹</button>
+        <button class="iconbtn" id="next" aria-label="Nästa månad">›</button>
+      </div>
+    </div>
+    <div>
+      <div class="grid" id="cal"></div>
+      <p class="hint" style="margin-top:12px">Alla dagar går att boka, även helger.</p>
+    </div>
+
+    <form id="bookForm" novalidate>
+      <p id="chosen" class="chosen empty">Välj en dag i kalendern.</p>
+      <div class="row">
+        <label for="f-count">Antal kärl<select id="f-count"><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+        <label for="f-plan">Typ<select id="f-plan"><option value="en">Engångstvätt</option><option value="abo">Varannan månad (−15 %)</option></select></label>
+      </div>
+      <label for="f-name">Namn<input id="f-name" autocomplete="name" maxlength="200" required></label>
+      <label for="f-addr">Adress<input id="f-addr" autocomplete="street-address" maxlength="200" required></label>
+      <div class="row">
+        <label for="f-zip">Postnummer<input id="f-zip" inputmode="numeric" autocomplete="postal-code" maxlength="6" required></label>
+        <label for="f-city">Ort<input id="f-city" autocomplete="address-level2" maxlength="100" required></label>
+      </div>
+      <div class="row">
+        <label for="f-phone">Telefon<input id="f-phone" type="tel" autocomplete="tel" maxlength="40" required></label>
+        <label for="f-mail">E-post<input id="f-mail" type="email" autocomplete="email" maxlength="200" required></label>
+      </div>
+      <label for="f-note">Övrigt (valfritt)<textarea id="f-note" rows="1" maxlength="1000"></textarea></label>
+      <p id="formMsg" class="msg" hidden></p>
+      <div class="foot">
+        <span class="total">Totalt<b id="total">125 kr</b></span>
+        <button class="btn" id="submit" type="submit">Boka</button>
+      </div>
+    </form>
+    <div id="done" class="done" hidden></div>
+  </section>
+
+  <section class="faq">
+    <h2>Frågor</h2>
+    <details><summary>Måste jag vara hemma?</summary><p>Nej. Låt kärlet stå vid tomtgränsen efter tömningen.</p></details>
+    <details><summary>Vad händer med smutsvattnet?</summary><p>Det samlas upp i bilens tank och lämnas till godkänd mottagning.</p></details>
+    <details><summary>Hur betalar jag?</summary><p>Faktura via e-post efter utförd tvätt.</p></details>
+    <details><summary>Kan jag avboka?</summary><p>Ja, kostnadsfritt senast dagen innan.</p></details>
+  </section>
+
+  <footer>binclean</footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="shared.js"></script>
+<script>
+const today=new Date();today.setHours(0,0,0,0);
+const last=new Date(today);last.setDate(last.getDate()+MAX_DAYS_AHEAD);
+let view=new Date(today.getFullYear(),today.getMonth(),1);
+let selected=null;
+
+function renderCal(){
+  $("month").textContent=MONTHS[view.getMonth()]+" "+view.getFullYear();
+  $("prev").disabled=view<=new Date(today.getFullYear(),today.getMonth(),1);
+  $("next").disabled=new Date(view.getFullYear(),view.getMonth()+1,1)>last;
+  let h=["mån","tis","ons","tor","fre","lör","sön"].map(d=>`<div class="dow">${d}</div>`).join("");
+  const lead=(view.getDay()+6)%7;
+  for(let i=0;i<lead;i++)h+="<div></div>";
+  const dim=new Date(view.getFullYear(),view.getMonth()+1,0).getDate();
+  for(let n=1;n<=dim;n++){
+    const d=new Date(view.getFullYear(),view.getMonth(),n);
+    const k=iso(d);
+    const bookable=d>=today&&d<=last;
+    let cls="day"+(bookable?" open":" off")+(k===selected?" sel":"");
+    h+=`<button type="button" class="${cls}" data-d="${k}"${bookable?"":" disabled"} aria-label="${nice(k)}">${n}</button>`;
+  }
+  $("cal").innerHTML=h;
+}
+$("cal").addEventListener("click",e=>{
+  const b=e.target.closest("button.open");if(!b)return;
+  selected=b.dataset.d;renderCal();
+  $("chosen").className="chosen";$("chosen").textContent=nice(selected).replace(/^./,c=>c.toUpperCase());
+});
+$("prev").onclick=()=>{view=new Date(view.getFullYear(),view.getMonth()-1,1);renderCal()};
+$("next").onclick=()=>{view=new Date(view.getFullYear(),view.getMonth()+1,1);renderCal()};
+
+const total=()=>priceFor(+$("f-count").value,$("f-plan").value);
+["f-count","f-plan"].forEach(id=>$(id).addEventListener("change",()=>$("total").textContent=fmt(total())));
+$("total").textContent=fmt(total());
+renderCal();
+
+function showErr(t){$("formMsg").textContent=t;$("formMsg").hidden=false}
+function resetChosen(){$("chosen").className="chosen empty";$("chosen").textContent="Välj en dag i kalendern."}
+
+$("bookForm").addEventListener("submit",async e=>{
+  e.preventDefault();$("formMsg").hidden=true;
+  if(!selected)return showErr("Välj en dag i kalendern först.");
+  const v=id=>$(id).value.trim();
+  const req=[["f-name","namn"],["f-addr","adress"],["f-zip","postnummer"],["f-city","ort"],["f-phone","telefon"],["f-mail","e-post"]];
+  const miss=req.filter(([id])=>!v(id)).map(([,n])=>n);
+  if(miss.length)return showErr("Fyll i "+miss.join(", ")+".");
+  if(!/^\d{3}\s?\d{2}$/.test(v("f-zip")))return showErr("Postnumret ska ha fem siffror, t.ex. 123 45.");
+  if(!/^\S+@\S+\.\S+$/.test(v("f-mail")))return showErr("Kontrollera e-postadressen.");
+  const sb=client();
+  if(!sb)return showErr("Bokningen är inte igång än. Kontakta oss direkt så länge.");
+  const bokning={datum:selected,antal:+$("f-count").value,typ:$("f-plan").value,
+    namn:v("f-name"),adress:v("f-addr"),postnr:v("f-zip"),ort:v("f-city"),
+    telefon:v("f-phone"),epost:v("f-mail"),ovrigt:v("f-note")||null};
+  $("submit").disabled=true;$("submit").textContent="Bokar…";
+  const {error}=await sb.from("bokningar").insert(bokning);
+  $("submit").disabled=false;$("submit").textContent="Boka";
+  if(error)return showErr("Bokningen kunde inte sparas. Kontrollera uppgifterna och försök igen.");
+  $("bookForm").hidden=true;$("done").hidden=false;
+  $("done").innerHTML=`<h2>Tack, vi ses ${nice(bokning.datum)}.</h2>
+    <p>${bokning.antal} ${bokning.antal>1?"soptunnor":"soptunna"} på ${esc(bokning.adress)}, ${esc(bokning.ort)} · ${fmt(total())}. Ställ ut kärlet vid tomtgränsen senast kl. 07.</p>
+    <div><button class="link" type="button" id="again">Boka en dag till</button></div>`;
+  $("again").onclick=()=>{$("done").hidden=true;$("bookForm").hidden=false;selected=null;renderCal();resetChosen()};
+});
+</script>
+</body>
+</html>

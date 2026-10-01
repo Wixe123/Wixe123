@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>binclean – dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="admin-mode">
+<div class="wrap">
+  <nav>
+    <div class="logo">binclean</div>
+    <div class="navlinks"><a href="./">Visa sidan</a><a href="#" id="logout" hidden>Logga ut</a></div>
+  </nav>
+
+  <form class="login" id="login" hidden novalidate>
+    <h1 style="font-size:2rem">Logga in</h1>
+    <p>Dashboarden för binclean. Logga in med kontot du skapade i Supabase.</p>
+    <label for="l-mail">E-post<input id="l-mail" type="email" autocomplete="username" required></label>
+    <label for="l-pass">Lösenord<input id="l-pass" type="password" autocomplete="current-password" required></label>
+    <p class="msg" id="l-msg" hidden></p>
+    <div><button class="btn" type="submit" id="l-btn">Logga in</button></div>
+  </form>
+
+  <p class="denied" id="denied" hidden></p>
+
+  <main class="dash" id="admin" hidden>
+    <div class="dash-head">
+      <div><h1 style="font-size:2rem">Dashboard</h1><p id="dashInfo">Laddar bokningar…</p></div>
+      <div style="display:flex;gap:8px"><button class="btn ghost sm" id="refresh">Uppdatera</button><button class="btn ghost sm" id="csv">Ladda ner CSV</button></div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><b id="k-upcoming">–</b><span>Kommande bokningar</span></div>
+      <div class="kpi"><b id="k-bins">–</b><span>Soptunnor att tvätta</span></div>
+      <div class="kpi"><b id="k-income">–</b><span id="k-income-l">Intäkter denna månad</span></div>
+      <div class="kpi"><b id="k-result">–</b><span id="k-result-l">Resultat denna månad</span></div>
+    </div>
+
+    <div class="two">
+      <div class="card">
+        <div class="card-head"><h3>Soptunnor per dag</h3><p>Kommande 14 dagar</p></div>
+        <div class="chart" id="chart"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Körlista</h3><button class="link" id="copyRoute">Kopiera adresser</button></div>
+        <div class="daysel" id="daysel"></div>
+        <ul class="stops" id="stops"></ul>
+      </div>
+    </div>
+
+    <div class="card" id="econ">
+      <div class="card-head"><h3>Ekonomi</h3>
+        <div class="nav-btns" style="align-items:center">
+          <button class="iconbtn" id="eprev" aria-label="Föregående månad">‹</button>
+          <span id="emonth" style="min-width:9em;text-align:center;font-weight:600;text-transform:capitalize"></span>
+          <button class="iconbtn" id="enext" aria-label="Nästa månad">›</button>
+        </div>
+      </div>
+      <div class="econ-sum">
+        <div><b id="e-book">–</b><span>Utförda tvättar</span></div>
+        <div><b id="e-inc">–</b><span>Övriga intäkter</span></div>
+        <div><b id="e-exp">–</b><span>Utgifter</span></div>
+        <div><b id="e-res">–</b><span>Resultat</span></div>
+      </div>
+      <form class="econ-form" id="econForm" novalidate>
+        <label for="e-date">Datum<input id="e-date" type="date"></label>
+        <label for="e-type">Typ<select id="e-type"><option value="intakt">Intäkt</option><option value="utgift">Utgift</option></select></label>
+        <label for="e-text" class="wide">Beskrivning<input id="e-text" maxlength="300" placeholder="T.ex. Swish från granne, diesel, tvättmedel"></label>
+        <label for="e-amt">Belopp (kr)<input id="e-amt" inputmode="decimal" placeholder="0"></label>
+        <button class="btn sm" type="submit" id="e-add">Lägg till</button>
+      </form>
+      <p class="msg" id="e-msg" hidden></p>
+      <div class="scroll"><table class="ledger"><thead><tr><th>Datum</th><th>Beskrivning</th><th>Typ</th><th>Belopp</th><th></th></tr></thead><tbody id="e-rows"></tbody></table></div>
+      <p class="yearline" id="e-year"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>Alla bokningar</h3>
+        <div class="tools">
+          <div class="daysel" id="filters">
+            <button class="chip" data-f="kommande" aria-pressed="true">Kommande</button>
+            <button class="chip" data-f="utford" aria-pressed="false">Utförda</button>
+            <button class="chip" data-f="avbokad" aria-pressed="false">Avbokade</button>
+            <button class="chip" data-f="alla" aria-pressed="false">Alla</button>
+          </div>
+          <input id="search" type="search" placeholder="Sök namn, adress, ort…" aria-label="Sök bokningar">
+        </div>
+      </div>
+      <div class="scroll"><table><thead><tr><th>Dag</th><th>Kund</th><th>Adress</th><th>Kontakt</th><th>Tunnor</th><th>Summa</th><th>Status</th></tr></thead><tbody id="rows"></tbody></table></div>
+    </div>
+  </main>
+
+  <footer>binclean</footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="shared.js"></script>
+<script>
+const today=new Date();today.setHours(0,0,0,0);
+const TODAY=iso(today);
+const STATUS={bokad:"Bokad",utford:"Utförd",avbokad:"Avbokad"};
+const st=b=>b.status||"bokad";
+const kr=n=>(n<0?"−":"")+fmt(Math.abs(n));
+let all=[],ledger=[],filter="kommande",routeDay=null,econMonth=TODAY.slice(0,7);
+const sb=client();
+
+/* ---------- Inloggning ---------- */
+function show(which){
+  $("login").hidden=which!=="login";$("admin").hidden=which!=="admin";
+  $("denied").hidden=which!=="denied";$("logout").hidden=which==="login";
+}
+async function start(){
+  if(!sb){$("denied").textContent="Sidan är inte kopplad till Supabase än. Fyll i config.js (se README).";show("denied");return}
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){show("login");return}
+  const ok=await load();
+  if(ok){show("admin");$("e-date").value=TODAY}
+}
+$("login").addEventListener("submit",async e=>{
+  e.preventDefault();$("l-msg").hidden=true;$("l-btn").disabled=true;
+  const {error}=await sb.auth.signInWithPassword({email:$("l-mail").value.trim(),password:$("l-pass").value});
+  $("l-btn").disabled=false;
+  if(error){$("l-msg").textContent="Fel e-post eller lösenord.";$("l-msg").hidden=false;return}
+  start();
+});
+$("logout").onclick=async e=>{e.preventDefault();await sb.auth.signOut();show("login")};
+
+/* ---------- Data ---------- */
+async function load(){
+  const [b,l]=await Promise.all([
+    sb.from("bokningar").select("*").order("datum").order("postnr"),
+    sb.from("ekonomi").select("*").order("datum",{ascending:false})
+  ]);
+  if(b.error||l.error){
+    $("denied").textContent="Kunde inte läsa data. Kontrollera att ditt konto finns i tabellen admins (se README).";
+    show("denied");return false;
+  }
+  all=b.data;ledger=l.data.map(x=>({...x,belopp:Number(x.belopp)}));
+  const isAdmin=await sb.rpc("is_admin");
+  if(isAdmin.data!==true){$("denied").textContent="Ditt konto är inte administratör. Lägg till det i tabellen admins (se README).";show("denied");return false}
+  renderDash();return true;
+}
+$("refresh").onclick=async()=>{$("refresh").disabled=true;await load();$("refresh").disabled=false};
+setInterval(()=>{if(!$("admin").hidden&&document.visibilityState==="visible")load()},60000);
+
+function renderDash(){
+  const upcoming=all.filter(b=>st(b)==="bokad"&&b.datum>=TODAY);
+  $("k-upcoming").textContent=upcoming.length;
+  $("k-bins").textContent=upcoming.reduce((s,b)=>s+b.antal,0);
+  $("dashInfo").textContent=all.length?all.length+" bokningar totalt · uppdateras varje minut":"Inga bokningar ännu. Nya bokningar dyker upp här.";
+  renderChart();renderRoute();renderTable();renderEconomy();
+}
+
+function nextDays(n){const out=[];const d=new Date(today);while(out.length<n){out.push(iso(d));d.setDate(d.getDate()+1)}return out}
+
+/* ---------- Diagram ---------- */
+function renderChart(){
+  const days=nextDays(14);
+  const per={};all.forEach(b=>{if(st(b)!=="avbokad")per[b.datum]=(per[b.datum]||0)+b.antal});
+  const W=600,H=220,pl=28,pr=8,pt=12,pb=34;
+  const maxV=Math.max(4,...days.map(d=>per[d]||0));
+  const y=v=>pt+(H-pt-pb)*(1-v/maxV);
+  const bw=(W-pl-pr)/days.length;
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Soptunnor per dag kommande 14 dagar">`;
+  const step=maxV<=4?1:maxV<=8?2:maxV<=20?5:10;
+  for(let v=0;v<=maxV;v+=step)s+=`<line class="gridl" x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}"/><text x="${pl-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
+  days.forEach((d,i)=>{
+    const v=per[d]||0,x=pl+i*bw+bw*0.2,w=bw*0.6,top=y(v),h=y(0)-top;
+    const r=Math.min(4,w/2,h);
+    s+=`<rect class="hit" x="${pl+i*bw}" y="${pt}" width="${bw}" height="${H-pt-pb}" data-i="${i}"/>`;
+    if(v)s+=`<path class="bar" d="M${x},${y(0)}V${top+r}Q${x},${top} ${x+r},${top}H${x+w-r}Q${x+w},${top} ${x+w},${top+r}V${y(0)}Z"/>`;
+    const dt=new Date(d+"T12:00");
+    if(i%2===0)s+=`<text x="${pl+i*bw+bw/2}" y="${H-pb+16}" text-anchor="middle">${dt.getDate()}/${dt.getMonth()+1}</text>`;
+  });
+  s+=`</svg><div class="tip" id="tip" hidden></div>`;
+  const el=$("chart");el.innerHTML=s;
+  el.querySelectorAll(".hit").forEach(r=>{
+    const d=days[+r.dataset.i],v=per[d]||0;
+    r.addEventListener("mousemove",()=>{
+      const box=el.getBoundingClientRect(),rb=r.getBoundingClientRect();
+      const tip=$("tip");tip.hidden=false;
+      tip.textContent=short(d)+": "+v+(v===1?" tunna":" tunnor");
+      tip.style.left=(rb.left-box.left+rb.width/2)+"px";tip.style.top=(rb.top-box.top+(y(v)/H)*rb.height)+"px";
+    });
+    r.addEventListener("mouseleave",()=>$("tip").hidden=true);
+    r.addEventListener("click",()=>{routeDay=d;renderRoute()});
+  });
+}
+
+/* ---------- Körlista ---------- */
+function renderRoute(){
+  const upcoming=all.filter(b=>st(b)==="bokad"&&b.datum>=TODAY);
+  const dates=[...new Set(upcoming.map(b=>b.datum))].slice(0,6);
+  if(!routeDay||(!dates.includes(routeDay)&&!nextDays(14).includes(routeDay)))routeDay=dates[0]||null;
+  $("daysel").innerHTML=dates.map(d=>`<button class="chip" data-d="${d}" aria-pressed="${d===routeDay}">${short(d)}</button>`).join("");
+  $("daysel").querySelectorAll(".chip").forEach(c=>c.onclick=()=>{routeDay=c.dataset.d;renderRoute()});
+  const list=upcoming.filter(b=>b.datum===routeDay);
+  $("copyRoute").hidden=!list.length;
+  if(!list.length){$("stops").innerHTML=`<li class="empty-state">${routeDay?"Inga tvättar "+nice(routeDay)+".":"Inga kommande tvättar."}</li>`;return}
+  $("stops").innerHTML=list.map(b=>`<li class="stop">
+    <span class="who">${esc(b.adress)}, ${esc(b.ort)}</span>
+    <span class="acts">${actions(b)}</span>
+    <span class="sub">${esc(b.namn)} · ${b.antal} ${b.antal>1?"tunnor":"tunna"} · ${esc(b.telefon)}${b.ovrigt?" · "+esc(b.ovrigt):""}</span>
+  </li>`).join("");
+  bindActions($("stops"));
+}
+$("copyRoute").onclick=async()=>{
+  const txt=all.filter(b=>st(b)==="bokad"&&b.datum===routeDay).map(b=>`${b.adress}, ${b.postnr} ${b.ort} (${b.antal} st, ${b.telefon})`).join("\n");
+  try{await navigator.clipboard.writeText(txt);$("copyRoute").textContent="Kopierat"}catch(e){$("copyRoute").textContent="Kunde inte kopiera"}
+  setTimeout(()=>$("copyRoute").textContent="Kopiera adresser",1800);
+};
+
+function actions(b){
+  if(st(b)==="bokad")return `<button class="btn sm" data-act="utford" data-id="${b.id}">Utförd</button><button class="btn ghost sm" data-act="avboka" data-id="${b.id}">Avboka</button>`;
+  return `<span class="pill ${st(b)}">${STATUS[st(b)]}</span><button class="link" data-act="bokad" data-id="${b.id}">Ångra</button>`;
+}
+function bindActions(root){
+  root.querySelectorAll("[data-act]").forEach(btn=>btn.onclick=async()=>{
+    const act=btn.dataset.act;
+    if(act==="avboka"&&btn.dataset.confirm!=="1"){btn.dataset.confirm="1";btn.textContent="Bekräfta avbokning";return}
+    btn.disabled=true;
+    const status=act==="avboka"?"avbokad":act;
+    const {error}=await sb.from("bokningar").update({status}).eq("id",btn.dataset.id);
+    if(error){btn.disabled=false;btn.textContent="Försök igen";return}
+    const b=all.find(x=>x.id===btn.dataset.id);if(b)b.status=status;
+    renderDash();
+  });
+}
+
+/* ---------- Alla bokningar ---------- */
+function renderTable(){
+  const q=$("search").value.trim().toLowerCase();
+  let rows=all.filter(b=>filter==="alla"||(filter==="kommande"?st(b)==="bokad"&&b.datum>=TODAY:st(b)===filter));
+  if(filter==="utford"||filter==="alla")rows=[...rows].reverse();
+  if(q)rows=rows.filter(b=>[b.namn,b.adress,b.ort,b.postnr,b.epost,b.telefon].join(" ").toLowerCase().includes(q));
+  $("rows").innerHTML=rows.length?rows.map(b=>`<tr>
+    <td class="num">${short(b.datum)}</td>
+    <td>${esc(b.namn)}${b.ovrigt?`<br><small style="color:var(--muted)">${esc(b.ovrigt)}</small>`:""}</td>
+    <td>${esc(b.adress)}<br>${esc(b.postnr)} ${esc(b.ort)}</td>
+    <td>${esc(b.telefon)}<br>${esc(b.epost)}</td>
+    <td class="num">${b.antal}${b.typ==="abo"?" · abo":""}</td>
+    <td class="num">${fmt(b.summa)}</td>
+    <td><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${actions(b)}</div></td></tr>`).join("")
+    :`<tr><td colspan="7" class="empty-state">${all.length?"Inga bokningar matchar.":"Inga bokningar ännu."}</td></tr>`;
+  bindActions($("rows"));
+}
+$("filters").querySelectorAll(".chip").forEach(c=>c.onclick=()=>{
+  filter=c.dataset.f;$("filters").querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed",x===c));renderTable();
+});
+$("search").addEventListener("input",renderTable);
+
+$("csv").onclick=()=>{
+  const cols=["datum","namn","adress","postnr","ort","telefon","epost","antal","typ","summa","status","ovrigt","skapad"];
+  const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+  const csv="﻿"+cols.join(";")+"\n"+all.map(b=>cols.map(c=>q(c==="status"?STATUS[st(b)]:b[c])).join(";")).join("\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+  a.download="binclean-bokningar-"+TODAY+".csv";document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+};
+
+/* ---------- Ekonomi ---------- */
+function sums(prefix){
+  const book=all.filter(b=>st(b)==="utford"&&b.datum.startsWith(prefix));
+  const L=ledger.filter(x=>x.datum.startsWith(prefix));
+  const bookSum=book.reduce((s,b)=>s+b.summa,0);
+  const inc=L.filter(x=>x.typ==="intakt").reduce((s,x)=>s+x.belopp,0);
+  const exp=L.filter(x=>x.typ==="utgift").reduce((s,x)=>s+x.belopp,0);
+  return {book,bookSum,inc,exp,income:bookSum+inc,res:bookSum+inc-exp,L};
+}
+function renderEconomy(){
+  const cur=sums(TODAY.slice(0,7)),mName=MONTHS[today.getMonth()];
+  $("k-income").textContent=fmt(cur.income);$("k-income-l").textContent="Intäkter i "+mName;
+  $("k-result").textContent=kr(cur.res);$("k-result-l").textContent="Resultat i "+mName;
+  const [Y,M]=econMonth.split("-").map(Number);
+  $("emonth").textContent=MONTHS[M-1]+" "+Y;
+  const m=sums(econMonth);
+  $("e-book").textContent=fmt(m.bookSum);$("e-inc").textContent=fmt(m.inc);$("e-exp").textContent=fmt(m.exp);
+  $("e-res").textContent=kr(m.res);$("e-res").className=m.res<0?"neg":"";
+  const rows=m.L.map(x=>`<tr>
+    <td class="num">${short(x.datum)}</td><td>${esc(x.text||"–")}</td>
+    <td><span class="pill ${x.typ==="intakt"?"bokad":"avbokad"}">${x.typ==="intakt"?"Intäkt":"Utgift"}</span></td>
+    <td class="num ${x.typ==="utgift"?"neg":""}">${x.typ==="utgift"?"−":""}${fmt(x.belopp)}</td>
+    <td><button class="link" data-del="${x.id}">Ta bort</button></td></tr>`);
+  if(m.book.length)rows.push(`<tr><td class="num">Hela månaden</td><td>Utförda tvättar via bokningar (${m.book.length} st)</td><td><span class="pill bokad">Intäkt</span></td><td class="num">${fmt(m.bookSum)}</td><td></td></tr>`);
+  $("e-rows").innerHTML=rows.length?rows.join(""):`<tr><td colspan="5" class="empty-state">Inget registrerat i ${MONTHS[M-1]}. Lägg till en intäkt eller utgift ovan.</td></tr>`;
+  $("e-rows").querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
+    if(b.dataset.confirm!=="1"){b.dataset.confirm="1";b.textContent="Bekräfta";return}
+    b.disabled=true;
+    const {error}=await sb.from("ekonomi").delete().eq("id",b.dataset.del);
+    if(error){b.disabled=false;b.textContent="Försök igen";return}
+    ledger=ledger.filter(x=>x.id!==b.dataset.del);renderEconomy();
+  });
+  const y=sums(String(Y));
+  $("e-year").textContent=`Hela ${Y}: intäkter ${fmt(y.income)} · utgifter ${fmt(y.exp)} · resultat ${kr(y.res)}`;
+}
+$("eprev").onclick=()=>{const [Y,M]=econMonth.split("-").map(Number);econMonth=iso(new Date(Y,M-2,1)).slice(0,7);renderEconomy()};
+$("enext").onclick=()=>{const [Y,M]=econMonth.split("-").map(Number);econMonth=iso(new Date(Y,M,1)).slice(0,7);renderEconomy()};
+$("econForm").addEventListener("submit",async e=>{
+  e.preventDefault();$("e-msg").hidden=true;
+  const err=t=>{$("e-msg").textContent=t;$("e-msg").hidden=false};
+  const amt=parseFloat($("e-amt").value.replace(/\s/g,"").replace(",","."));
+  const date=$("e-date").value;
+  if(!date)return err("Välj ett datum.");
+  if(!(amt>0))return err("Skriv ett belopp större än 0, t.ex. 250.");
+  $("e-add").disabled=true;
+  const {data,error}=await sb.from("ekonomi").insert({datum:date,typ:$("e-type").value,text:$("e-text").value.trim()||null,belopp:Math.round(amt*100)/100}).select().single();
+  $("e-add").disabled=false;
+  if(error)return err("Kunde inte spara. Försök igen.");
+  ledger.unshift({...data,belopp:Number(data.belopp)});ledger.sort((a,b)=>b.datum.localeCompare(a.datum));
+  $("e-text").value="";$("e-amt").value="";econMonth=date.slice(0,7);renderDash();
+});
+
+start();
+</script>
+</body>
+</html>
