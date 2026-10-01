@@ -1,0 +1,4 @@
+# Läses när Netlify använder binclean/ som base directory.
+[build]
+  publish = "."
+  command = "echo 'binclean: ingen build behövs'"

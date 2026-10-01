@@ -1,0 +1,5 @@
+# Netlify lägger upp binclean-sajten (mappen binclean/), inte videoappen.
+[build]
+  base = "binclean"
+  publish = "."
+  command = "echo 'binclean: ingen build behövs'"
