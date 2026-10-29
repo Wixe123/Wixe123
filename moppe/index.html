@@ -14,7 +14,7 @@ select,input[type=text],button{background:var(--in);color:var(--tx);border:1px s
 select{max-width:200px}input[type=range]{width:150px}input[type=color]{width:44px;height:26px;border:0;background:none;padding:0}
 button{cursor:pointer}button.p{background:var(--ac);color:#111;border-color:var(--ac);font-weight:600}
 .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-#st{font-size:12px;line-height:1.55;color:var(--mu);margin-top:6px}#st b{color:var(--tx)}
+#st,#tmp{font-size:12px;line-height:1.55;color:var(--mu);margin-top:6px}#st b,#tmp b{color:var(--tx)}
 canvas#dy{width:100%;height:150px;background:var(--in);border-radius:6px}
 #hud{position:fixed;left:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));background:rgba(15,19,24,.78);color:#e8ecf1;padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5;min-width:210px}
 #hud .big{font-size:30px;font-weight:700}
@@ -40,6 +40,9 @@ canvas#dy{width:100%;height:150px;background:var(--in);border-radius:6px}
 <canvas id="dy"></canvas>
 <div class="row"><button id="bRef">Fäst som referens</button><button id="bClr">Rensa referens</button></div>
 <div id="st"></div>
+<h3>Motor &amp; kylning</h3>
+<div id="tmp"></div>
+<div class="row"><button id="bRep">Reparera motor</button></div>
 <h3>Stil</h3>
 <label>Kaross<input type="color" id="cBody"></label>
 <label>Sadel<input type="color" id="cSeat"></label>
@@ -58,9 +61,9 @@ const CARB=[12,17.5,19,21,24];
 const GEARS=[0,3.0,1.95,1.45,1.12];
 const def=o=>Object.assign({kit:0,exh:0,carb:1,jet:85,port:0,roller:9,col:'#e63946',seat:'#222222',rim:'#cccccc',fin:'gloss',num:'7',mir:true},o);
 const MOP=[
-{id:'jog',n:'Jogga 50 (skoter, CVT)',cvt:1,m:85,wb:1.2,wr:.17,fd:9.4,d:def({carb:0,jet:58,roller:10})},
-{id:'rok',n:'Aerox 50 (sportskoter, CVT)',cvt:1,aero:1,m:98,wb:1.3,wr:.26,fd:13,d:def({col:'#1d6fe0',num:'27'})},
-{id:'dt',n:'Enduro DT 50 (växlad)',cvt:0,m:80,wb:1.3,wr:.22,fd:12.8,d:def({col:'#f4c20d',num:'3'})}];
+{id:'jog',n:'Jogga 50 (skoter, CVT)',cvt:1,cool:'air',fan:1,m:85,wb:1.2,wr:.17,fd:9.4,d:def({carb:0,jet:58,roller:10})},
+{id:'rok',n:'Aerox 50 (sportskoter, CVT)',cvt:1,cool:'liquid',aero:1,m:98,wb:1.3,wr:.26,fd:13,d:def({col:'#1d6fe0',num:'27'})},
+{id:'dt',n:'Enduro DT 50 (växlad)',cvt:0,cool:'air',fan:0,m:80,wb:1.3,wr:.22,fd:12.8,d:def({col:'#f4c20d',num:'3'})}];
 let cur=MOP[0],cfgs={},cfg;
 MOP.forEach(m=>cfgs[m.id]=Object.assign({},m.d));
 try{const s=JSON.parse(localStorage.getItem('moppe_v1')||'null');if(s&&s.cfgs){MOP.forEach(m=>{const c=s.cfgs[m.id];if(c&&typeof c==='object'){const o=Object.assign({},m.d);for(const k in o){if(c[k]!==undefined&&typeof c[k]===typeof o[k])o[k]=c[k]}
@@ -82,9 +85,29 @@ function torque(P,rpm){
  const g=Math.exp(-Math.pow((rpm-P.pk)/P.w,2));let t=P.tmax*(.3+.7*g)*P.fuelF;
  t*=1-(1-P.restr)*Math.min(1,rpm/P.pk);
  t*=1-Math.min(.35,P.over*.3)*Math.max(0,1-rpm/(P.pk*.9));
- return rpm>P.lim?0:t;
+ return rpm>P.lim?0:t*(P.cond||1);
 }
 const target=c=>5200+780*(14-c.roller);
+
+/* ---------- värmemodell ----------
+ Luftkyld motor: en klump (cylinder+topp), givaren är en topptempgivare (CHT) under tändstiftet.
+ Vätskekyld motor: cylinder och kylvätska som två klumpar, givaren sitter i kylvätskan.
+ Värme in = P.heat*(1.4*avgiven effekt + 300 W per 1000 rpm). Kylning = hA*(T-luft), där hA växer med
+ fläkt (varvtal) och/eller fartvind. Alla konstanter är spelets trimvärden, inte uppmätta data. */
+const AMB=15;/* utetemperatur, °C (antagen) */
+const TH={jog:{C:2500,a0:4,af:5.3,av:.6},dt:{C:2500,a0:6,af:0,av:4.7},rok:{C:1500,G:100,a0:2,Cw:4200,r0:10,rv:9.3}};
+const BAND={air:{lab:'Topptemp (CHT)',desc:'givare under tändstiftet',b:[[50,'kall, varmkör','#4aa3ff'],[200,'normal','#6bd36b'],[230,'varm','#ffb020'],[1e9,'ÖVERHETTAD','#ff6a4a']]},
+ liquid:{lab:'Kylvätska',desc:'givare i kylvätskan',b:[[50,'kall, varmkör','#4aa3ff'],[95,'normal','#6bd36b'],[110,'varm','#ffb020'],[1e9,'KOKAR','#ff6a4a']]}};
+const T_LOSS=225,T_DMG=240,T_BOIL=120;/* cylindertemp där effekten börjar sjunka (knack) resp. kolven tar skada */
+const VS={};MOP.forEach(m=>VS[m.id]={dmg:0,tc:AMB,tw:AMB,boil:false});
+function therm(m,dt,Q,rpm,v){const t=TH[m.id],s=VS[m.id];
+ if(m.cool==='liquid'){/* kokande kylvätska (≈120°C vid locktrycket) blir inte varmare, men ångfickor gör att cylindern kyls sämre */
+  const hr=(t.r0+t.rv*Math.pow(v,.8))*(s.boil?.35:1),q=t.G*(s.boil?.4:1)*(s.tc-s.tw);
+  s.tc+=(Q-q-t.a0*(s.tc-AMB))/t.C*dt;s.tw=Math.min(T_BOIL,s.tw+(q-hr*(s.tw-AMB))/t.Cw*dt);if(s.tw>=T_BOIL-.5)s.boil=true;else if(s.tw<100)s.boil=false}
+ else s.tc+=(Q-(t.a0+t.af*Math.pow(rpm/1000,.8)+t.av*Math.pow(v,.8))*(s.tc-AMB))/t.C*dt;
+ if(s.tc>T_DMG)s.dmg=Math.min(1,s.dmg+dt*(s.tc-T_DMG)/900)}
+const heatF=s=>1-Math.min(.45,Math.max(0,(s.tc-T_LOSS)/100));/* effektförlust av överhettning */
+function tinfo(m){const s=VS[m.id],B=BAND[m.cool],v=m.cool==='liquid'?s.tw:s.tc,b=B.b.find(x=>v<x[0]);return {lab:B.lab,desc:B.desc,v,band:b[1],col:b[2],tc:s.tc,boil:s.boil,dmg:s.dmg}}
 
 /* ---------- scen ---------- */
 /* r128 läser hex/CSS-färger som linjära men renderar med sRGB-utdata, så allt blev blekt och färgväljaren stämde inte. Tolka dem som sRGB. */
@@ -207,21 +230,22 @@ function stats(a){
  (cur.cvt?`<br>Variatorns målvarv ≈ <b>${Math.round(target(cfg))}</b> mot effekttopp vid <b>${pp.r}</b>`:`<br>Växlad: varvgräns och växlingspunkt styr hur mycket du får ut.`)+
  `<br>Avgasportens timing: <b>${P.ex.toFixed(1)}°</b>`;
 }
-function refresh(){P=calc(cfg);let hb=0;for(let r=2000;r<=15000;r+=250)hb=Math.max(hb,torque(P,r)*r/9549*1.341);P.hp=hb;$('oJet').textContent=cfg.jet;$('oPort').textContent=(cfg.port>0?'+':'')+cfg.port+'°';$('oRoll').textContent=cfg.roller;stats(dyno())}
+function refresh(){P=calc(cfg);P.cond=1-.4*VS[cur.id].dmg;let hb=0;for(let r=2000;r<=15000;r+=250)hb=Math.max(hb,torque(P,r)*r/9549*1.341);P.hp=hb;$('oJet').textContent=cfg.jet;$('oPort').textContent=(cfg.port>0?'+':'')+cfg.port+'°';$('oRoll').textContent=cfg.roller;stats(dyno())}
 const on=(id,fn)=>$(id).addEventListener('input',()=>{fn();refresh()});
 on('sKit',()=>cfg.kit=+$('sKit').value);on('sCarb',()=>cfg.carb=+$('sCarb').value);on('rJet',()=>cfg.jet=+$('rJet').value);on('rPort',()=>cfg.port=+$('rPort').value);on('rRoll',()=>cfg.roller=+$('rRoll').value);
 on('sExh',()=>{cfg.exh=+$('sExh').value;build()});
 on('cBody',()=>{cfg.col=$('cBody').value;finish()});on('cSeat',()=>{cfg.seat=$('cSeat').value;finish()});on('cRim',()=>{cfg.rim=$('cRim').value;finish()});on('sFin',()=>{cfg.fin=$('sFin').value;finish()});
 on('iNum',()=>{cfg.num=$('iNum').value.replace(/[^0-9]/g,'').slice(0,2);build()});on('cMir',()=>{cfg.mir=$('cMir').checked;build()});
-on('sMop',()=>{cur=MOP[+$('sMop').value];cfg=cfgs[cur.id];sync();build();resetS()});
+on('sMop',()=>{cur=MOP[+$('sMop').value];cfg=cfgs[cur.id];S.on=false;sync();build();resetS()});
+$('bRep').onclick=()=>{if(S.on){say('Stäng av motorn (X) innan du reparerar');return}VS[cur.id].dmg=0;refresh();tpanel();say('Motorn reparerad')};
 $('bRef').onclick=()=>{ref=curve(P);refresh()};$('bClr').onclick=()=>{ref=null;refresh()};
 $('bSave').onclick=()=>{try{localStorage.setItem('moppe_v1',JSON.stringify({cur:cur.id,cfgs}));$('bSave').textContent='Sparat ✓'}catch(e){$('bSave').textContent='Kunde inte spara'}setTimeout(()=>$('bSave').textContent='Spara',1500)};
 $('bReset').onclick=()=>{cfgs[cur.id]=Object.assign({},cur.d);cfg=cfgs[cur.id];sync();build();refresh()};
 
 /* ---------- körning ---------- */
-const S={h:0,v:0,rpm:1800,thr:0,gear:1,temp:60,ratio:2.9,lean:0,t0:null,t60:null,steer:0,pitch:0,off:new THREE.Vector3(),on:false,msg:'',mt:0};
+const S={h:0,v:0,rpm:1800,thr:0,gear:1,ratio:2.9,lean:0,t0:null,t60:null,steer:0,pitch:0,off:new THREE.Vector3(),on:false,msg:'',mt:0};
 const K={};let mode='garage',az=.8,el=.25,dist=3.2,taz=.8,tel=.25,tdist=3.2,au=null;const pan=new THREE.Vector3();
-function resetS(){G.position.set(95,0,-70);G.rotation.y=S.h=0;Object.assign(S,{v:0,rpm:1800,thr:0,gear:1,temp:60,lean:0,pitch:0,t0:null,t60:null});S.off.set(0,0,0);G.rotation.x=0}
+function resetS(){G.position.set(95,0,-70);G.rotation.y=S.h=0;Object.assign(S,{v:0,rpm:1800,thr:0,gear:1,lean:0,pitch:0,t0:null,t60:null});S.off.set(0,0,0);G.rotation.x=0}
 function setMode(m){mode=m;const gm=m==='garage';studio.visible=gm;world.forEach(o=>o.visible=!gm);sc.background=sky(gm?0x0d1014:0xaecbe0);sc.fog.color.set(gm?0x0d1014:0xaecbe0);sc.fog.near=gm?7:80;sc.fog.far=gm?24:260;$('pn').classList.toggle('off',m==='ride');$('bMode').textContent=m==='ride'?'Garage':'Åk ut (Tab)';S.v=0;$('tip').textContent=m==='ride'?'W/↑ gas · S/↓/Mellanslag broms · A vänster / D höger · Ctrl eller Shift = wheelie (med gas) · Q/E växla (DT) · K kicka igång · X stäng av motorn · R tillbaka till start · M ljud av/på · Tab garage':'Dra med musen för att rotera · K = kicka igång motorn, sedan håller W gas för att varva (ljud)';if(m==='ride')refresh()}
 $('bMode').onclick=()=>setMode(mode==='ride'?'garage':'ride');
 function startAudio(){if(au)return;try{const A=new(window.AudioContext||window.webkitAudioContext)(),o1=A.createOscillator(),o2=A.createOscillator(),f=A.createBiquadFilter(),gn=A.createGain();o1.type='sawtooth';o2.type='square';f.type='lowpass';gn.gain.value=0;o1.connect(f);o2.connect(f);f.connect(gn);gn.connect(A.destination);o1.start();o2.start();au={A,o1,o2,f,gn,mute:false}}catch(e){}}
@@ -239,12 +263,16 @@ document.querySelectorAll('[data-cam]').forEach(b=>b.onclick=()=>{const[a,l,d]=b
 addEventListener('pointermove',e=>{if(!dr||mode!=='garage')return;if(dr===1){taz=az-=e.movementX*.008;tel=el=Math.min(1.3,Math.max(.03,el+e.movementY*.006))}else{pan.x-=Math.cos(az)*e.movementX*.003*dist;pan.z+=Math.sin(az)*e.movementX*.003*dist;pan.y=Math.min(1,Math.max(-.3,pan.y+e.movementY*.003*dist));pan.clampLength(0,2)}});
 function say(t){S.msg=t;S.mt=performance.now()+2500}
 function kickSnd(){if(!au)return;const A=au.A,n=Math.floor(A.sampleRate*.12),b=A.createBuffer(1,n,A.sampleRate),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,3);const s=A.createBufferSource(),f=A.createBiquadFilter(),g=A.createGain();f.type='lowpass';f.frequency.value=500;g.gain.value=au.mute?0:.6;s.buffer=b;s.connect(f);f.connect(g);g.connect(A.destination);s.start()}
-function kick(){if(S.on||(mode==='ride'&&S.v>3))return;kickSnd();const p=Math.max(.08,.18+.62*P.fuelF-(P.m>1.3?.15:0));if(Math.random()<p){S.on=true;S.rpm=2600;say('Motorn startade!')}else say('Kick… den startade inte'+(P.m<.9?' (för mager?)':P.m>1.15?' (för fet?)':''))}
+function kick(){if(S.on||(mode==='ride'&&S.v>3))return;if(VS[cur.id].dmg>=1){say('Motorn har skurit och går inte att starta. Reparera den.');return}kickSnd();const p=Math.max(.08,.18+.62*P.fuelF-(P.m>1.3?.15:0));if(Math.random()<p){S.on=true;S.rpm=2600;say('Motorn startade!')}else say('Kick… den startade inte'+(P.m<.9?' (för mager?)':P.m>1.15?' (för fet?)':''))}
+/* värme för alla mopeder: den aktiva får värme från motorn, de andra svalnar */
+function heat(dt,Tq,v){MOP.forEach(m=>{const a=m===cur,on=a&&S.on,rpm=on?S.rpm:0;therm(m,dt,on?P.heat*(1.4*Tq*rpm*Math.PI/30+300*rpm/1000):0,rpm,a?v:0)});
+ const s=VS[cur.id];if(S.on&&s.dmg>=1){S.on=false;say('Kolvskär! Motorn skar på grund av överhettning. Reparera den i panelen.')}}
 function step(dt){
  const thrIn=(K.w||K.arrowup)?1:0,brk=(K.s||K.arrowdown||K[' '])?1:0,st=((K.d||K.arrowright)?1:0)-((K.a||K.arrowleft)?1:0);
  S.thr+=(thrIn-S.thr)*Math.min(1,dt*(2+8*P.resp));const thr=S.thr;
  const fwd=new THREE.Vector3(Math.sin(S.h),0,Math.cos(S.h));
- if(mode==='garage'){const goal=!S.on?0:thr>.02?1800+thr*(P.pk*1.05-1800):1800;S.rpm+=(goal-S.rpm)*Math.min(1,dt*(S.on?3+9*P.resp:4));S.v=0;G.position.sub(S.off);S.off.set(0,0,0);S.pitch=0;G.rotation.x=0;return}
+ if(mode==='garage'){const goal=!S.on?0:thr>.02?1800+thr*(P.pk*1.05-1800):1800;S.rpm+=(goal-S.rpm)*Math.min(1,dt*(S.on?3+9*P.resp:4));
+  heat(dt,S.on?torque(P,S.rpm)*(.15+.85*thr)*heatF(VS[cur.id])*.25:0,0);S.v=0;G.position.sub(S.off);S.off.set(0,0,0);S.pitch=0;G.rotation.x=0;return}
  G.position.sub(S.off);
  const mo=cur,wheelRpm=S.v/(2*Math.PI*mo.wr)*60;let tot,des,tg=target(cfg)*(.55+.45*Math.max(thr,.2));
  if(mo.cvt){S.ratio=Math.min(2.9,Math.max(.85,tg/Math.max(wheelRpm*mo.fd,1)));tot=S.ratio*mo.fd;
@@ -252,10 +280,10 @@ function step(dt){
  else{tot=GEARS[S.gear]*mo.fd;const drv=wheelRpm*tot;des=Math.max(drv,thr>.05?2200+thr*(P.pk-2200):1800)}
  if(!S.on)des=0;S.rpm+=(des-S.rpm)*Math.min(1,dt*(S.on?3+9*P.resp:3));S.rpm=Math.min(S.rpm,P.lim*1.03);
  let Tq=torque(P,S.rpm)*(.15+.85*thr);if(thr<.02&&!mo.cvt)Tq=-.5;
- if(S.temp>250)Tq*=.6;if(!S.on)Tq=0;
+ Tq*=heatF(VS[cur.id]);if(!S.on)Tq=0;
  const F=Tq*tot*.85/mo.wr,mass=mo.m+75,drag=.33*S.v*S.v+.015*mass*9.8;
  S.acc=(F-(S.v>0?drag:0))/mass;let a=S.acc-brk*6.5;S.v=Math.max(0,S.v+a*dt);
- S.temp+=((40+(60+110*thr*Math.min(1,S.rpm/P.pk))*P.heat-S.v*.9)-S.temp)*dt*.12;
+ heat(dt,Math.max(0,Tq),S.v);
  S.h-=st*(1-S.pitch*.6)*1.6*Math.min(1,S.v/1.5)/(1+S.v*.12)*dt;
  S.lean+=((st*Math.min(S.v,18)*.025)-S.lean)*Math.min(1,dt*5);
  G.position.addScaledVector(fwd,S.v*dt);G.position.x=Math.max(-140,Math.min(140,G.position.x));G.position.z=Math.max(-140,Math.min(140,G.position.z));
@@ -269,8 +297,15 @@ function step(dt){
 }
 function audio(){if(!au)return;const t=au.A.currentTime,e=EXH[cfg.exh];au.o1.frequency.setTargetAtTime(Math.max(20,S.rpm/60),t,.03);au.o2.frequency.setTargetAtTime(Math.max(40,S.rpm/30),t,.03);
  au.f.frequency.setTargetAtTime(500+S.rpm*.25+e.l*500,t,.05);au.gn.gain.setTargetAtTime(au.mute||!S.on?0:(.025+.05*S.thr)*(.7+e.l*.5),t,.05)}
-function hud(){const k=Math.round(S.v*3.6);$('hs').textContent=k;$('hb').style.width=Math.min(100,S.rpm/P.lim*100)+'%';
- $('hx').innerHTML=`${S.on?'':'<b style="color:#ff6a4a">MOTOR AV</b> – K = kicka<br>'}${performance.now()<S.mt?'<i>'+S.msg+'</i><br>':''}${P.hp.toFixed(1)} hk (toppeffekt) · gasrespons ${Math.round(P.resp*100)}% · ${Math.round(S.rpm)} rpm · ${cur.cvt?'CVT '+S.ratio.toFixed(2)+':1':'Växel '+S.gear}<br>Temp ${Math.round(S.temp)}°C${S.temp>250?' <b style="color:#ff6a4a">ÖVERHETTAD</b>':''}<br>0–60 km/h: ${S.t60?S.t60.toFixed(2)+' s':'–'}`}
+function tline(){const t=tinfo(cur);return `${t.lab} <b>${Math.round(t.v)}°C</b> <b style="color:${t.col}">${t.band}</b>`+(t.tc>T_LOSS?' · effekten sjunker':'')}
+let tmpT=0;function tpanel(){const t=tinfo(cur),B=BAND[cur.cool],th=B.b.slice(0,3).map(x=>x[0]);
+ $('tmp').innerHTML=`${cur.cool==='liquid'?'Vätskekyld':'Luftkyld, '+(cur.fan?'fläkt på svänghjulet (kylningen följer varvtalet)':'fartvind (kylningen följer farten)')} · utetemp ${AMB}°C<br>`+
+ `${t.lab} (${t.desc}): <b>${t.v.toFixed(0)}°C</b> <b style="color:${t.col}">${t.band}</b>`+(cur.cool==='liquid'?`<br>Cylinder (beräknad, ingen givare): <b>${t.tc.toFixed(0)}°C</b>${t.boil?' · <b style="color:#ff6a4a">kylvätskan kokar, kylaren tappar effekt</b>':''}`:'')+
+ `<br>Gränser: kall &lt; ${th[0]} · normal &lt; ${th[1]} · varm &lt; ${th[2]}°C. Över ${T_LOSS}°C i cylindern sjunker effekten, över ${T_DMG}°C skadas kolven.`+
+ `<br>Motorskick: <b style="color:${t.dmg>0?'#ff6a4a':'inherit'}">${Math.round((1-t.dmg)*100)}%</b>${t.dmg>=1?' <b style="color:#ff6a4a">KOLVSKÄR</b>':''}`;
+ $('bRep').disabled=t.dmg===0;$('bRep').title=t.dmg===0?'Motorn är hel':S.on?'Stäng av motorn först':''}
+function hud(){if(performance.now()>tmpT){tmpT=performance.now()+200;tpanel();const c=1-.4*VS[cur.id].dmg;if(Math.abs(c-P.cond)>.005)refresh()}const k=Math.round(S.v*3.6);$('hs').textContent=k;$('hb').style.width=Math.min(100,S.rpm/P.lim*100)+'%';
+ $('hx').innerHTML=`${S.on?'':'<b style="color:#ff6a4a">MOTOR AV</b> – K = kicka<br>'}${performance.now()<S.mt?'<i>'+S.msg+'</i><br>':''}${P.hp.toFixed(1)} hk (toppeffekt) · gasrespons ${Math.round(P.resp*100)}% · ${Math.round(S.rpm)} rpm · ${cur.cvt?'CVT '+S.ratio.toFixed(2)+':1':'Växel '+S.gear}<br>${tline()}<br>0–60 km/h: ${S.t60?S.t60.toFixed(2)+' s':'–'}`}
 function size(){const w=innerWidth,h=innerHeight;R.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();if(P)dyno()}
 addEventListener('resize',size);
 let last=performance.now();
