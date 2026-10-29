@@ -248,8 +248,8 @@ function step(dt){
  G.position.sub(S.off);
  const mo=cur,wheelRpm=S.v/(2*Math.PI*mo.wr)*60;let tot,des,tg=target(cfg)*(.55+.45*Math.max(thr,.2));
  if(mo.cvt){S.ratio=Math.min(2.9,Math.max(.85,tg/Math.max(wheelRpm*mo.fd,1)));tot=S.ratio*mo.fd;
-  const drv=wheelRpm*tot;des=Math.max(drv,thr>.05?Math.min(tg,2000+thr*6000):1800)}
- else{tot=GEARS[S.gear]*mo.fd;const drv=wheelRpm*tot;des=Math.max(drv,thr>.05?2200+thr*3300:1800)}
+  const drv=wheelRpm*tot;des=Math.max(drv,thr>.05?tg:1800)}
+ else{tot=GEARS[S.gear]*mo.fd;const drv=wheelRpm*tot;des=Math.max(drv,thr>.05?2200+thr*(P.pk-2200):1800)}
  if(!S.on)des=0;S.rpm+=(des-S.rpm)*Math.min(1,dt*(S.on?3+9*P.resp:3));S.rpm=Math.min(S.rpm,P.lim*1.03);
  let Tq=torque(P,S.rpm)*(.15+.85*thr);if(thr<.02&&!mo.cvt)Tq=-.5;
  if(S.temp>250)Tq*=.6;if(!S.on)Tq=0;

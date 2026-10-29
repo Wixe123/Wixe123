@@ -34,6 +34,7 @@ Källa: `aerox.obj` (3ds Max-export, 269 grupper, ~107k punkter, **negativa rela
 - DT 50: slutväxeln `fd` var 7.2, vilket gav så låg utväxling att kopplingen aldrig greppade och motorn stod på 5500 varv i alla växlar. Nu 12.8 (vald så att 4:an vid 9500 varv ≈ 55 km/h; en speltrimning, inte ett mätt värde).
 - Färger: r128 tolkade hex/CSS-färger som linjära med sRGB-utdata, så allt blev blekt och färgväljaren stämde inte (rött blev rosa). `Color.setHex/setStyle` omvandlar nu från sRGB; bakgrunden och startnummertexturen hanteras separat.
 - Tangenter: efter att man rört en reglage/lista ignorerades K, W, Tab osv. tills man klickade i 3D-vyn. Nu sväljer bara textfält tangenterna.
+- Starten: under slirningen från stillastående låstes varvet till max 8000 (skotrar) och 5500 (DT), oavsett motor. Trimmade motorer med effekt vid 11–12k drog därför SÄMRE från start än standard (race-Jogga 0–20 km/h 3,5 s mot standard 2,4 s). Nu slirar skotrarna på variatorns målvarv (rullvikten) och DT:n på effekttoppen. Simulerat vid 60 fps: race-Jogga 0–20/30/40 = 1,3/1,9/2,6 s, standard oförändrat ≈2,5/4,1/6,8 s.
 - Garaget: utomhusmiljön (träd, hus, grön markkant) syntes bakom studion. Den döljs nu i garageläget.
 
 ## Kända brister / att verifiera
