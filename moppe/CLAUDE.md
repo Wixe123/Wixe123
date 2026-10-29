@@ -8,7 +8,10 @@ Svenskspråkigt 3D-spel i webbläsaren (en enda HTML-fil, Three.js r128 från cd
 - Trimning: delar köps i butiken och monteras i Förrådet (cylinder, avgas, förgasare m.fl.). Reglage för huvudmunstycke, avgasportens timing och rullvikt (intervallen styrs av monterad munstyckes-/rullsats). Dynograf med referenskurva, sparas automatiskt som "före bytet" vid montering.
 - Stil: färg på kaross/sadel/fälgar, finish, startnummer. Speglar, skärm, tank, styre, fälgtyp och lyktglas är delar (se Delar).
 - Körning: A vänster, D höger, W gas, S/Mellanslag broms, Q/E växla (DT), Ctrl/Shift luta bakåt + ryck (stegring), K kicka igång, X stäng av motorn, R återställ/res upp, M ljud, Tab garage/körning. Esc stänger butiken.
-- Panelflikar: Garage (trimning, dyno, motor & kylning, stil), Förråd (monterat + förråd), Ekonomi (plånbok, dagens utmaningar, statistik, mopeder, händelser) och knappen Butik (helskärm).
+- Panel (förenklad): Åk ut och Butik överst, moped, flikarna Garage / Förråd / Pengar. Garage visar effekt, temp och motorskick, trimningsreglagen, ETT tips åt gången (`#hint`, beräknat i `stats`) och dynon. Detaljer, lack och kameravinklar ligger i hopfällda `<details>`. Ingen Spara-knapp (allt sparas automatiskt).
+- HUD: pengar, fart, varvmätare, temp. Hjälpraden är kort, H (eller klick) visar alla tangenter. "Åk ut" startar motorn automatiskt (upp till 3 kickförsök).
+- Butik: kategorichips (Motor / Kraftöverföring / Utseende), sök, "Visar delar för min moped", varje kort visar beräknad hk-skillnad för din moped (`effect`, `hpWith`), "Köp och montera" (motorn stängs av automatiskt). Varukorg och fler filter (källa, tillverkare, motor, pris, JSON-import) finns kvar.
+- Produktbilder: `partModel` bygger en 3D-modell per deltyp och variant och `renderThumb` renderar den i en egen WebGL-canvas till en data-URL (cache per typ+värden, kö via `fillThumbs`/`thumbRun`). Det är illustrationer, inte produktfoton, och det står i butiken.
 - Sparning: automatiskt i `localStorage` `moppe_v2` (validerad, `moppe_v1` förs över, trasig sparning kopieras till `moppe_v2_trasig`).
 
 ## Version 2 (Loves prioriteringar 1–7, 2026-10-29)
