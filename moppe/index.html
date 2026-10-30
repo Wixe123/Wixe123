@@ -308,26 +308,93 @@ function tinfo(m){const s=VS[m.id],B=BAND[m.cool],v=m.cool==='liquid'?s.tw:s.tc,
 const sky=c=>new THREE.Color(c).convertLinearToSRGB();/* bakgrunden ritas utan sRGB-kodning */
 const cv=$('c'),R=new THREE.WebGLRenderer({canvas:cv,antialias:true});R.setPixelRatio(Math.min(devicePixelRatio,2));
 R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;R.outputEncoding=THREE.sRGBEncoding;R.toneMapping=THREE.ACESFilmicToneMapping;
-const sc=new THREE.Scene();sc.background=sky(0xaecbe0);sc.fog=new THREE.Fog(0xaecbe0,80,260);
+const sc=new THREE.Scene();sc.background=sky(0xc9dbe8);sc.fog=new THREE.Fog(0xc9dbe8,90,300);
 const cam=new THREE.PerspectiveCamera(60,1,.1,400);
-sc.add(new THREE.HemisphereLight(0xffffff,0x4a6a3a,.9));const sun=new THREE.DirectionalLight(0xffffff,.8);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-6,right:6,top:6,bottom:-6,near:1,far:60});sun.shadow.bias=-.0005;sc.add(sun,sun.target);
-const studio=new THREE.Group();{const fm=new THREE.Mesh(new THREE.CircleGeometry(9,64),new THREE.MeshStandardMaterial({color:0x14171c,roughness:.35,metalness:.6,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4}));fm.rotation.x=-Math.PI/2;fm.position.y=.012;fm.receiveShadow=true;const gr=new THREE.GridHelper(18,36,0x3a4350,0x232a33);gr.position.y=.016;const l1=new THREE.PointLight(0x88aaff,.9,14),l2=new THREE.PointLight(0xffd9a0,1,14);l1.position.set(-3,2.5,-2);l2.position.set(3,3,3);studio.add(fm,gr,l1,l2);sc.add(studio)}
+/* ---------- realism: reflektioner, texturer, garage, miljö ----------
+ Miljökartor byggs av små 3D-scener (studio med ljuspaneler resp. himmel) och förfiltreras med PMREM, så lack, metall
+ och krom speglar omgivningen. Texturerna ritas i canvas (brus), inga externa filer. */
+function envScene(kind){const s=new THREE.Scene(),box=new THREE.BoxGeometry();
+ const panel=(i,w,h,d,x,y,z)=>{const m=new THREE.Mesh(box,new THREE.MeshBasicMaterial({color:new THREE.Color(i,i,i)}));m.scale.set(w,h,d);m.position.set(x,y,z);s.add(m)};
+ if(kind==='sky'){const g=new THREE.SphereGeometry(50,32,16),c=[],p=g.attributes.position;for(let i=0;i<p.count;i++){const y=p.getY(i)/50,col=new THREE.Color();
+   if(y>0)col.setRGB(.35+.25*(1-y),.55+.2*(1-y),.85+.08*(1-y));else col.setRGB(.25,.32,.2);c.push(col.r,col.g,col.b)}
+  g.setAttribute('color',new THREE.Float32BufferAttribute(c,3));s.add(new THREE.Mesh(g,new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.BackSide})));
+  const sunM=new THREE.Mesh(new THREE.SphereGeometry(3,16,8),new THREE.MeshBasicMaterial({color:new THREE.Color(40,36,30)}));sunM.position.set(25,35,15);s.add(sunM)}
+ else{const room=new THREE.Mesh(box,new THREE.MeshBasicMaterial({color:new THREE.Color(.09,.09,.1),side:THREE.BackSide}));room.scale.set(24,10,24);room.position.y=4;s.add(room);
+  panel(4,10,.2,4,0,8.8,0);panel(2,.2,4,8,-11.8,4,0);panel(1.6,.2,4,8,11.8,4,0);panel(1.2,8,4,.2,0,4,-11.8);panel(1,8,3,.2,0,4,11.8);panel(.25,24,.1,24,0,-.9,0)}
+ return s}
+const pmrem=new THREE.PMREMGenerator(R);
+const ENV={garage:pmrem.fromScene(envScene('room'),.04).texture,sky:pmrem.fromScene(envScene('sky'),.04).texture};
+/* brustexturer */
+function noiseTex(base,spots,n,size,rep,opt){const c=document.createElement('canvas');c.width=c.height=size;const x=c.getContext('2d');x.fillStyle=base;x.fillRect(0,0,size,size);
+ for(let i=0;i<n;i++){const s=spots[(Math.random()*spots.length)|0];x.fillStyle=s[0];x.globalAlpha=s[1];const r=s[2]*(.5+Math.random());x.fillRect(Math.random()*size,Math.random()*size,r,r*(opt&&opt.streak?.3+Math.random()*3:1))}
+ x.globalAlpha=1;if(opt&&opt.cracks){x.strokeStyle='rgba(0,0,0,.18)';x.lineWidth=1;for(let i=0;i<opt.cracks;i++){let px=Math.random()*size,py=Math.random()*size;x.beginPath();x.moveTo(px,py);for(let k=0;k<8;k++){px+=(Math.random()-.5)*30;py+=(Math.random()-.5)*30;x.lineTo(px,py)}x.stroke()}}
+ const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rep[0],rep[1]);t.encoding=THREE.sRGBEncoding;t.anisotropy=Math.min(8,R.capabilities.getMaxAnisotropy());return t}
+const TX={grass:()=>noiseTex('#4c7a37',[['#3d6a2c',.5,3],['#5f8f45',.45,2],['#6f9a4a',.35,2],['#2f5523',.35,4],['#7a8f3e',.25,2]],26000,512,[1,1]),
+ asphalt:()=>noiseTex('#3d4045',[['#55585e',.5,1.5],['#2b2d31',.55,1.5],['#6a6d72',.3,1],['#222428',.25,6]],30000,512,[1,1],{cracks:6}),
+ concrete:()=>noiseTex('#686a6c',[['#717375',.25,3],['#5f6163',.25,3],['#55575a',.18,10],['#7a7c7e',.15,2]],18000,512,[1,1],{cracks:8}),
+ wood:()=>noiseTex('#8a5a33',[['#6e4526',.35,2],['#a06a3d',.3,2]],9000,256,[1,1],{streak:1})};
+const tex=(f,rx,ry)=>{const t=TX[f]();t.repeat.set(rx,ry);return t};
+const std=(o)=>new THREE.MeshStandardMaterial(Object.assign({roughness:.9,metalness:0},o));
+/* ---------- garaget: ett riktigt rum ---------- */
+function buildGarage(grp){const W=16,H=4.2,add=(geo,mat,x,y,z,ry)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);if(ry)m.rotation.y=ry;m.receiveShadow=true;grp.add(m);return m};
+ const floor=add(new THREE.PlaneGeometry(W,W),std({map:tex('concrete',4,4),roughness:.55,metalness:0,envMapIntensity:.6}),0,.006,0);floor.rotation.x=-Math.PI/2;
+ const wallM=std({color:0xa9a59c,roughness:.95}),wall=(x,z,ry)=>add(new THREE.PlaneGeometry(W,H),wallM,x,H/2,z,ry);wall(0,-W/2,0);wall(-W/2,0,Math.PI/2);wall(W/2,0,-Math.PI/2);wall(0,W/2,Math.PI);
+ const ceil=add(new THREE.PlaneGeometry(W,W),std({color:0x9a9890}),0,H,0);ceil.rotation.x=Math.PI/2;
+ const lineM=new THREE.MeshBasicMaterial({color:0xd8b41e});[[-2.2,0],[2.2,0]].forEach(([x])=>{const l=add(new THREE.PlaneGeometry(.08,6),lineM,x,.008,0);l.rotation.x=-Math.PI/2});
+ /* lysrör */
+ const tubeM=new THREE.MeshBasicMaterial({color:new THREE.Color(2.2,2.2,2.1)});[-3,0,3].forEach(z=>{add(new THREE.BoxGeometry(2.4,.06,.12),tubeM,-1.5,H-.05,z);add(new THREE.BoxGeometry(2.4,.06,.12),tubeM,1.5,H-.05,z)});
+ /* arbetsbänk, verktygstavla, hyllor, däckstapel, verktygsvagn, oljefat */
+ const wood=std({map:tex('wood',2,1),roughness:.8}),steel=std({color:0x5d636b,roughness:.45,metalness:.6}),red=std({color:0xb5231c,roughness:.45,metalness:.2}),blk=std({color:0x161718,roughness:.9});
+ const box=(w,h,d,m,x,y,z)=>{const o=add(new THREE.BoxGeometry(w,h,d),m,x,y,z);o.castShadow=true;return o};
+ box(3.2,.08,.8,wood,-3.5,.95,-W/2+.45);[-4.9,-2.1].forEach(x=>box(.08,.95,.7,steel,x,.47,-W/2+.45));box(3,.03,.6,steel,-3.5,.3,-W/2+.45);
+ box(2.6,1.3,.04,std({color:0x8c7a5a,roughness:.9}),-3.5,1.9,-W/2+.03);
+ for(let i=0;i<9;i++){const t=add(new THREE.BoxGeometry(.04,.25+Math.random()*.25,.04),steel,-4.6+i*.28,1.9+(Math.random()-.5)*.6,-W/2+.08);t.rotation.z=(Math.random()-.5)*.6}
+ box(.6,.9,.45,red,-1.3,.5,-W/2+.35);for(let i=0;i<4;i++)box(.56,.02,.02,steel,-1.3,.2+i*.22,-W/2+.58);
+ [[0,1.4],[0,2.2],[0,3]].forEach(([_,y])=>box(2.4,.04,.45,steel,3.6,y,-W/2+.25));
+ for(let i=0;i<5;i++){const c=box(.3+Math.random()*.25,.25+Math.random()*.2,.3,std({color:[0x2b5fa8,0xc0392b,0x7f8c8d,0xe0a526,0x2c3e50][i],roughness:.6}),2.7+i*.45,1.42+.15,-W/2+.25)}
+ for(let i=0;i<4;i++){const t=add(new THREE.TorusGeometry(.26,.09,10,24),blk,W/2-.5,.09+i*.18,-W/2+.7);t.rotation.x=Math.PI/2;t.castShadow=true}
+ const barrel=add(new THREE.CylinderGeometry(.3,.3,.9,24),std({color:0x1f5f9e,roughness:.5,metalness:.3}),W/2-.6,.45,-W/2+1.6);barrel.castShadow=true;
+ /* garageport */
+ const door=add(new THREE.PlaneGeometry(5,3),std({color:0xb9bec4,roughness:.5,metalness:.4}),0,1.5,W/2-.02,Math.PI);for(let i=1;i<6;i++)add(new THREE.BoxGeometry(5,.03,.02),std({color:0x8d939a,roughness:.5,metalness:.4}),0,i*.5,W/2-.04)}
+/* ---------- utomhus ---------- */
+function skyDome(){const g=new THREE.SphereGeometry(360,32,16),p=g.attributes.position,c=[];for(let i=0;i<p.count;i++){const y=Math.max(0,p.getY(i)/360),a=new THREE.Color(0xc9dbe8),b=new THREE.Color(0x4f86c9);a.lerp(b,Math.pow(y,.6));c.push(a.r,a.g,a.b)}
+ g.setAttribute('color',new THREE.Float32BufferAttribute(c,3));const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.BackSide,fog:false,depthWrite:false}));m.renderOrder=-1;return m}
+/* svenskt hus: panel, vita knutar och fönster, sadeltak */
+function house(x,z,ry,col,w,d){const g=new THREE.Group(),H=2.8,wallM=std({color:col,roughness:.85}),wh=std({color:0xf2f0ea,roughness:.7}),roofM=std({color:0x2e2f33,roughness:.8}),glass=std({color:0x1d2630,roughness:.08,metalness:.4});
+ const a=(geo,m,px,py,pz,r)=>{const o=new THREE.Mesh(geo,m);o.position.set(px,py,pz);if(r)o.rotation.y=r;o.castShadow=o.receiveShadow=true;g.add(o);return o};
+ a(new THREE.BoxGeometry(w,H,d),wallM,0,H/2,0);a(new THREE.BoxGeometry(w+.1,.3,d+.1),std({color:0x55585c}),0,.15,0);
+ [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sz])=>a(new THREE.BoxGeometry(.14,H,.14),wh,sx*w/2,H/2,sz*d/2));
+ const sh=new THREE.Shape();sh.moveTo(-d/2-.35,0);sh.lineTo(0,1.7);sh.lineTo(d/2+.35,0);sh.lineTo(-d/2-.35,0);const rg=new THREE.ExtrudeGeometry(sh,{depth:w+.5,bevelEnabled:false});rg.translate(0,0,-(w+.5)/2);
+ const roof=a(rg,roofM,0,H,0);roof.rotation.y=Math.PI/2;const gs=new THREE.Shape();gs.moveTo(-d/2,0);gs.lineTo(0,1.55);gs.lineTo(d/2,0);gs.lineTo(-d/2,0);
+ [-1,1].forEach(s=>{const gb=a(new THREE.ShapeGeometry(gs),wallM,s*(w/2+.001),H,0,s*Math.PI/2)});
+ const win=(px,pz,r)=>{a(new THREE.BoxGeometry(1,1.1,.06),wh,px,1.55,pz,r);a(new THREE.BoxGeometry(.82,.92,.08),glass,px,1.55,pz,r);a(new THREE.BoxGeometry(.06,.92,.1),wh,px,1.55,pz,r)};
+ for(let i=0;i<Math.floor(w/2.6);i++){const px=-w/2+1.5+i*2.6;win(px,d/2+.01,0);win(px,-d/2-.01,0)}
+ a(new THREE.BoxGeometry(1,2,.08),std({color:0x3b2a1e,roughness:.7}),w/2-1.4,1,d/2+.02);
+ g.position.set(x,0,z);g.rotation.y=ry;return g}
+function spruce(x,z,h){const g=new THREE.Group(),tr=std({color:0x4a3322}),c=[0x1d4728,0x23502e,0x1a3f24][(Math.random()*3)|0];const m=std({color:c,roughness:1,flatShading:true});
+ const t=new THREE.Mesh(new THREE.CylinderGeometry(.18,.25,1.4,6),tr);t.position.y=.7;g.add(t);for(let i=0;i<4;i++){const r=1.9-i*.42,ch=h*.42;const k=new THREE.Mesh(new THREE.ConeGeometry(r,ch,9),m);k.position.y=1.1+i*h*.2+ch/2;k.rotation.y=Math.random();k.castShadow=true;g.add(k)}g.position.set(x,0,z);return g}
+function birch(x,z,h){const g=new THREE.Group(),tr=std({color:0xe8e4da,roughness:.8}),lf=std({color:[0x5f8f3a,0x6d9a42,0x557f33][(Math.random()*3)|0],roughness:1,flatShading:true});
+ const t=new THREE.Mesh(new THREE.CylinderGeometry(.1,.16,h*.65,7),tr);t.position.y=h*.32;g.add(t);for(let i=0;i<3;i++){const k=new THREE.Mesh(new THREE.IcosahedronGeometry(1.1+Math.random()*.5,1),lf);k.position.set((Math.random()-.5)*1.2,h*.6+i*.7,(Math.random()-.5)*1.2);k.castShadow=true;g.add(k)}g.position.set(x,0,z);return g}
+const hemi=new THREE.HemisphereLight(0xffffff,0x4a6a3a,.9);sc.add(hemi);const sun=new THREE.DirectionalLight(0xffffff,.8);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-6,right:6,top:6,bottom:-6,near:1,far:60});sun.shadow.bias=-.0005;sc.add(sun,sun.target);
+const studio=new THREE.Group();{buildGarage(studio);const l1=new THREE.PointLight(0xdfe8ff,.5,12),l2=new THREE.PointLight(0xffe2b8,.6,12);l1.position.set(-2.5,3.4,-1.5);l2.position.set(2.5,3.4,2);studio.add(l1,l2);sc.add(studio)}
 const bx=(w,h,d,c,x,y,z)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:c}));m.position.set(x,y,z);sc.add(m);return m};
-const fl=(g,c,x,y,z)=>{const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({color:c}));m.rotation.x=-Math.PI/2;m.receiveShadow=true;m.position.set(x,y,z);sc.add(m)};
-fl(new THREE.PlaneGeometry(320,320),0x4f7d3c,0,0,0);
-fl(new THREE.RingGeometry(38,50,64),0x3a3d42,0,.02,0);
-fl(new THREE.PlaneGeometry(10,170),0x3a3d42,95,.02,0);
-fl(new THREE.PlaneGeometry(46,8),0x3a3d42,72,.02,0);
-fl(new THREE.CircleGeometry(30,32),0x3a6f94,-90,.03,-90);
-bx(.3,.02,12,0xffffff,95,.04,-60).visible=true;
-bx(10,.03,.4,0xffffff,95,.04,-75);bx(10,.03,.4,0xffffff,95,.04,75);
+const fl=(g,mat,x,y,z)=>{const m=new THREE.Mesh(g,mat);m.rotation.x=-Math.PI/2;m.receiveShadow=true;m.position.set(x,y,z);sc.add(m);return m};
+const asM=(rx,ry)=>std({map:tex('asphalt',rx,ry),roughness:.92});
+fl(new THREE.PlaneGeometry(320,320),std({map:tex('grass',70,70),roughness:1}),0,0,0);
+fl(new THREE.RingGeometry(38,50,96),asM(22,22),0,.02,0);
+fl(new THREE.PlaneGeometry(10,170),asM(2.5,40),95,.02,0);
+fl(new THREE.PlaneGeometry(46,8),asM(11,2),72,.02,0);
+fl(new THREE.CircleGeometry(30,48),std({color:0x24506e,roughness:.04,metalness:.25}),-90,.03,-90);
+bx(.3,.02,12,0xf2f2ee,95,.04,-60);bx(10,.03,.4,0xf2f2ee,95,.04,-75);bx(10,.03,.4,0xf2f2ee,95,.04,75);
+[90.4,99.6].forEach(x=>bx(.15,.015,170,0xe8e8e2,x,.032,0));
 let sd=7;const rnd=()=>(sd=(sd*16807)%2147483647)/2147483647;
 const bad=(x,z)=>{const r=Math.hypot(x,z);return(r>32&&r<56)||Math.abs(x-95)<12||(Math.abs(z)<8&&x>40&&x<100)||Math.hypot(x+90,z+90)<36||r<10};
-const HC=[0x9c2f22,0xd9b44a,0xe9e4d6,0x9c2f22];
-for(let i=0,n=0;n<16&&i<400;i++){const x=(rnd()-.5)*270,z=(rnd()-.5)*270;if(bad(x,z))continue;n++;bx(8,5,6,HC[n%4],x,2.5,z);bx(8.6,.5,6.6,0x2b2b2b,x,5.2,z)}
-for(let i=0,n=0;n<70&&i<600;i++){const x=(rnd()-.5)*290,z=(rnd()-.5)*290;if(bad(x,z))continue;n++;const h=4+rnd()*4;bx(.4,1.5,.4,0x5a3d22,x,.75,z);const c=new THREE.Mesh(new THREE.ConeGeometry(1.6,h,8),new THREE.MeshLambertMaterial({color:0x1f4d2b}));c.position.set(x,1.5+h/2,z);sc.add(c)}
-bx(9,4,6,0x9c2f22,110,2,-74);bx(9.6,.4,6.6,0xffffff,110,4.1,-74);bx(4,3,.2,0x333333,105.5,1.6,-70.9);
-const world=sc.children.filter(o=>o.isMesh);/* utomhusmiljön, döljs i garaget */
+const HC=[0x8a2b1f,0xd6b04a,0xeae5d8,0x8a2b1f];
+for(let i=0,n=0;n<16&&i<400;i++){const x=(rnd()-.5)*270,z=(rnd()-.5)*270;if(bad(x,z))continue;n++;sc.add(house(x,z,Math.floor(rnd()*4)*Math.PI/2,HC[n%4],8,6))}
+for(let i=0,n=0;n<80&&i<700;i++){const x=(rnd()-.5)*290,z=(rnd()-.5)*290;if(bad(x,z))continue;n++;sc.add((rnd()<.7?spruce:birch)(x,z,5+rnd()*4))}
+sc.add(house(110,-74,Math.PI/2,0x8a2b1f,9,6));
+const SKY=skyDome();sc.add(SKY);
+const world=sc.children.filter(o=>o!==studio&&!o.isLight&&o!==sun.target);/* utomhusmiljön, döljs i garaget */
 
 /* ---------- moped ---------- */
 let G,fw,rw,mats,AX=null;
@@ -336,27 +403,18 @@ function build(){
  E=ecfg(cur.id);const pos=G?G.position.clone():new THREE.Vector3(95,0,-70),rot=G?G.rotation.y:0;if(G)sc.remove(G);
  const mo=cur,g=new THREE.Group();g.rotation.order='YXZ';
  const M=(c,r,m)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});
- mats={body:M(cfg.col,.4,.1),seat:M(cfg.seat,.8,0),rim:M(cfg.rim,.4,.6),ex:M(EXH[E.exh].col,.3,.9),tire:M(0x15171a,.9,0),dk:M(0x222428,.6,.3),dec:new THREE.MeshBasicMaterial({map:numTex(cfg.num),transparent:true})};
+ mats={body:new THREE.MeshPhysicalMaterial({color:cfg.col,roughness:.4,metalness:.05,clearcoat:1,clearcoatRoughness:.05}),seat:M(cfg.seat,.8,0),rim:M(cfg.rim,.4,.6),ex:M(EXH[E.exh].col,.3,.9),tire:M(0x15171a,.9,0),dk:M(0x222428,.6,.3),dec:new THREE.MeshBasicMaterial({map:numTex(cfg.num),transparent:true})};
  const add=(geo,mat,x,y,z,rx,rz)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);if(rx)m.rotation.x=rx;if(rz)m.rotation.z=rz;g.add(m);return m};
  const B=(w,h,d)=>new THREE.BoxGeometry(w,h,d),wr=mo.wr,wb=mo.wb;
  const wheel=z=>{const w=new THREE.Group();const t=new THREE.Mesh(new THREE.CylinderGeometry(wr,wr,.1,24),mats.tire),r=new THREE.Mesh(new THREE.CylinderGeometry(wr*.62,wr*.62,.11,16),mats.rim);t.rotation.z=r.rotation.z=Math.PI/2;w.add(t,r);w.position.set(0,wr,z);g.add(w);return w};
  if(mo.aero&&AX){const r=buildAero(g,mats);fw=r.fw;rw=r.rw;g.position.copy(pos);g.rotation.y=rot;sc.add(g);G=g;finish();return}
  if(mo.cvt){const r=buildScooter(g,mo,mats,E);fw=r.fw;rw=r.rw;g.position.copy(pos);g.rotation.y=rot;sc.add(g);G=g;g.traverse(o=>{if(o.isMesh)o.castShadow=true});finish();return}
- fw=wheel(wb/2);rw=wheel(-wb/2);
- if(false){add(B(.34,.07,wb*.55),mats.body,0,wr+.1,.05);add(B(.3,.3,.5),mats.body,0,wr+.3,-wb*.28);add(B(.3,.5,.1),mats.body,0,wr+.4,wb*.3);add(B(.28,.08,.5),mats.seat,0,wr+.5,-wb*.22);
-  add(B(.16,.22,.34),mats.dk,0,wr+.12,-wb*.33)}
- else{if(E.tank!=='none')add(B(.26,.2,.42),E.tank==='carbon'?carbon():mats.body,0,wr+.66,.12);add(B(.24,.08,.55),mats.seat,0,wr+.6,-.3);add(B(.1,.3,.7),mats.dk,0,wr+.4,-.05);add(B(.22,.28,.3),mats.dk,0,wr+.22,0);add(B(.16,.1,.4),mats.body,0,wr+.52,-.62)}
- {const hb=E.bars==='high',by=wr+.95+(hb?.08:0),bw=hb?.74:.62;add(new THREE.CylinderGeometry(.015,.015,bw,8),mats.dk,0,by,wb/2-.1,0,Math.PI/2);if(hb)[-1,1].forEach(s=>add(B(.025,.1,.025),mats.dk,s*.06,by-.05,wb/2-.1));
-  if(E.mir!=='none')[-1,1].forEach(s=>{add(B(.012,.2,.012),mats.dk,s*bw*.42,by+.1,wb/2-.12);const mh=add(new THREE.SphereGeometry(.05,10,8),E.mir==='round'?new THREE.MeshStandardMaterial({color:0xeeeeee,roughness:.1,metalness:1}):mats.dk,s*bw*.42,by+.22,wb/2-.13);if(E.mir!=='round')mh.scale.set(1,.7,.3)})}
- add(B(.05,.8,.05),mats.dk,0,wr+.5,wb/2-.06,-.25);
- add(new THREE.SphereGeometry(.08,12,8),new THREE.MeshBasicMaterial({color:E.glass==='tint'?0x8a8466:0xfff2b0}),0,wr+.88,wb/2);
- const L=.5+EXH[E.exh].l*.45;add(new THREE.CylinderGeometry(.04+EXH[E.exh].l*.02,.04,L,12),mats.ex,.2,wr+.1,-wb*.3,Math.PI/2);
- if(E.tank!=='none')[-1,1].forEach(s=>{const d=new THREE.Mesh(new THREE.PlaneGeometry(.2,.2),mats.dec);d.position.set(s*.165,mo.cvt?wr+.32:wr+.67,mo.cvt?-wb*.28:.12);d.rotation.y=s*Math.PI/2;g.add(d)});
+ {const r=buildDT(g,mo,mats,E);fw=r.fw;rw=r.rw}
  g.position.copy(pos);g.rotation.y=rot;sc.add(g);G=g;finish();
 }
-let carbonM=null;const carbon=()=>carbonM||(carbonM=new THREE.MeshStandardMaterial({color:0x1b1d21,roughness:.28,metalness:.35}));
+let carbonM=null;const carbon=()=>carbonM||(carbonM=new THREE.MeshPhysicalMaterial({color:0x1b1d21,roughness:.35,metalness:.3,clearcoat:1,clearcoatRoughness:.04}));
 function finish(){const f=cfg.fin,pol=E.rims==='pol';mats.rim.metalness=pol?1:.6;mats.rim.roughness=pol?.12:.4;mats.body.color.set(cfg.col);mats.seat.color.set(cfg.seat);mats.rim.color.set(cfg.rim);
- mats.body.roughness=f==='matt'?.9:f==='metal'?.3:.25;mats.body.metalness=f==='metal'?.85:f==='matt'?0:.1}
+ mats.body.roughness=f==='matt'?.85:f==='metal'?.42:.38;mats.body.metalness=f==='metal'?.75:f==='matt'?0:.05;mats.body.clearcoat=f==='matt'?0:1;mats.body.clearcoatRoughness=f==='metal'?.08:.04;mats.body.needsUpdate=true}
 
 function rb(w,h,d,r){const s=new THREE.Shape(),x=-w/2,y=-h/2;s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.quadraticCurveTo(x+w,y,x+w,y+r);s.lineTo(x+w,y+h-r);s.quadraticCurveTo(x+w,y+h,x+w-r,y+h);s.lineTo(x+r,y+h);s.quadraticCurveTo(x,y+h,x,y+h-r);s.lineTo(x,y+r);s.quadraticCurveTo(x,y,x+r,y);const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:true,bevelThickness:r*.4,bevelSize:r*.4,bevelSegments:2,curveSegments:6});g.translate(0,0,-d/2);return g}
 function prof(pts,w,b){const s=new THREE.Shape();s.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++){const p=pts[i];p.length>2?s.quadraticCurveTo(p[2],p[3],p[0],p[1]):s.lineTo(p[0],p[1])}const g=new THREE.ExtrudeGeometry(s,{depth:w,bevelEnabled:true,bevelThickness:b,bevelSize:b,bevelSegments:3,curveSegments:10});g.rotateY(-Math.PI/2);g.translate(w/2,0,0);return g}
@@ -397,6 +455,70 @@ function buildScooter(g,mo,m,cfg){
  tube([-.14,.2,-.15],[-.3,.02,-.1],.012,met);
  at(new THREE.BoxGeometry(.14,.05,.04),red,0,.5,-.69*s);at(rb(.22,.12,.01,.01),wht,0,.38,-.7*s,.2);at(rb(.16,.08,.008,.008),wht,0,wr+.2,z0+.07);
  [-1,1].forEach(x=>{at(new THREE.SphereGeometry(.025,8,6),amb,x*.2,.80,.62*s);at(new THREE.SphereGeometry(.025,8,6),amb,x*.18,.46,-.68*s);const d=new THREE.Mesh(new THREE.PlaneGeometry(.2,.2),m.dec);d.position.set(x*.168,.42,-.36*s);d.rotation.y=x*Math.PI/2;g.add(d)});
+ return {fw,rw}}
+/* Enduro DT 50: procedurell modell (ram, gaffel, motor med kylflänsar, expansionskammare, sving med stötdämpare, ekerhjul) */
+function buildDT(g,mo,m,E){const wr=mo.wr,z0=mo.wb/2,V=THREE.Vector3;
+ const M=(c,r,mt,o)=>new THREE.MeshPhysicalMaterial(Object.assign({color:c,roughness:r,metalness:mt},o||{}));
+ const frameM=M(0x1b1c1f,.35,.5,{clearcoat:.6}),chr=M(0xeef0f3,.08,1),alu=M(0xb8bdc4,.3,.85),eng=M(0x9ea3a9,.45,.7),blk=M(0x111214,.8,.1),wht=M(0xf3f3ef,.35,0,{clearcoat:.4}),rubber=M(0x0e0f10,.95,0),lamp=M(0xfff2c8,.15,0,{emissive:0xffe0a0,emissiveIntensity:.5});
+ const at=(geo,mat,x,y,z,rx,ry,rz)=>{const o=new THREE.Mesh(geo,mat);o.position.set(x,y,z);o.rotation.set(rx||0,ry||0,rz||0);o.castShadow=true;g.add(o);return o};
+ const tube=(pts,r,mat,seg)=>{const o=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p=>new V(...p))),seg||24,r,10,false),mat);o.castShadow=true;g.add(o);return o};
+ const rod=(a,b,r,mat)=>{const A=new V(...a),B=new V(...b),d=B.clone().sub(A),o=new THREE.Mesh(new THREE.CylinderGeometry(r,r,d.length(),10),mat);o.position.copy(A).addScaledVector(d,.5);o.quaternion.setFromUnitVectors(new V(0,1,0),d.clone().normalize());o.castShadow=true;g.add(o);return o};
+ /* ekerhjul med grovmönstrat däck */
+ const wheel=z=>{const w=new THREE.Group(),R=wr-.04;const t=new THREE.Mesh(new THREE.TorusGeometry(R,.042,14,40),rubber);t.rotation.y=Math.PI/2;w.add(t);
+  const n=46,kn=new THREE.InstancedMesh(new THREE.BoxGeometry(.075,.018,.026),rubber,n),du=new THREE.Object3D();for(let i=0;i<n;i++){const a=i/n*Math.PI*2;du.position.set((i%2?.02:-.02),Math.cos(a)*(wr+.003),Math.sin(a)*(wr+.003));du.rotation.set(a,0,0);du.updateMatrix();kn.setMatrixAt(i,du.matrix)}w.add(kn);
+  const rim=new THREE.Mesh(new THREE.TorusGeometry(R-.035,.012,8,40),m.rim);rim.rotation.y=Math.PI/2;w.add(rim);
+  const hub=new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,.11,16),alu);hub.rotation.z=Math.PI/2;w.add(hub);
+  const sp=new THREE.InstancedMesh(new THREE.CylinderGeometry(.0028,.0028,R-.05,4),chr,24),d2=new THREE.Object3D();
+  for(let i=0;i<24;i++){const a=i/24*Math.PI*2,side=i%2?.045:-.045,tw=(i%4<2?1:-1)*.18;d2.position.set(side*.5,Math.cos(a+tw*.5)*(R-.05)/2,Math.sin(a+tw*.5)*(R-.05)/2);d2.rotation.set(a+tw,0,side*.6);d2.updateMatrix();sp.setMatrixAt(i,d2.matrix)}w.add(sp);
+  w.position.set(0,wr,z);g.add(w);return w};
+ const fw=wheel(z0),rw=wheel(-z0);
+ at(new THREE.CylinderGeometry(.09,.09,.006,24),M(0x8d9298,.3,.9),.06,wr,z0,0,0,Math.PI/2);/* skivbroms fram */
+ /* ram */
+ const head=[0,.98,.43],headLo=[0,.82,.47];
+ tube([head,[0,.92,.2],[0,.86,-.05],[0,.82,-.25]],.024,frameM);
+ tube([headLo,[0,.6,.38],[0,.38,.24],[0,.3,.05],[0,.32,-.15]],.022,frameM);
+ [-1,1].forEach(s=>{tube([[s*.07,.82,-.25],[s*.09,.78,-.45],[s*.1,.74,-.75]],.014,frameM);tube([[s*.06,.32,-.15],[s*.08,.5,-.3],[s*.1,.74,-.6]],.013,frameM)});
+ at(new THREE.CylinderGeometry(.04,.04,.18,14),frameM,0,.9,.45,-.45);
+ /* framgaffel med lutning */
+ const rake=-.45;[-1,1].forEach(s=>{rod([s*.075,1.02,.4],[s*.075,.62,.56],.022,chr);rod([s*.075,.66,.545],[s*.075,wr,z0],.028,blk)});
+ at(new THREE.BoxGeometry(.22,.035,.07),alu,0,.95,.43,rake);at(new THREE.BoxGeometry(.22,.035,.07),alu,0,1.03,.4,rake);
+ /* framskärm (hög, enduro) */
+ const ff=new THREE.TorusGeometry(wr+.06,.02,6,16,Math.PI*.6);ff.scale(1,1,5.5);if(E.fender!=='none')at(ff,wht,0,wr,z0,0,Math.PI/2,Math.PI*.15);
+ /* styre */
+ const hb=E.bars==='high',by=1.08+(hb?.07:0),bw=hb?.74:.64;
+ tube(hb?[[-bw/2,by+.06,.36],[-bw*.32,by+.02,.38],[-.1,by-.03,.4],[.1,by-.03,.4],[bw*.32,by+.02,.38],[bw/2,by+.06,.36]]:[[-bw/2,by+.02,.36],[-.15,by-.02,.4],[.15,by-.02,.4],[bw/2,by+.02,.36]],.011,hb?alu:blk);
+ if(hb)rod([-.15,by+.01,.4],[.15,by+.01,.4],.008,alu);[-1,1].forEach(s=>{at(new THREE.CylinderGeometry(.017,.017,.11,12),rubber,s*(bw/2-.04),by+.04,.36,0,0,Math.PI/2);rod([s*.04,1.03,.41],[s*.06,by-.02,.4],.012,blk)});
+ if(E.mir!=='none')[-1,1].forEach(s=>{rod([s*bw*.38,by,.38],[s*bw*.42,by+.24,.36],.006,blk);const mh=at(new THREE.SphereGeometry(.05,14,10),E.mir==='round'?chr:blk,s*bw*.43,by+.27,.35);if(E.mir!=='round')mh.scale.set(1.2,.75,.3);else mh.scale.set(1,1,.45)});
+ /* strålkastare i nummerplåt */
+ at(new THREE.BoxGeometry(.22,.24,.04),wht,0,.9,.55,rake);at(new THREE.CylinderGeometry(.07,.07,.05,20),E.glass==='tint'?M(0x2a3038,.05,.4):lamp,0,.9,.575,Math.PI/2+rake);
+ /* tank */
+ if(E.tank!=='none'){const tm=E.tank==='carbon'?carbon():m.body,tg=rb(.24,.15,.4,.07);const t=at(tg,tm,0,.9,.13,-.16);at(new THREE.CylinderGeometry(.035,.035,.03,16),chr,0,.99,.2);
+  [-1,1].forEach(s=>{const d=new THREE.Mesh(new THREE.PlaneGeometry(.17,.17),m.dec);d.position.set(s*.132,.9,.12);d.rotation.y=s*Math.PI/2;g.add(d)})}
+ /* sadel och sidoskydd */
+ at(rb(.22,.07,.62,.03),m.seat,0,.9,-.36,.06);
+ [-1,1].forEach(s=>{const sp=at(rb(.006,.17,.22,.03),wht,s*.115,.74,-.3);const d=new THREE.Mesh(new THREE.PlaneGeometry(.13,.13),m.dec);d.position.set(s*.13,.74,-.3);d.rotation.y=s*Math.PI/2;g.add(d)});
+ /* bakskärm */
+ const rf=new THREE.Shape();rf.moveTo(0,0);rf.quadraticCurveTo(.25,.02,.45,.12);rf.lineTo(.45,.15);rf.quadraticCurveTo(.25,.05,0,.03);const rfg=new THREE.ExtrudeGeometry(rf,{depth:.16,bevelEnabled:false});rfg.translate(0,0,-.08);
+ at(rfg,wht,0,.84,-.62,0,Math.PI/2);at(new THREE.BoxGeometry(.13,.05,.03),M(0xb01020,.3,0,{emissive:0x600008,emissiveIntensity:.6}),0,.93,-1.04);
+ /* motor: vevhus, cylinder med flänsar framåtlutad, topp */
+ const ce=at(rb(.2,.2,.3,.05),eng,0,.3,0);const cyl=new THREE.Group();cyl.position.set(0,.42,.08);cyl.rotation.x=.35;g.add(cyl);
+ const cm=(geo,mat,y)=>{const o=new THREE.Mesh(geo,mat);o.position.y=y;o.castShadow=true;cyl.add(o)};cm(new THREE.CylinderGeometry(.055,.055,.2,18),eng,.08);
+ for(let i=0;i<7;i++)cm(new THREE.BoxGeometry(.19,.012,.17),alu,.0+i*.028);cm(new THREE.BoxGeometry(.17,.035,.15),alu,.2);cm(new THREE.CylinderGeometry(.012,.012,.05,8),chr,.24);
+ at(new THREE.CylinderGeometry(.11,.11,.03,28),alu,.115,.3,-.02,0,0,Math.PI/2);/* kopplingslock */
+ at(new THREE.CylinderGeometry(.03,.035,.07,14),alu,0,.47,-.06,1.2);at(new THREE.BoxGeometry(.06,.06,.08),alu,0,.49,-.12);/* förgasare */
+ rod([.1,.36,-.02],[.13,.28,-.17],.01,chr);at(new THREE.BoxGeometry(.03,.012,.08),chr,.13,.28,-.2);/* kickstart */
+ [-1,1].forEach(s=>at(new THREE.CylinderGeometry(.012,.012,.12,8),chr,s*.13,.26,-.06,0,0,Math.PI/2));/* fotpinnar */
+ /* expansionskammare: från cylinderns avgasport, runt motorn, längs högersidan upp mot bak */
+ const e=EXH[E.exh],R=.035+e.l*.035,path=[[0,.47,.22],[.02,.32,.32],[.08,.2,.2],[.14,.25,-.05],[.15,.42,-.32],[.15,.6,-.55]],
+  pc=new THREE.CatmullRomCurve3(path.map(p=>new V(...p))),rad=t=>t<.15?.022:t<.55?.022+(R-.022)*Math.min(1,(t-.15)/.2):t<.8?R:R-(R-.016)*(t-.8)/.2;
+ const pg=new THREE.TubeGeometry(pc,60,1,14,false),pos=pg.attributes.position,fr=pc.computeFrenetFrames(60,false);
+ for(let i=0;i<=60;i++){const t=i/60,c=pc.getPointAt(t),r=rad(t);for(let j=0;j<=14;j++){const k=i*15+j,v=new V(pos.getX(k),pos.getY(k),pos.getZ(k)).sub(c).multiplyScalar(r);pos.setXYZ(k,c.x+v.x,c.y+v.y,c.z+v.z)}}
+ pg.computeVertexNormals();const ex=new THREE.Mesh(pg,m.ex);ex.castShadow=true;g.add(ex);rod([.15,.6,-.55],[.15,.7,-.78],.022,m.ex);at(new THREE.CylinderGeometry(.03,.03,.1,14),blk,.15,.72,-.82,1.2);
+ /* sving, stötdämpare, kedja */
+ [-1,1].forEach(s=>{rod([s*.08,.3,-.18],[s*.08,wr,-z0],.018,frameM);});
+ [-1,1].forEach(s=>{rod([s*.09,.3,-.5],[s*.1,.78,-.52],.016,chr);const sp=new THREE.Mesh(new THREE.TubeGeometry(new (class extends THREE.Curve{getPoint(t,o=new V()){const a=t*14*Math.PI*2;return o.set(s*.1+Math.cos(a)*.026,.42+t*.28,-.51+Math.sin(a)*.026)}})(),140,.005,6,false),M(0xd8b41e,.4,.3));g.add(sp)});
+ /* kedja och drev */
+ const chM=M(0x3a3c40,.6,.6);rod([-.08,.34,-.06],[-.08,wr+.075,-z0],.007,chM);rod([-.08,.26,-.06],[-.08,wr-.075,-z0],.007,chM);at(new THREE.CylinderGeometry(.08,.08,.008,28),M(0x8d9298,.35,.8),-.08,wr,-z0,0,0,Math.PI/2);
  return {fw,rw}}
 /* ---------- UI ---------- */
 const fillSel=(id,arr)=>{$(id).innerHTML=arr.map((a,i)=>`<option value="${i}">${a}</option>`).join('')};
@@ -451,7 +573,7 @@ $('bReset').onclick=()=>{cfgs[cur.id]=Object.assign({},cur.d);cfg=cfgs[cur.id];s
 const S={pw:0,crash:null,wh:null,clk:0,h:0,v:0,rpm:1800,thr:0,gear:1,ratio:2.9,lean:0,t0:null,t60:null,steer:0,pitch:0,off:new THREE.Vector3(),on:false,msg:'',mt:0};
 const K={};let mode='garage',az=.8,el=.25,dist=3.2,taz=.8,tel=.25,tdist=3.2,au=null;const pan=new THREE.Vector3();
 function resetS(){G.position.set(95,0,-70);G.rotation.y=S.h=0;Object.assign(S,{v:0,rpm:1800,thr:0,gear:1,lean:0,pitch:0,pw:0,t0:null,t60:null,crash:null,wh:null});S.off.set(0,0,0);G.rotation.x=0}
-function setMode(m){if(m==='ride'&&!ST.own[cur.id]){say('Du äger inte '+cur.n+'. Köp den under fliken Ekonomi.');toast('Du äger inte den här mopeden',1);return}if(S.wh)say('Stegringen avbröts, ingen bonus');Object.assign(S,{wh:null,crash:null,pitch:0,pw:0});mode=m;const gm=m==='garage';studio.visible=gm;world.forEach(o=>o.visible=!gm);sc.background=sky(gm?0x0d1014:0xaecbe0);sc.fog.color.set(gm?0x0d1014:0xaecbe0);sc.fog.near=gm?7:80;sc.fog.far=gm?24:260;$('pn').classList.toggle('off',m==='ride');$('bMode').textContent=m==='ride'?'Till garaget':'Åk ut';S.v=0;tip();if(m==='ride'){refresh();if(!S.on)kick(3)}}
+function setMode(m){if(m==='ride'&&!ST.own[cur.id]){say('Du äger inte '+cur.n+'. Köp den under fliken Ekonomi.');toast('Du äger inte den här mopeden',1);return}if(S.wh)say('Stegringen avbröts, ingen bonus');Object.assign(S,{wh:null,crash:null,pitch:0,pw:0});mode=m;const gm=m==='garage';studio.visible=gm;world.forEach(o=>o.visible=!gm);sc.background=sky(gm?0x0d1014:0xc9dbe8);sc.fog.color.set(gm?0x0d1014:0xc9dbe8);sc.fog.near=gm?40:90;sc.fog.far=gm?80:300;sc.environment=gm?ENV.garage:ENV.sky;hemi.intensity=gm?.2:.55;sun.intensity=gm?.45:1.15;R.toneMappingExposure=gm?.85:1;$('pn').classList.toggle('off',m==='ride');$('bMode').textContent=m==='ride'?'Till garaget':'Åk ut';S.v=0;tip();if(m==='ride'){refresh();if(!S.on)kick(3)}}
 let tipFull=false;function tip(){$('tip').textContent=mode==='ride'?(tipFull?'W/↑ gas · S/↓/Mellanslag broms · A/D styr · Shift/Ctrl luta bakåt och rycka (stegring: ryck med gas, balansera med gas och bakbroms) · Q/E växla (DT) · K starta · X stäng av motorn · R tillbaka till start · M ljud av/på · Tab garaget · H färre':'W gas · S broms · A/D styr · Shift stegring · K starta · Tab garaget · H fler'):(tipFull?'Dra för att rotera, högerdra för att flytta, scrolla för att zooma · K starta motorn, håll W för att varva · Tab åk ut · H färre':'Dra för att rotera · K starta · Tab åk ut · H fler')}
 $('tip').onclick=()=>{tipFull=!tipFull;tip()};
 $('bMode').onclick=()=>setMode(mode==='ride'?'garage':'ride');
@@ -616,7 +738,7 @@ let TR=null,tq=[];const thumbs={};
 const thumbKey=p=>{const s=gameSlot(p);return s?s+':'+(p.same||p.sku).replace(/-(jog|rok|dt)$/,'')+':'+JSON.stringify(gameVal(p)):null};
 function renderThumb(p){try{const g=partModel(p);if(!g)return null;
   if(!TR){const c=document.createElement('canvas');c.width=360;c.height=270;const r=new THREE.WebGLRenderer({canvas:c,antialias:true,alpha:true,preserveDrawingBuffer:true});r.setClearColor(0,0);r.outputEncoding=THREE.sRGBEncoding;r.toneMapping=THREE.ACESFilmicToneMapping;
-   const s=new THREE.Scene();s.add(new THREE.HemisphereLight(0xffffff,0x8090a0,1.15));const d=new THREE.DirectionalLight(0xffffff,1.3);d.position.set(2,3,2.5);const d2=new THREE.DirectionalLight(0xbfd6ff,.6);d2.position.set(-2.5,1,-1);s.add(d,d2);TR={r,s,cam:new THREE.PerspectiveCamera(28,4/3,.01,30)}}
+   const s=new THREE.Scene();s.environment=new THREE.PMREMGenerator(r).fromScene(envScene('room'),.04).texture;s.add(new THREE.HemisphereLight(0xffffff,0x8090a0,.5));const d=new THREE.DirectionalLight(0xffffff,1);d.position.set(2,3,2.5);const d2=new THREE.DirectionalLight(0xbfd6ff,.6);d2.position.set(-2.5,1,-1);s.add(d,d2);TR={r,s,cam:new THREE.PerspectiveCamera(28,4/3,.01,30)}}
   TR.s.add(g);const bs=new THREE.Box3().setFromObject(g).getBoundingSphere(new THREE.Sphere());g.position.sub(bs.center);const dist=bs.radius/Math.sin(THREE.MathUtils.degToRad(14))*1.05;
   TR.cam.position.set(.55,.42,.72).normalize().multiplyScalar(dist);TR.cam.lookAt(0,0,0);TR.r.render(TR.s,TR.cam);const url=TR.r.domElement.toDataURL('image/png');
   TR.s.remove(g);g.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)o.material.dispose()});return url}catch(e){console.warn('Produktbilden kunde inte renderas',p.sku,e);return null}}
@@ -745,11 +867,12 @@ function hud(){if(performance.now()>invT){invT=performance.now()+1500;inv()}if(p
 function size(){const w=innerWidth,h=innerHeight;R.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();if(P)dyno()}
 addEventListener('resize',size);
 let last=performance.now();
-function loop(n){requestAnimationFrame(loop);const dt=Math.min(.05,(n-last)/1000);last=n;step(dt);audio();hud();
+/* fysiken körs i delsteg på högst 1/60 s utifrån verklig tid, så spelet går i rätt fart även vid låg bildfrekvens (upp till 0,25 s per bildruta) */
+let fps=60;function loop(n){requestAnimationFrame(loop);const real=Math.min(.25,Math.max(0,(n-last)/1000));last=n;fps+=(1/Math.max(real,1e-3)-fps)*.05;const ns=Math.max(1,Math.ceil(real*60)),dt=real/ns;for(let i=0;i<ns;i++)step(dt);audio();hud();
  const p=G.position;
- if(mode==='ride'){const fw_=new THREE.Vector3(Math.sin(S.h),0,Math.cos(S.h)),t=p.clone().addScaledVector(fw_,-5).add(new THREE.Vector3(0,2.3,0));cam.position.lerp(t,Math.min(1,dt*4));cam.lookAt(p.x,p.y+1,p.z)}
- else{const k=Math.min(1,dt*6),d=((taz-az+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;az+=d*k;el+=(tel-el)*k;dist+=(tdist-dist)*k;const tx=p.x+pan.x,ty=p.y+.55+pan.y,tz=p.z+pan.z;cam.position.set(tx+Math.sin(az)*Math.cos(el)*dist,Math.max(.15,ty+Math.sin(el)*dist),tz+Math.cos(az)*Math.cos(el)*dist);cam.lookAt(tx,ty,tz)}
- sun.position.set(p.x+10,p.y+20,p.z+8);sun.target.position.copy(p);studio.position.set(p.x,0,p.z);R.render(sc,cam)}
+ if(mode==='ride'){const fw_=new THREE.Vector3(Math.sin(S.h),0,Math.cos(S.h)),t=p.clone().addScaledVector(fw_,-5).add(new THREE.Vector3(0,2.3,0));cam.position.lerp(t,Math.min(1,real*4));cam.lookAt(p.x,p.y+1,p.z)}
+ else{const k=Math.min(1,real*6),d=((taz-az+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;az+=d*k;el+=(tel-el)*k;dist+=(tdist-dist)*k;const tx=p.x+pan.x,ty=p.y+.55+pan.y,tz=p.z+pan.z;cam.position.set(tx+Math.sin(az)*Math.cos(el)*dist,Math.max(.15,ty+Math.sin(el)*dist),tz+Math.cos(az)*Math.cos(el)*dist);cam.lookAt(tx,ty,tz)}
+ SKY.position.copy(cam.position);sun.position.set(p.x+10,p.y+20,p.z+8);sun.target.position.copy(p);studio.position.set(p.x,0,p.z);R.render(sc,cam)}
 function buildAero(g,m){const root=new THREE.Group();root.scale.setScalar(AX.s);g.add(root);
  const M=(c,r,t)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:t});
  const mt={paint:m.body,seat:m.seat,dark:M(0x1c1e22,.6,.2),metal:M(0x8d9298,.4,.8),ex:m.ex,fTire:m.tire,rTire:m.tire,fRim:m.rim,rRim:m.rim,fDisc:M(0x9aa0a6,.3,.9),rDisc:M(0x9aa0a6,.3,.9)};

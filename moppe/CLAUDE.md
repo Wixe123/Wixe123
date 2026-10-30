@@ -3,8 +3,9 @@
 Svenskspråkigt 3D-spel i webbläsaren (en enda HTML-fil, Three.js r128 från cdnjs, ingen build). Kör: öppna `index.html` i en webbläsare. Användaren heter Love, skriver svenska och vill ha ärlighet om vad som faktiskt är **verifierat** att fungera. Spelet är nu kört i headless Chromium (Playwright, SwiftShader-WebGL, three r128 från npm i stället för cdnjs). Se "Verifierat" nedan.
 
 ## Vad som finns
-- Tre mopeder (`MOP`): Jogga 50 (skoter, CVT, procedurell modell i `buildScooter`), Aerox 50 (CVT, riktig OBJ-modell inbäddad, `buildAero`), Enduro DT 50 (växlad, 4 steg, enkel boxmodell i `build`).
-- Garage (studiobakgrund, golvrutnät, skuggor) och utomhusbana (rundbana, dragstrip, hus, träd, sjö). Tab växlar läge.
+- Tre mopeder (`MOP`): Jogga 50 (skoter, CVT, procedurell modell i `buildScooter`), Aerox 50 (CVT, riktig OBJ-modell inbäddad, `buildAero`), Enduro DT 50 (växlad, 4 steg, procedurell enduromodell i `buildDT`: ram, gaffel, flänsad cylinder, expansionskammare, sving, ekerhjul).
+- Garage (`buildGarage`: betonggolv, väggar, lysrör, arbetsbänk, verktygstavla, hyllor, däck, port) och utomhusbana (rundbana, dragstrip, svenska hus med vita knutar och sadeltak `house`, gran/björk `spruce`/`birch`, sjö, himmelskupol `SKY` som följer kameran). Tab växlar läge.
+- Realism: miljökartor (`envScene`, `ENV.garage`/`ENV.sky`, PMREM) ger reflektioner, lacken är `MeshPhysicalMaterial` med clearcoat, asfalt/gräs/betong/trä är canvas-brustexturer (`noiseTex`). Inga externa filer.
 - Trimning: delar köps i butiken och monteras i Förrådet (cylinder, avgas, förgasare m.fl.). Reglage för huvudmunstycke, avgasportens timing och rullvikt (intervallen styrs av monterad munstyckes-/rullsats). Dynograf med referenskurva, sparas automatiskt som "före bytet" vid montering.
 - Stil: färg på kaross/sadel/fälgar, finish, startnummer. Speglar, skärm, tank, styre, fälgtyp och lyktglas är delar (se Delar).
 - Körning: A vänster, D höger, W gas, S/Mellanslag broms, Q/E växla (DT), Ctrl/Shift luta bakåt + ryck (stegring), K kicka igång, X stäng av motorn, R återställ/res upp, M ljud, Tab garage/körning. Esc stänger butiken.
@@ -58,7 +59,7 @@ Källa: `aerox.obj` (3ds Max-export, 269 grupper, ~107k punkter, **negativa rela
 - Aerox lyfter knappt i stegring ens som racebygge (tyngre, längre hjulbas).
 - Spelet räknar i varje bildruta med dt ≤ 0,05 s: under 20 fps går det i slowmotion (syns i headless).
 - Racebyggen blir varma (race-Jogga ≈250°C vid fullgas): fetare munstycke eller storflänsat topplock behövs.
-- DT 50 är fortfarande enkla boxar.
+- Jogga och DT är byggda i kod av enkla former. Riktiga 3D-modeller (.glb/.obj, med licens) skulle ge störst skillnad, se Aerox.
 
 ## Nästa steg (Loves prioritering)
 Följande kommer från Loves "Moppe Garage 2.0"-prompt, i denna ordning: (1) detaljerade modeller, (2) ljus, material, kamera, garage, (3) flikar: GARAGE, ENGINE, PORTING, CARBURETOR, TRANSMISSION, EXHAUST, DYNO, CUSTOMIZATION, PARTS SHOP, TEST RIDE med riktiga funktioner, (4) visuell portningsverkstad (tvärsnitt, timingdiagram, port bredd/höjd, squish, före/efter-kurva), (5) bättre svensk miljö och körning, (6) fler modeller (Slider, BW's, DT50, Ciao) med egen delkompatibilitet, (7) dyno, flera sparade byggen (med JSON export/import), delbutik med kompatibilitet och byggkostnad.
