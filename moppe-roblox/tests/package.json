@@ -1,0 +1,11 @@
+{
+  "name": "moppe-roblox-tests",
+  "private": true,
+  "description": "Tester utan Roblox: syntax/globala namn (luaparse) och spellogik i Lua (fengari)",
+  "scripts": {
+    "syntax": "node check_syntax.js ../src",
+    "logic": "node run.js ../src/shared logic_tests.lua",
+    "test": "node check_syntax.js ../src && node run.js ../src/shared logic_tests.lua"
+  },
+  "dependencies": { "fengari": "0.1.4", "luaparse": "0.3.1" }
+}
