@@ -523,7 +523,7 @@ function E.mouseMove(x, y)
 	E.input.mouse = V2.new(x, y)
 	E.input.delta = V2.new(x - old.X, y - old.Y)
 	local uis = E.services.UserInputService
-	local ino = io({ _UserInputType = E.Enum.UserInputType.MouseMovement, _UserInputState = E.Enum.UserInputState.Change, _Position = V3.new(x, y - E.VIEW.inset, 0), _Delta = V3.new(x - old.X, y - old.Y, 0), _KeyCode = E.Enum.KeyCode.Unknown })
+	local ino = io({ _UserInputType = E.Enum.UserInputType.MouseMovement, _UserInputState = E.Enum.UserInputState.Change, _Position = V3.new(x, y - E.VIEW.inset, 0), _Delta = V3.new(x - old.X, y - old.Y, 0), _KeyCode = E.enumItem("KeyCode", 0) })
 	local hits = E.guiAt(x, y)
 	local now = {}
 	for _, h in ipairs(hits) do now[h] = true end
@@ -546,7 +546,7 @@ function E.mouseButton(btn, down)
 	E.input.buttons[bn] = down
 	local target = E.guiTarget(x, y)
 	local gp = target ~= nil and (E.isA(target.cls, "GuiButton") or target.Active == true)
-	local ino = io({ _UserInputType = E.Enum.UserInputType[bn], _UserInputState = down and E.Enum.UserInputState.Begin or E.Enum.UserInputState.End, _Position = V3.new(x, y - E.VIEW.inset, 0), _Delta = V3.zero, _KeyCode = E.Enum.KeyCode.Unknown })
+	local ino = io({ _UserInputType = E.Enum.UserInputType[bn], _UserInputState = down and E.Enum.UserInputState.Begin or E.Enum.UserInputState.End, _Position = V3.new(x, y - E.VIEW.inset, 0), _Delta = V3.zero, _KeyCode = E.enumItem("KeyCode", 0) })
 	local uis = E.services.UserInputService
 	if target then
 		if down then
@@ -608,9 +608,28 @@ function E.findGui(pat, opts)
 		end
 	end
 end
+-- scroll scrolling frames so a GUI object is in view, as a player would
+function E.scrollIntoView(o)
+	local sf = o.parent
+	while sf do
+		if sf.cls == "ScrollingFrame" then
+			local root = sf
+			while root and root.cls ~= "ScreenGui" do root = root.parent end
+			if root then E.layoutRoot(root) end
+			local L0, SL = o.L, sf.L
+			if L0 and SL and (L0.y < SL.y or L0.y + L0.h > SL.y + SL.h) then
+				local cp = sf.props.CanvasPosition or T.Vector2.zero
+				sf.props.CanvasPosition = T.Vector2.new(cp.X, math.max(0, cp.Y + (L0.y - SL.y) - 10))
+				E.layoutRoot(root)
+			end
+		end
+		sf = sf.parent
+	end
+end
 function E.clickGui(pat, btn)
 	local o = E.isInst(pat) and pat or E.findGui(pat, { button = true })
 	if not o then E.reportError("scenario: no visible button matching '" .. tostring(pat) .. "'", nil, { name = "scenario" }); return false end
+	E.scrollIntoView(o)
 	local L = o.L
 	local x, y = L.x + L.w / 2, L.y + L.h / 2
 	local t = E.guiTarget(x, y)
@@ -659,6 +678,7 @@ local function trigger(pp)
 	E.runDeferred()
 end
 function E.pressPromptKey(key)
+	if not E.services.ProximityPromptService.Enabled then return end
 	local list, root = E.promptsInRange()
 	for _, it in ipairs(list) do
 		if it.p.KeyboardKeyCode.Name == key then
@@ -698,7 +718,8 @@ function E.usePrompt(action)
 		for _, it in ipairs(list) do if it.p.KeyboardKeyCode == target.KeyboardKeyCode then nearest = it.p; break end end
 	end
 	if nearest ~= target then
-		E.reportError("scenario: prompt '" .. action .. "' cannot be reached: nearest prompt is '" .. (nearest and nearest.ActionText or "none") .. "'", nil, { name = "scenario" })
+		local r0 = E.player.props.Character and Ins.FindFirstChild(E.player.props.Character, "HumanoidRootPart")
+		E.reportError("scenario: prompt '" .. action .. "' cannot be reached: nearest prompt is '" .. (nearest and nearest.ActionText or "none") .. "' (player at " .. tostring(r0 and r0.cframe.Position) .. ")", nil, { name = "scenario" })
 		return
 	end
 	E.pressPromptKey(target.KeyboardKeyCode.Name)
@@ -710,8 +731,25 @@ function E.walkNear(pos, dist)
 	local root = Ins.FindFirstChild(ch, "HumanoidRootPart")
 	local from = root.cframe.Position
 	local flat = V3.new(pos.X - from.X, 0, pos.Z - from.Z)
-	local stop = pos - (flat.Magnitude > 0.1 and flat.Unit or V3.new(0, 0, 1)) * (dist or 3)
-	local target = V3.new(stop.X, math.max(pos.Y, from.Y), stop.Z)
+	local params0 = T.RaycastParams.new()
+	params0.FilterDescendantsInstances = { ch }
+	params0.RespectCanCollide = true
+	-- stand next to the target on free floor (a player walks around walls to get there)
+	local target
+	local base = flat.Magnitude > 0.1 and math.atan(-flat.Z, -flat.X) or 0
+	for k = 0, 15 do
+		local a = base + (k % 2 == 0 and 1 or -1) * math.floor((k + 1) / 2) * math.pi / 8
+		local c = pos + V3.new(math.cos(a), 0, math.sin(a)) * (dist or 3)
+		local hit = E.raycast(V3.new(c.X, pos.Y + 6, c.Z), V3.new(0, -20, 0), params0)
+		if hit and hit.Position.Y < pos.Y + 1.5 and hit.Position.Y > pos.Y - 4 then
+			local los = E.raycast(V3.new(c.X, hit.Position.Y + 2, c.Z), pos - V3.new(c.X, hit.Position.Y + 2, c.Z), params0)
+			if not los or (los.Position - pos).Magnitude < 2.5 then target = V3.new(c.X, hit.Position.Y + 3, c.Z); break end
+		end
+	end
+	if not target then
+		local stop = pos - (flat.Magnitude > 0.1 and flat.Unit or V3.new(0, 0, 1)) * (dist or 3)
+		target = V3.new(stop.X, math.max(pos.Y, from.Y), stop.Z)
+	end
 	local params = T.RaycastParams.new()
 	params.FilterDescendantsInstances = { ch }
 	params.RespectCanCollide = true
@@ -734,6 +772,38 @@ function E.teleport(pos, lookAt)
 	local root = Ins.FindFirstChild(E.player.props.Character, "HumanoidRootPart")
 	E.movePart(root, lookAt and CF.lookAt(pos, lookAt) or CF.new(pos))
 	E.run(0.1)
+end
+
+
+-- call the server API from the local player's client context (like State.api does) and wait for the answer
+function E.api(action, ...)
+	local args = table.pack(...)
+	local res
+	E.spawn(function()
+		local api = E.services.ReplicatedStorage.Remotes.Api
+		res = table.pack(api:InvokeServer(action, table.unpack(args, 1, args.n)))
+	end, E.player.ctx)
+	local t0 = E.now
+	while not res and E.now - t0 < 5 do E.step(1 / 30) end
+	if not res then return nil end
+	return table.unpack(res, 1, res.n)
+end
+-- screen point (incl. inset) of a world position for the local camera
+function E.screenOf(pos)
+	local cam = E.currentCamera(E.player.ctx)
+	local v, on = cam:WorldToViewportPoint(pos)
+	return v.X, v.Y, on
+end
+-- drag with the mouse from (x0,y0) to (x1,y1) in steps
+function E.drag(x0, y0, x1, y1, steps)
+	E.mouseMove(x0, y0)
+	E.mouseButton(1, true)
+	E.run(0.05)
+	steps = steps or 8
+	for i = 1, steps do E.mouseMove(x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps); E.step(1 / 30) end
+	E.run(0.1)
+	E.mouseButton(1, false)
+	E.run(0.4)
 end
 
 return E

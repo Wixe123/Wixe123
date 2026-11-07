@@ -134,7 +134,19 @@ local function buildShop()
 		UI.text(banner, "Cylinderkit, förgasare och avgassystem. Fri frakt över 2 000 kr.\n\nLeverans: 1 del ca 1 min, 3–6 delar 3–5 min, större order ca 10 min.", UDim2.new(1, -20, 0, 150), UDim2.fromOffset(10, 76), { ts = 13, wrap = true, ya = Enum.TextYAlignment.Top })
 	end
 	local FEATURED = { cylinder_nordtrim70 = 1, cylinder_fartek70 = 1, forgasare_gs19 = 1, avgas_fartek = 1, variator_nordtrim = 1, koppling_nordtrim = 1, cdi_snabbo = 1, luftfilter_fartek = 1, reed_fartek = 1, vevaxel_fartek = 1, verktyg_slippro = 1 }
-	for _, part in ipairs(Parts.LIST) do
+	-- the category's own kind first (cylinders before pistons under "Cylindrar")
+	local MAIN = { Cylindrar = "cylinder", ["Förgasare"] = "forgasare", Variatorer = "variator", Kopplingar = "koppling", Vevpartier = "vevaxel", ["Tändsystem"] = "cdi", Insug = "reed", Avgassystem = "avgas", Chassi = "ram" }
+	local list2 = {}
+	for i, part in ipairs(Parts.LIST) do list2[i] = part end
+	if W.cat and MAIN[W.cat] then
+		local mainKind = MAIN[W.cat]
+		table.sort(list2, function(a, b)
+			local ma, mb = a.kind == mainKind, b.kind == mainKind
+			if ma ~= mb then return ma end
+			return (Parts.LIST_INDEX[a.sku] or 0) < (Parts.LIST_INDEX[b.sku] or 0)
+		end)
+	end
+	for _, part in ipairs(list2) do
 		if matches(part) and (W.cat or W.search ~= "" or FEATURED[part.sku]) then
 			order = order + 1
 			card(list, part, order)

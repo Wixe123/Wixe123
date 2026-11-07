@@ -30,7 +30,7 @@ end
 local function match(partLvl, cylLvl)
 	local d = (partLvl or 0) - (cylLvl or 0)
 	if d >= 0 then return 1 + 0.025 * math.min(d, 2) end
-	return 1 + 0.11 * d
+	return 1 + 0.06 * d
 end
 
 -- cfg from an engine socket map; chassis map optional
@@ -182,7 +182,7 @@ function Performance.summary(items, engine, chassis, jet)
 	end
 	local temp = Performance.temp(c, top)
 	local status = "OK"
-	if c.wear > 0.6 then status = "Sliten" elseif temp > Performance.TEMP_WARN then status = "Går varm" end
+	if c.wear > 0.6 then status = "Sliten" elseif temp > Performance.TEMP_WARN then status = "Går varm" elseif c.peak > c.limit + 300 then status = "Strypt (CDI)" end
 	return { hp = peakHp, rpm = peakRpm, limit = c.limit, top = top, t45 = t45, t60 = t60, temp = temp, status = status, cc = c.cc, cfg = c }
 end
 

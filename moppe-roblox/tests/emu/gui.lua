@@ -412,7 +412,7 @@ function E.snapshot(opts)
 	local function walk(x)
 		for _, d in ipairs(x.children) do
 			if E.isA(d.cls, "BasePart") and d.cls ~= "Terrain" then
-				if d.Transparency < 1 then snap.parts[#snap.parts + 1] = partRec(d) end
+				if d.Transparency < 1 and (d.props.LocalTransparencyModifier or 0) < 1 then snap.parts[#snap.parts + 1] = partRec(d) end
 				for _, k in ipairs(d.children) do
 					if (k.cls == "PointLight" or k.cls == "SpotLight" or k.cls == "SurfaceLight") and k.Enabled then
 						local face = k.cls ~= "PointLight" and k.Face.Name or nil
@@ -431,7 +431,7 @@ function E.snapshot(opts)
 						local els = {}
 						for _, e in ipairs(M.Instance.GetDescendants(k)) do if isGuiObj(e) and e.L and e.L.vis then els[#els + 1] = guiRec(e, k) end end
 						snap.surf[#snap.surf + 1] = { cf = cfArr(d.cframe), size = { d.Size.X, d.Size.Y, d.Size.Z }, face = k.Face.Name, pw = pw, ph = ph, els = els, glow = k.LightInfluence < 0.5 }
-					elseif k.cls == "ProximityPrompt" and k.Enabled and E.player then
+					elseif k.cls == "ProximityPrompt" and k.Enabled and E.player and E.services.ProximityPromptService.Enabled then
 						local ch = E.player.Character
 						local root = ch and M.Instance.FindFirstChild(ch, "HumanoidRootPart")
 						if root and (root.cframe.Position - d.cframe.Position).Magnitude <= k.MaxActivationDistance then
@@ -457,7 +457,7 @@ function E.snapshot(opts)
 	walk(ws)
 	-- part ids for highlights
 	local idx = 0
-	local function ids(x) for _, d in ipairs(x.children) do if E.isA(d.cls, "BasePart") and d.cls ~= "Terrain" and d.Transparency < 1 then idx = idx + 1; snap.parts[idx].id = d.id end ids(d) end end
+	local function ids(x) for _, d in ipairs(x.children) do if E.isA(d.cls, "BasePart") and d.cls ~= "Terrain" and d.Transparency < 1 and (d.props.LocalTransparencyModifier or 0) < 1 then idx = idx + 1; snap.parts[idx].id = d.id end ids(d) end end
 	ids(ws)
 	snap.terrain = {}
 	for _, op in ipairs(E.terrainOps) do snap.terrain[#snap.terrain + 1] = { k = op.kind, cf = cfArr(op.cf), size = { op.size.X, op.size.Y, op.size.Z }, m = op.mat } end

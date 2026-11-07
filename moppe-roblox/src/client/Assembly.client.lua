@@ -114,7 +114,7 @@ UI.list(checkList, 3)
 
 local bottom = UI.new("Frame", { Size = UDim2.fromOffset(820, 44), Position = UDim2.new(0.5, 0, 1, -12), AnchorPoint = Vector2.new(0.5, 1), BackgroundTransparency = 1, Name = "Knappar" }, gui)
 UI.list(bottom, 8, true, Enum.HorizontalAlignment.Center)
-local hint = UI.text(gui, "Rotera: R / högerklick och dra   ·   Zoom: rullhjul   ·   Ta bort: högerklicka på en del", UDim2.fromOffset(600, 20), UDim2.new(0.5, 0, 1, -62), { anchor = Vector2.new(0.5, 0), ts = 13, color = UI.C.dim, xa = Enum.TextXAlignment.Center })
+local hint = UI.text(gui, "Rotera: R / högerklick och dra   ·   Zoom: rullhjul   ·   Ta bort: högerklicka på en del", UDim2.fromOffset(600, 20), UDim2.new(0.5, 0, 1, -84), { anchor = Vector2.new(0.5, 0), ts = 13, color = UI.C.dim, xa = Enum.TextXAlignment.Center })
 
 local menu -- context menu
 local function closeMenu() if menu then menu:Destroy(); menu = nil end end

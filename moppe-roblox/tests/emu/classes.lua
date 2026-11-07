@@ -73,6 +73,7 @@ function I.GetPropertyChangedSignal(o, p)
 end
 function I.ClearAllChildren(o) for i = #o.children, 1, -1 do local c = o.children[i]; if not c.locked then I.Destroy(c) end end end
 function I.Destroy(o)
+	if o.destroyed then return end -- destroying twice is allowed in Roblox
 	if o.locked then error("The Parent property of " .. o.props.Name .. " is locked", 2) end
 	E.fireEv(o, "Destroying")
 	for i = #o.children, 1, -1 do I.Destroy(o.children[i]) end
@@ -204,7 +205,9 @@ end
 function E.movePart(p, newCF)
 	local old = partCF(p)
 	local delta = newCF * old:Inverse()
+	E.movedSet = E.movedSet or {}
 	for _, x in ipairs(E.assembly(p)) do
+		E.movedSet[x] = true
 		if x == p then x.cframe = newCF else x.cframe = delta * partCF(x) end
 		E.changed(x, "CFrame"); E.changed(x, "Position")
 	end

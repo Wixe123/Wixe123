@@ -40,7 +40,7 @@ function Porting.grind(s, zoneId, u, v, dt, speed)
 			local d = math.sqrt((col - cx) ^ 2 + (row - cy) ^ 2)
 			if d < 1.25 then
 				local i = (row - 1) * Porting.COLS + col
-				cells[i] = cells[i] + dt * 0.85 * speed * (1 - d / 1.25)
+				cells[i] = cells[i] + dt * 1.3 * speed * (1 - d / 1.25)
 			end
 		end
 	end

@@ -68,6 +68,7 @@ Parts.BRANDS = {
 
 Parts.ITEMS = {}
 Parts.LIST = {}
+Parts.LIST_INDEX = {}
 local function add(kind, code, brand, name, price, stock, stats, desc)
 	local sku = kind .. "_" .. code
 	assert(Parts.KINDS[kind], kind)
@@ -75,6 +76,7 @@ local function add(kind, code, brand, name, price, stock, stats, desc)
 	local it = { sku = sku, kind = kind, brand = brand, name = name, price = price, stock = stock, stats = stats or {}, desc = desc or "" }
 	Parts.ITEMS[sku] = it
 	Parts.LIST[#Parts.LIST + 1] = it
+	Parts.LIST_INDEX[sku] = #Parts.LIST
 	return it
 end
 Parts.add = add

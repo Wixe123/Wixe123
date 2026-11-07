@@ -134,8 +134,9 @@ function E.raycast(origin, dir, params, root)
 		end
 		walk(root)
 	else
-		-- flat list of workspace parts, rebuilt when the tree changes; cheap sphere test first
-		if E.partsDirty or not E.partList then
+		-- parts are bucketed in a 32-stud grid (rebuilt when the tree changes); parts moved since then are checked always
+		local G = 32
+		if E.partsDirty or not E.partGrid then
 			local list = {}
 			local function walk(x)
 				for _, c in ipairs(x.children) do
@@ -144,23 +145,47 @@ function E.raycast(origin, dir, params, root)
 				end
 			end
 			walk(services.Workspace)
-			E.partList, E.partsDirty = list, false
+			local grid = {}
+			for _, p in ipairs(list) do
+				local c, sz = p.cframe, p.props.Size
+				local r = math.sqrt(sz.x * sz.x + sz.y * sz.y + sz.z * sz.z) / 2
+				for gx = math.floor((c.px - r) / G), math.floor((c.px + r) / G) do
+					for gz = math.floor((c.pz - r) / G), math.floor((c.pz + r) / G) do
+						local k = gx * 100003 + gz
+						local cell = grid[k]
+						if not cell then cell = {}; grid[k] = cell end
+						cell[#cell + 1] = p
+					end
+				end
+			end
+			E.partList, E.partGrid, E.partsDirty, E.movedSet = list, grid, false, {}
 		end
 		local ox, oy, oz = origin.X, origin.Y, origin.Z
 		local ux, uy, uz = unit.X, unit.Y, unit.Z
-		for _, p in ipairs(E.partList) do
-			if p.parent then
-				local c, s = p.cframe, p.props.Size
-				local rx, ry, rz = c.px - ox, c.py - oy, c.pz - oz
-				local t = rx * ux + ry * uy + rz * uz
-				local rad2 = (s.x * s.x + s.y * s.y + s.z * s.z) / 4
-				if t > -1e9 and t < len + 1e4 then
-					local tt = math.max(0, math.min(len, t))
-					local dx, dy, dz = rx - ux * tt, ry - uy * tt, rz - uz * tt
-					if dx * dx + dy * dy + dz * dz <= rad2 then test(p) end
+		local seen = {}
+		local function consider(p)
+			if seen[p] or not p.parent then return end
+			seen[p] = true
+			local c, sz = p.cframe, p.props.Size
+			local rx, ry, rz = c.px - ox, c.py - oy, c.pz - oz
+			local t = rx * ux + ry * uy + rz * uz
+			local rad2 = (sz.x * sz.x + sz.y * sz.y + sz.z * sz.z) / 4
+			local tt = math.max(0, math.min(len, t))
+			local dx, dy, dz = rx - ux * tt, ry - uy * tt, rz - uz * tt
+			if dx * dx + dy * dy + dz * dz <= rad2 then test(p) end
+		end
+		local ex, ez = ox + ux * len, oz + uz * len
+		if len < 400 then
+			for gx = math.floor(math.min(ox, ex) / G), math.floor(math.max(ox, ex) / G) do
+				for gz = math.floor(math.min(oz, ez) / G), math.floor(math.max(oz, ez) / G) do
+					local cell = E.partGrid[gx * 100003 + gz]
+					if cell then for _, p in ipairs(cell) do consider(p) end end
 				end
 			end
+		else
+			for _, p in ipairs(E.partList) do consider(p) end
 		end
+		for p in pairs(E.movedSet) do consider(p) end
 	end
 	-- terrain boxes
 	if E.terrainOps then
@@ -182,7 +207,11 @@ E.RaycastResultMt = {
 T.TYPE[E.RaycastResultMt] = "RaycastResult"
 
 local Wm = cls(M, "WorldRoot")
-function Wm.Raycast(o, origin, dir, params) return E.raycast(origin, dir, params, o.cls == "Workspace" and nil or o) end
+function Wm.Raycast(o, origin, dir, params)
+	local root = nil
+	if o.cls ~= "Workspace" then root = o end
+	return E.raycast(origin, dir, params, root)
+end
 function Wm.Blockcast(o, cf, size, dir, params)
 	-- approximation: center ray plus the 4 corners of the box face
 	local best
@@ -459,13 +488,15 @@ TweenMt.__index = function(tw, k)
 	error(tostring(k) .. " is not a valid member of Tween", 2)
 end
 function E.stepTweens()
-	for tw in pairs(E.tweens) do
+	local list = {}
+	for tw in pairs(E.tweens) do list[#list + 1] = tw end
+	for _, tw in ipairs(list) do
 		if tw.inst.destroyed then E.tweens[tw] = nil
 		else
 			local info = tw.info
 			local dur = math.max(1e-6, info.Time)
-			local t = math.max(0, math.min(1, (E.now - tw.t0 - (info.DelayTime or 0)) / dur))
-			local a = ease(info.EasingStyle, info.EasingDirection, t)
+			local t = math.max(0, math.min(1, (E.now - tw.t0 - (rawget(info, "_DelayTime") or 0)) / dur))
+			local a = ease(rawget(info, "_EasingStyle"), rawget(info, "_EasingDirection"), t)
 			E.trusted = false
 			for k, v in pairs(tw.goals) do tw.inst[k] = lerp(tw.from[k], v, a) end
 			if t >= 1 then

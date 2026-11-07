@@ -49,7 +49,7 @@ function Paint.spray(s, u, v, dt, dist, even)
 	even = even or 0
 	dist = dist or 1
 	local radius = 1.6 * dist
-	local rate = 0.9 / (dist * dist) * dt
+	local rate = 2.0 / (dist * dist) * dt
 	local cx, cy = u * Paint.COLS + 0.5, v * Paint.ROWS + 0.5
 	for row = 1, Paint.ROWS do
 		for col = 1, Paint.COLS do

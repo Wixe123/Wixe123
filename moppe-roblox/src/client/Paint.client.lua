@@ -97,21 +97,31 @@ local function boothCF() return S.origin() * GarageBuilder.BOOTH * CFrame.new(0,
 local frame -- face frame: LookVector points from the panel towards the camera
 local function buildScene(id)
 	scene:ClearAllChildren()
+	scene.Parent = workspace -- must be in the world before raycasting against the panel
 	local it = S.item(id)
+	-- hide the real part on the stand while the enlarged one is shown
+	local plot = S.plot()
+	L.hidden = {}
+	if plot then
+		for _, d in ipairs(plot:GetDescendants()) do
+			if d:IsA("Model") and d:GetAttribute("Item") == id then
+				for _, q in ipairs(d:GetDescendants()) do if q:IsA("BasePart") then q.LocalTransparencyModifier = 1; L.hidden[#L.hidden + 1] = q end end
+			end
+		end
+	end
 	local model = Models.item(it.sku, nil) -- unpainted (primer)
+	if model.PrimaryPart then model.PrimaryPart:Destroy() end -- the invisible handle must not catch the paint rays
 	model:ScaleTo(2.2)
-	model:PivotTo(boothCF())
+	-- turn the panel so its broad side faces the booth opening (+Z)
+	local _, size0 = model:GetBoundingBox()
+	local turn = size0.X < size0.Z and CFrame.Angles(0, math.rad(-90), 0) or CFrame.new()
+	model:PivotTo(boothCF() * turn)
 	for _, d in ipairs(model:GetDescendants()) do if d:IsA("BasePart") then d.Color = Color3.fromRGB(160, 162, 166); d.Material = Enum.Material.SmoothPlastic end end
 	model.Parent = scene
 	L.panelModel = model
 	local cf, size = model:GetBoundingBox()
-	-- look at the widest side: thinnest horizontal axis is the normal
-	local normal = size.X < size.Z and Vector3.new(-1, 0, 0) or Vector3.new(0, 0, -1)
-	local w = normal.X ~= 0 and size.Z or size.X
-	local h = size.Y
-	local depth = normal.X ~= 0 and size.X or size.Z
-	local origin = boothCF()
-	local worldNormal = origin:VectorToWorldSpace(normal)
+	local w, h, depth = size.X, size.Y, size.Z
+	local worldNormal = Vector3.new(0, 0, 1)
 	frame = CFrame.lookAt(cf.Position + worldNormal * (depth / 2 + 0.06), cf.Position + worldNormal * 5)
 	L.w, L.h = math.max(w, 1), math.max(h, 1)
 	-- coverage cells only where the panel is behind them
@@ -161,7 +171,7 @@ local function buildScene(id)
 	L.mist.Parent = att
 	L.nozzle = nozzle
 	scene.Parent = workspace
-	S.camTo(frame * CFrame.new(0, 0.3, 7.5) * CFrame.Angles(math.rad(-3), 0, 0), 45, 0.4)
+	S.camTo(CFrame.lookAt(frame.Position + frame.LookVector * 4.6 + Vector3.new(0, 0.4, 0), frame.Position), 62, 0.4)
 end
 local function paintCells()
 	for i, p in pairs(L.cells) do
@@ -247,6 +257,8 @@ local function close()
 	picker.Visible = false
 	L.spraying = false
 	L.cells = nil
+	for _, q in ipairs(L.hidden or {}) do if q.Parent then q.LocalTransparencyModifier = 0 end end
+	L.hidden = nil
 	scene:ClearAllChildren()
 	scene.Parent = nil
 end

@@ -23,7 +23,7 @@ local money = UI.panel(gui, UDim2.fromOffset(196, 40), UDim2.new(1, -12, 0, 8), 
 local moneyText = UI.text(money, "", UDim2.new(1, -54, 1, 0), UDim2.fromOffset(14, 0), { font = UI.BOLD, ts = 20, xa = Enum.TextXAlignment.Right, name = "Belopp" })
 UI.button(money, "+", UDim2.fromOffset(32, 32), UDim2.new(1, -36, 0, 4), { kind = "green", ts = 22, name = "Tjäna" }, function() S.open:Fire("jobs") end)
 
-local toasts = UI.new("Frame", { Size = UDim2.fromOffset(460, 300), Position = UDim2.new(0.5, 0, 0, 8), AnchorPoint = Vector2.new(0.5, 0), BackgroundTransparency = 1, Name = "Notiser" }, gui)
+local toasts = UI.new("Frame", { Size = UDim2.fromOffset(460, 300), Position = UDim2.new(0.5, 0, 0, 54), AnchorPoint = Vector2.new(0.5, 0), BackgroundTransparency = 1, Name = "Notiser" }, gui)
 UI.list(toasts, 6, false, Enum.HorizontalAlignment.Center)
 local TOAST = { error = UI.C.red, money = UI.C.green, box = UI.C.orange, info = UI.C.accent, ok = UI.C.green }
 S.toastEv.Event:Connect(function(text, kind)

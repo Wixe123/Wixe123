@@ -84,10 +84,21 @@ function S.perf(m)
 end
 
 -- work modes: only one at a time; modes lock walking and may take over the camera
+-- hide my own character and the E-prompts while working (the camera is close)
+local function workView(on)
+	pcall(function() game:GetService("ProximityPromptService").Enabled = not on end)
+	local char = plr.Character
+	if char then
+		for _, d in ipairs(char:GetDescendants()) do
+			if d:IsA("BasePart") then d.LocalTransparencyModifier = on and 1 or 0 end
+		end
+	end
+end
 function S.setMode(name)
 	if S.mode == name then return true end
 	if S.mode then return false end
 	S.mode = name
+	workView(true)
 	S.lockMove(true)
 	S.modeEv:Fire(name)
 	return true
@@ -95,6 +106,7 @@ end
 function S.endMode(name)
 	if name and S.mode ~= name then return end
 	S.mode = nil
+	workView(false)
 	S.lockMove(false)
 	S.camRelease()
 	S.modeEv:Fire(nil)

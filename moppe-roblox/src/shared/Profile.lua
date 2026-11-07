@@ -50,6 +50,9 @@ end
 local function free(p, it)
 	if not it then return false end
 	if Profile.STORAGE[it.loc] or it.loc == "hand" then return true end
+	-- a cylinder in the vise or a panel on the paint stand can be used when no session is running
+	if it.loc == "port" then return not p.portStart end
+	if it.loc == "lack" then return not p.paintStart end
 	local o = boxOrder(p, it.loc)
 	return o ~= nil and o.state == "oppnad"
 end

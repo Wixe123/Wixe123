@@ -148,7 +148,7 @@ check("stock CDI limits revs and speed", s4.limit == 7000 and s4.top < s2.top - 
 
 -- paint and designs
 local ps = Paint.new()
-for row = 1, Paint.ROWS do for col = 1, Paint.COLS do for _ = 1, 12 do Paint.spray(ps, (col - 0.5) / Paint.COLS, (row - 0.5) / Paint.ROWS, 1 / 30, 1, 0) end end end
+for row = 1, Paint.ROWS do for col = 1, Paint.COLS do for _ = 1, 6 do Paint.spray(ps, (col - 0.5) / Paint.COLS, (row - 0.5) / Paint.ROWS, 1 / 30, 1, 0) end end end
 local pr = Paint.result(ps)
 HOST_ECHO(string.format("  paint: cover %.2f even %.2f runs %.2f q %.2f %s", pr.cover, pr.even, pr.runs, pr.q, pr.label))
 check("even spraying gives good paint", pr.q >= 0.75, pr.q)
