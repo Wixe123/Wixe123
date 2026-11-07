@@ -3,11 +3,24 @@ local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local DataStoreService = game:GetService("DataStoreService")
+local PhysicsService = game:GetService("PhysicsService")
 local Shared = RS:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Catalog = require(Shared.Catalog)
 local Economy = require(Shared.Economy)
 local Builder = require(Shared.Builder)
+
+-- the rider does not collide with anything while seated: otherwise legs and feet drag on the ground and tip the moped over
+pcall(function()
+	PhysicsService:RegisterCollisionGroup("Rider")
+	PhysicsService:CollisionGroupSetCollidable("Rider", "Default", false)
+	PhysicsService:CollisionGroupSetCollidable("Rider", "Rider", false)
+end)
+local function setRider(char, on)
+	for _, d in ipairs(char:GetDescendants()) do
+		if d:IsA("BasePart") then d.CollisionGroup = on and "Rider" or "Default" end
+	end
+end
 
 local remotes = Instance.new("Folder"); remotes.Name = "Remotes"; remotes.Parent = RS
 local Api = Instance.new("RemoteFunction"); Api.Name = "Api"; Api.Parent = remotes
@@ -64,7 +77,11 @@ local function spawnMoped(plr, atCf)
 	local model = Builder.moped(mop, Economy.ecfg(p, id), look(p, id))
 	model.Name = "Moped_" .. plr.Name
 	local spot = workspace:FindFirstChild("MoppeWorld") and workspace.MoppeWorld:FindFirstChild("Garage") and workspace.MoppeWorld.Garage:FindFirstChild("MopedSpot")
-	local cf = atCf or (spot and (spot.CFrame * CFrame.new(0, 0.3, 0)) or CFrame.new(0, 3, 0))
+	-- the root sits (wr + 0.15) m above the ground: place it so the wheels end up exactly on the floor
+	-- (too low makes the wheels start inside the floor; Roblox then pushes the moped out with a jolt and it tips)
+	local lift = (mop.wr + 0.15) / Config.STUD + 0.05
+	local groundY = spot and (spot.Position.Y - spot.Size.Y / 2 - 0.05) or 0
+	local cf = atCf or CFrame.new(spot and spot.Position.X or 0, groundY + lift, spot and spot.Position.Z or 0)
 	model:PivotTo(cf)
 	-- constraints the client drives (the client owns the physics of its moped)
 	local root = model.PrimaryPart
@@ -72,14 +89,21 @@ local function spawnMoped(plr, atCf)
 	local lv = Instance.new("LinearVelocity")
 	lv.Name = "Drive"; lv.Attachment0 = att; lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
 	lv.PrimaryTangentAxis = Vector3.new(1, 0, 0); lv.SecondaryTangentAxis = Vector3.new(0, 0, 1)
-	lv.RelativeTo = Enum.ActuatorRelativeTo.World; lv.MaxForce = 0; lv.Parent = root
+	lv.RelativeTo = Enum.ActuatorRelativeTo.World; lv.MaxForce = 2e4; lv.PlaneVelocity = Vector2.new(0, 0); lv.Parent = root -- parked: stays put
 	local ao = Instance.new("AlignOrientation")
 	ao.Name = "Tilt"; ao.Mode = Enum.OrientationAlignmentMode.OneAttachment; ao.Attachment0 = att
-	ao.Responsiveness = 40; ao.MaxTorque = 0; ao.RigidityEnabled = false; ao.CFrame = cf.Rotation; ao.Parent = root
+	ao.Responsiveness = 40; ao.MaxTorque = 1e6; ao.RigidityEnabled = false; ao.CFrame = cf.Rotation; ao.Parent = root -- always upright, like on its kickstand
 	local owner = Instance.new("ObjectValue"); owner.Name = "Owner"; owner.Value = plr; owner.Parent = model
 	local mid = Instance.new("StringValue"); mid.Name = "MopedId"; mid.Value = id; mid.Parent = model
 	model.Parent = workspace
 	for _, d in ipairs(model:GetDescendants()) do if d:IsA("BasePart") then pcall(function() d:SetNetworkOwner(plr) end) end end
+	local seatPart = model:FindFirstChild("Seat")
+	local lastChar
+	seatPart:GetPropertyChangedSignal("Occupant"):Connect(function()
+		local hum = seatPart.Occupant
+		if hum and hum.Parent then lastChar = hum.Parent; setRider(lastChar, true)
+		elseif lastChar then setRider(lastChar, false); lastChar = nil end
+	end)
 	s.moped, s.last = model, nil
 	local hum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
 	if hum then model.Seat:Sit(hum) end

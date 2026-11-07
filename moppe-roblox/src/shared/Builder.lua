@@ -61,6 +61,25 @@ local function maker(model, root)
 		local cf = CFrame.lookAt((A + B) / 2, B) * CFrame.Angles(0, math.pi / 2, 0)
 		return K.part(name, "cyl", Vector3.new(len, r * 2, r * 2), cf, color, material, refl)
 	end
+	-- part the client rotates (wheel spokes): Weld instead of WeldConstraint so C0 can be changed
+	function K.spin(name, sizeM, cf, color, material, refl)
+		local p = K.part(name, "box", sizeM, cf, color, material, refl)
+		for _, c in ipairs(p:GetChildren()) do if c:IsA("WeldConstraint") then c:Destroy() end end
+		local w = Instance.new("Weld")
+		w.Name = "SpinWeld"
+		w.Part0, w.Part1 = root, p
+		w.C0 = root.CFrame:Inverse() * p.CFrame
+		w.Parent = p
+		return w
+	end
+	-- attachment on the root in metre coordinates (for lights and smoke)
+	function K.attach(name, x, y, z)
+		local a = Instance.new("Attachment")
+		a.Name = name
+		a.Position = root.CFrame:PointToObjectSpace(Vector3.new(x * S, y * S, -z * S))
+		a.Parent = root
+		return a
+	end
 	function K.box(name, w, h, d, x, y, z, color, material, refl, rx)
 		return K.part(name, "box", Vector3.new(w, h, d), K.at(x, y, z) * CFrame.Angles(rx or 0, 0, 0), color, material, refl)
 	end
@@ -80,14 +99,16 @@ local function wheel(K, name, wr, z, width, E, look)
 	tyre.CanCollide = true
 	tyre.CanQuery = true
 	tyre.Massless = false
-	tyre.CustomPhysicalProperties = PhysicalProperties.new(1, 0.05, 0, 1, 1) -- slides on the ground, the controller decides speed
+	tyre.CustomPhysicalProperties = PhysicalProperties.new(3, 0.05, 0, 1, 1) -- slides on the ground, the controller decides speed
 	local rc, rm, rr = rimLook(E, look.rim or C.alu)
 	K.part(name .. "Rim", "cyl", Vector3.new(width * 1.05, wr * 1.25, wr * 1.25), K.at(0, wr, z), rc, rm, rr)
 	K.part(name .. "Hub", "cyl", Vector3.new(width * 1.2, wr * 0.35, wr * 0.35), K.at(0, wr, z), C.alu, MAT.metal, 0.2)
 	-- spokes as a separate part the client rotates (visual only)
-	local sp = K.part(name .. "Spokes", "box", Vector3.new(width * 1.1, wr * 1.15, 0.03), K.at(0, wr, z), rc, rm, rr)
-	K.part(name .. "Spokes2", "box", Vector3.new(width * 1.1, 0.03, wr * 1.15), K.at(0, wr, z), rc, rm, rr)
-	return tyre, sp
+	local spins = {}
+	for i = 0, 2 do
+		table.insert(spins, K.spin(name .. "Spoke", Vector3.new(width * 1.1, wr * 1.2, 0.025), K.at(0, wr, z) * CFrame.Angles(i * math.pi / 3, 0, 0), rc, rm, rr))
+	end
+	return tyre, spins
 end
 
 local function paintMat(look)
@@ -108,7 +129,7 @@ function Builder.moped(mop, E, look)
 	root.Transparency = 1
 	root.CanCollide = false
 	root.CanQuery = false
-	root.CustomPhysicalProperties = PhysicalProperties.new(2, 0.3, 0, 1, 1)
+	root.CustomPhysicalProperties = PhysicalProperties.new(10, 0.3, 0, 1, 1) -- heavy and low-slung: low centre of mass, the rider does not tip it over
 	root.Parent = model
 	model.PrimaryPart = root
 	local K = maker(model, root)
@@ -233,9 +254,32 @@ function Builder.moped(mop, E, look)
 	local sw = Instance.new("WeldConstraint"); sw.Part0, sw.Part1 = root, seat; sw.Parent = seat
 	-- references for the client
 	local refs = Instance.new("Folder"); refs.Name = "Refs"; refs.Parent = model
-	for name, p in pairs({ FW = fw, RW = rw, FSpokes = fsp, RSpokes = rsp }) do
+	for name, p in pairs({ FW = fw, RW = rw }) do
 		local o = Instance.new("ObjectValue"); o.Name = name; o.Value = p; o.Parent = refs
 	end
+	for i, w in ipairs(fsp) do local o = Instance.new("ObjectValue"); o.Name = "SpinF" .. i; o.Value = w; o.Parent = refs end
+	for i, w in ipairs(rsp) do local o = Instance.new("ObjectValue"); o.Name = "SpinR" .. i; o.Value = w; o.Parent = refs end
+	-- headlight (real light), tail light and exhaust smoke
+	local isDt, sc = mop.id == "dt", wb / 1.2
+	local hl = K.attach("HeadlightAtt", 0, isDt and 0.9 or (mop.id == "rok" and 0.92 or 0.98), isDt and 0.6 or 0.7 * sc)
+	local spot = Instance.new("SpotLight"); spot.Name = "Headlight"; spot.Face = Enum.NormalId.Front; spot.Angle = 55; spot.Range = 45; spot.Brightness = E.glass == "tint" and 1.2 or 2.5
+	spot.Color = Color3.fromRGB(255, 240, 210); spot.Shadows = true; spot.Parent = hl
+	local tl = K.attach("TailAtt", 0, isDt and 0.92 or (mop.id == "rok" and 0.6 or 0.5), isDt and -1.1 or -0.7 * sc)
+	local pl = Instance.new("PointLight"); pl.Name = "TailLight"; pl.Color = Color3.fromRGB(255, 40, 40); pl.Range = 6; pl.Brightness = 1.2; pl.Parent = tl
+	local ex = isDt and K.attach("ExhaustAtt", 0.15, 0.72, -0.85) or K.attach("ExhaustAtt", 0.2, 0.22, 0.04 - (0.7 + exh.l * 0.5) - 0.02)
+	local pe = Instance.new("ParticleEmitter")
+	pe.Name = "Smoke"
+	pe.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	pe.Rate = 0
+	pe.Lifetime = NumberRange.new(0.6, 1.4)
+	pe.Speed = NumberRange.new(2, 4)
+	pe.SpreadAngle = Vector2.new(12, 12)
+	pe.EmissionDirection = Enum.NormalId.Back
+	pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 2.2) })
+	pe.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1) })
+	pe.Color = ColorSequence.new(Color3.fromRGB(200, 200, 205))
+	pe.LightInfluence = 1
+	pe.Parent = ex
 	return model
 end
 

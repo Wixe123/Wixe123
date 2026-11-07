@@ -54,6 +54,7 @@ UIS.InputEnded:Connect(function(io) K[io.KeyCode.Name] = false end)
 UIS.WindowFocusReleased:Connect(function() K = {} end)
 
 local wasSeated = false
+local baseC0 = setmetatable({}, { __mode = "k" }) -- the spokes' starting position per weld
 RunService.Heartbeat:Connect(function(dtReal)
 	if not R.P then return end
 	local m = myMoped()
@@ -80,11 +81,29 @@ RunService.Heartbeat:Connect(function(dtReal)
 		local vs = R.v * S
 		lv.MaxForce = 4e5
 		lv.PlaneVelocity = Vector2.new(-math.sin(R.h) * vs, -math.cos(R.h) * vs)
-		ao.MaxTorque = 4e5
+		ao.MaxTorque = 1e6
 		local roll = R.crash and R.crash.side * math.min(1.45, R.crash.t * 2.4) or -R.lean
 		ao.CFrame = CFrame.Angles(0, R.h, 0) * CFrame.Angles(R.pitch, 0, roll)
 	else
+		-- parked: upright with the current heading and standing still (never limp, it would tip over)
 		R.drive = false
-		lv.MaxForce, ao.MaxTorque = 0, 0
+		local _, y = root.CFrame:ToOrientation()
+		lv.MaxForce, lv.PlaneVelocity = 2e4, Vector2.new(0, 0)
+		ao.MaxTorque, ao.CFrame = 1e6, CFrame.Angles(0, y, 0)
 	end
+	-- spinning wheels (local visual) and exhaust smoke after the throttle
+	local refs = m:FindFirstChild("Refs")
+	if refs then
+		R.wheelA = ((R.wheelA or 0) + (seated and R.v or 0) / R.mop.wr * real) % (2 * math.pi)
+		for _, o in ipairs(refs:GetChildren()) do
+			local w = o:IsA("ObjectValue") and o.Value
+			if w and w:IsA("Weld") then
+				if not baseC0[w] then baseC0[w] = w.C0 end
+				w.C0 = baseC0[w] * CFrame.Angles(-R.wheelA, 0, 0)
+			end
+		end
+	end
+	local exAtt = root:FindFirstChild("ExhaustAtt")
+	local smoke = exAtt and exAtt:FindFirstChild("Smoke")
+	if smoke then smoke.Rate = R.on and (6 + 40 * R.thr) or 0 end
 end)

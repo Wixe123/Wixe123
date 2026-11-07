@@ -39,7 +39,11 @@ Bromsen ligger bara på S, eftersom Mellanslag är Robloxs "hoppa av" och inte g
 
 ## Vad som finns
 
-- Tre mopeder byggda av delar: Jogga 50, Aerox 50 och Enduro DT 50.
+- Tre mopeder byggda av delar: Jogga 50, Aerox 50 och Enduro DT 50. Strålkastaren lyser på riktigt, det kommer avgasrök efter gasen och hjulen snurrar.
+- **Världen:**
+  - Roblox Terrain med gräs, kullar och en sjö med riktigt vatten.
+  - Ett stort garage på 24 × 16 m och 5 m i takhöjd, med tegelväggar, stålbalkar, hängande lampor, rullport, fönster, moppelyft, arbetsbänk, verktygsvagn, hyllor, däck, kompressor, oljefat och ett kontorshörn.
+  - Väg med trottoarkant, trottoar och gatlampor, en rundbana med röd-vita kantstenar och svenska hus med skorsten, staket och brevlåda.
 - Motormodell, CVT/växlar, temperatur med överhettning och kolvskär, stegring med momentbalans och vurpor. Allt är samma kod som webben, och testat mot den (se nedan).
 - Ekonomi: 5 kr per 100 m, 40 kr per 2 km ren körning, stegringsbonus (max 400 kr/min), reparationer, köpa och sälja delar och mopeder.
 - Butik med 3D-förhandsvisning av varje del och beräknad hk-skillnad för din moped. Förråd, montering och trimning (munstycke, porttiming, rullvikt), samt lack och startnummer.
@@ -71,7 +75,6 @@ Bromsen ligger bara på S, eftersom Mellanslag är Robloxs "hoppa av" och inte g
 ## Kända begränsningar
 
 - **Mopedernas form:** De är byggda av vanliga Roblox-delar. Aerox-modellen från webben (OBJ) går inte att lägga in från ett skript. Den måste laddas upp som MeshPart i Studio.
-- **Hjulen** snurrar inte.
 - **Ingen daglig utmaning** och ingen import av egen katalog. Det finns i webbversionen men inte här än.
 - **Demobutik:** Tillverkare och priser är påhittade och betalas med spelpengar.
 
