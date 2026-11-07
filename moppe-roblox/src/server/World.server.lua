@@ -38,15 +38,18 @@ local rays = Instance.new("SunRaysEffect"); rays.Intensity, rays.Spread = 0.04, 
 local base = workspace:FindFirstChild("Baseplate"); if base then base:Destroy() end
 local T = workspace.Terrain
 T.WaterColor, T.WaterReflectance, T.WaterTransparency, T.WaterWaveSize, T.WaterWaveSpeed = Color3.fromRGB(40, 78, 96), 0.6, 0.4, 0.08, 6
-T:FillBlock(CFrame.new(0, -8, M(110)), Vector3.new(M(560), 16, M(480)), Enum.Material.Grass) -- (z in metres -110 = Roblox +Z)
+-- the ground is a flat grass part just below zero: terrain bulges up slightly and would cover roads and garage floors
+part("Ground", Vector3.new(M(560), 2, M(480)), CFrame.new(0, -1.05, M(110)), Color3.fromRGB(76, 122, 55), Enum.Material.Grass)
 local hr = Random.new(3)
 for i = 0, 31 do
 	local a = i / 32 * math.pi * 2
 	T:FillBall(Vector3.new(math.cos(a) * M(265), -M(4), M(110) + math.sin(a) * M(225)), M(26 + hr:NextNumber() * 18), hr:NextNumber() < 0.25 and Enum.Material.Rock or Enum.Material.Grass)
 end
 local lake = Vector3.new(-M(100), 0, M(250)) -- metres (x -100, z -250)
-T:FillCylinder(CFrame.new(lake + Vector3.new(0, -2, 0)), 4, M(32), Enum.Material.Sand)
-T:FillCylinder(CFrame.new(lake + Vector3.new(0, -4, 0)), 8, M(28), Enum.Material.Water)
+-- lake: sandy shore as a part, water from the terrain on top of it
+part("Shore", Vector3.new(0.4, M(64), M(64)), CFrame.new(lake + Vector3.new(0, 0.1, 0)) * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(194, 178, 128), Enum.Material.Sand, "cyl")
+part("LakeBed", Vector3.new(0.4, M(56), M(56)), CFrame.new(lake + Vector3.new(0, 0.15, 0)) * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(60, 70, 60), Enum.Material.Mud, "cyl")
+T:FillCylinder(CFrame.new(lake + Vector3.new(0, 1.2, 0)), 2, M(28), Enum.Material.Water)
 
 -- ---------- roads ----------
 local asph, lineC, curbC, walk = Color3.fromRGB(56, 59, 64), Color3.fromRGB(232, 232, 226), Color3.fromRGB(165, 165, 160), Color3.fromRGB(150, 150, 146)

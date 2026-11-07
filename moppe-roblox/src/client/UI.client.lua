@@ -37,6 +37,8 @@ local function call(a, ...) local ok, msg = Api:InvokeServer(a, ...); if type(ms
 local function clear(f) for _, c in ipairs(f:GetChildren()) do if c:IsA("GuiObject") then c:Destroy() end end end
 
 local gui = new("ScreenGui", { Name = "MoppeHUD", ResetOnSpawn = false }, plr:WaitForChild("PlayerGui"))
+-- Roblox's player list covers the money top right: hide it (the garage signs show who owns what)
+pcall(function() game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false) end)
 -- ---------- HUD ----------
 local money = corner(new("TextLabel", { BackgroundColor3 = COL.bg, BackgroundTransparency = 0.15, TextColor3 = Color3.fromRGB(255, 209, 102), Font = Enum.Font.GothamBold, TextSize = 22,
 	AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 14), Size = UDim2.new(0, 170, 0, 40) }, gui))
