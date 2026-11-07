@@ -1,81 +1,94 @@
--- Cylinder porting: the marked areas (ports) are split into cells. The tool tip removes material in the cells it
--- touches while the player holds the button. Quality comes from evenness, precision (time outside the areas)
--- and over-porting. Coordinates u, v in [-1, 1] on the cylinder's work view (seen from above, exhaust towards +v).
+-- Cylinder porting: four port windows, each a grid of cells that are ground down to the marked depth.
+-- The client sends the cell depths when done; the server computes the quality from them with result().
 local Porting = {}
 
+Porting.COLS, Porting.ROWS = 6, 3
 Porting.ZONES = {
-	{ id = "exhaust", n = "Avgasport", u = { -0.18, 0.18 }, v = { 0.52, 0.86 }, color = Color3.fromRGB(255, 120, 40) },
-	{ id = "transfer_l", n = "Överströmning vänster", u = { -0.86, -0.6 }, v = { -0.22, 0.3 }, color = Color3.fromRGB(60, 170, 255) },
-	{ id = "transfer_r", n = "Överströmning höger", u = { 0.6, 0.86 }, v = { -0.22, 0.3 }, color = Color3.fromRGB(60, 170, 255) },
-	{ id = "boost", n = "Boostport", u = { -0.14, 0.14 }, v = { -0.86, -0.6 }, color = Color3.fromRGB(120, 255, 140) },
+	{ id = "avgas", n = "Porta avgasporten", face = "front", w = 0.62, h = 0.36 },
+	{ id = "overV", n = "Överströmning vänster", face = "left", w = 0.4, h = 0.26 },
+	{ id = "overH", n = "Överströmning höger", face = "right", w = 0.4, h = 0.26 },
+	{ id = "insug", n = "Porta insuget", face = "back", w = 0.5, h = 0.3 },
 }
-Porting.CU, Porting.CV = 4, 3 -- cells per zone
-Porting.RADIUS = 0.07 -- the tool tip's reach
-Porting.RATE = 0.55 -- work per second at full contact (1 = finished cell)
+Porting.BY_ID = {}
+for _, z in ipairs(Porting.ZONES) do Porting.BY_ID[z.id] = z end
+Porting.TARGET = 1.0 -- depth that counts as done
+Porting.OVER = 1.3 -- deeper than this is over-ported (bad)
 
-function Porting.new(steady, training)
-	local s = { cells = {}, on = 0, off = 0, t = 0, steady = steady or 0.6, training = training == true }
+function Porting.new()
+	local s = { cells = {}, inside = 0, outside = 0 }
 	for _, z in ipairs(Porting.ZONES) do
-		s.cells[z.id] = {}
-		for i = 1, Porting.CU * Porting.CV do s.cells[z.id][i] = 0 end
+		local c = {}
+		for i = 1, Porting.COLS * Porting.ROWS do c[i] = 0 end
+		s.cells[z.id] = c
 	end
 	return s
 end
 
-local function cellCenter(z, i)
-	local cu, cv = (i - 1) % Porting.CU, math.floor((i - 1) / Porting.CU)
-	return z.u[1] + (cu + 0.5) / Porting.CU * (z.u[2] - z.u[1]), z.v[1] + (cv + 0.5) / Porting.CV * (z.v[2] - z.v[1])
-end
-Porting.cellCenter = cellCenter
-
--- one time step: the tool is at (u, v), grinding = button held. Returns the zone the tool is in (or nil).
-function Porting.grind(s, u, v, dt, grinding)
-	if not grinding then return nil end
-	s.t = s.t + dt
-	local hit = nil
-	for _, z in ipairs(Porting.ZONES) do
-		if u >= z.u[1] - Porting.RADIUS and u <= z.u[2] + Porting.RADIUS and v >= z.v[1] - Porting.RADIUS and v <= z.v[2] + Porting.RADIUS then
-			hit = z
-			for i = 1, Porting.CU * Porting.CV do
-				local cu, cv = cellCenter(z, i)
-				local d = math.sqrt((cu - u) ^ 2 + (cv - v) ^ 2)
-				local cellR = math.max((z.u[2] - z.u[1]) / Porting.CU, (z.v[2] - z.v[1]) / Porting.CV) * 0.6
-				if d < Porting.RADIUS + cellR then
-					local w = 1 - d / (Porting.RADIUS + cellR)
-					s.cells[z.id][i] = s.cells[z.id][i] + Porting.RATE * w * dt
-				end
+-- grind at (u,v) in 0..1 zone coordinates for dt seconds; speed from the tool; returns true if inside the zone
+function Porting.grind(s, zoneId, u, v, dt, speed)
+	local cells = s.cells[zoneId]
+	if not cells then return false end
+	speed = speed or 1
+	if u < -0.02 or u > 1.02 or v < -0.02 or v > 1.02 then
+		s.outside = s.outside + dt
+		return false
+	end
+	s.inside = s.inside + dt
+	local cx, cy = u * Porting.COLS + 0.5, v * Porting.ROWS + 0.5
+	for row = 1, Porting.ROWS do
+		for col = 1, Porting.COLS do
+			local d = math.sqrt((col - cx) ^ 2 + (row - cy) ^ 2)
+			if d < 1.25 then
+				local i = (row - 1) * Porting.COLS + col
+				cells[i] = cells[i] + dt * 0.85 * speed * (1 - d / 1.25)
 			end
 		end
 	end
-	if hit then s.on = s.on + dt else s.off = s.off + dt end
-	return hit
+	return true
 end
 
-function Porting.zoneProgress(s, zid)
+function Porting.zoneProgress(s, zoneId)
+	local cells = s.cells[zoneId]
+	local sum = 0
+	for _, d in ipairs(cells) do sum = sum + math.min(d, Porting.TARGET) end
+	return sum / (#cells * Porting.TARGET)
+end
+function Porting.progress(s)
 	local t = 0
-	for _, w in ipairs(s.cells[zid]) do t = t + math.min(1, w) end
-	return t / (Porting.CU * Porting.CV)
+	for _, z in ipairs(Porting.ZONES) do t = t + Porting.zoneProgress(s, z.id) end
+	return t / #Porting.ZONES
 end
 
--- result: coverage (0..1), evenness, precision, over (share of cells over 1.4), q (0..1), deg (raised timing)
+-- quality metrics 0..1 and an overall q; label in Swedish
 function Porting.result(s)
-	local all, sum, over = {}, 0, 0
-	for _, z in ipairs(Porting.ZONES) do for _, w in ipairs(s.cells[z.id]) do table.insert(all, w); sum = sum + math.min(1, w); if w > 1.4 then over = over + 1 end end end
-	local nCells = #all
-	local coverage = sum / nCells
-	local mean = 0
-	for _, w in ipairs(all) do mean = mean + math.min(1.6, w) end
-	mean = mean / nCells
+	local all = {}
+	for _, z in ipairs(Porting.ZONES) do
+		local cells = s.cells and s.cells[z.id]
+		if type(cells) ~= "table" then return nil end
+		for i = 1, Porting.COLS * Porting.ROWS do
+			local d = tonumber(cells[i]) or 0
+			all[#all + 1] = math.max(0, math.min(3, d))
+		end
+	end
+	local n = #all
+	local cover, mean, over = 0, 0, 0
+	for _, d in ipairs(all) do
+		cover = cover + math.min(d, Porting.TARGET) / Porting.TARGET
+		mean = mean + d
+		if d > Porting.OVER then over = over + 1 end
+	end
+	cover, mean = cover / n, mean / n
 	local var = 0
-	for _, w in ipairs(all) do var = var + (math.min(1.6, w) - mean) ^ 2 end
-	local sd = math.sqrt(var / nCells)
-	local evenness = math.max(0, 1 - sd / 0.5)
-	local precision = (s.on + s.off) > 0 and s.on / (s.on + s.off) or 0
-	local overShare = over / nCells
-	local q = math.max(0, math.min(1, (0.4 * evenness + 0.4 * precision + 0.2 * (1 - overShare)) * coverage * (0.85 + 0.15 * s.steady)))
-	local deg = 4 * coverage * (1 - 0.5 * overShare)
-	local label = q > 0.8 and "Utmärkt" or q > 0.6 and "Bra" or q > 0.35 and "Okej" or "Dålig"
-	return { coverage = coverage, evenness = evenness, precision = precision, over = overShare, q = q, deg = deg, label = label }
+	for _, d in ipairs(all) do var = var + (math.min(d, 1.6) - math.min(mean, 1.6)) ^ 2 end
+	local even = math.max(0, 1 - math.sqrt(var / n) * 1.6)
+	local inside, outside = tonumber(s.inside) or 0, tonumber(s.outside) or 0
+	local precision = (inside + outside) > 0 and inside / (inside + outside) or 0
+	local overF = over / n
+	local q = cover * 0.45 + even * 0.3 + precision * 0.25 - overF * 0.8
+	q = math.max(0, math.min(1, q))
+	if cover < 0.5 then q = math.min(q, 0.3) end
+	local label = q >= 0.9 and "Perfekt" or (q >= 0.75 and "Bra" or (q >= 0.5 and "OK" or "Dålig"))
+	return { cover = cover, even = even, precision = precision, over = overF, q = q, label = label }
 end
 
 return Porting

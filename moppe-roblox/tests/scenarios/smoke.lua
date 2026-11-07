@@ -1,0 +1,7 @@
+E.startServer()
+E.addPlayer("Love")
+E.run(2)
+E.check("player has character", E.player.Character ~= nil)
+E.shot("smoke")
+E.lookFrom(E.T.Vector3.new(12, 10, 12), E.T.Vector3.new(0, 1, 0))
+E.shot("smoke2")

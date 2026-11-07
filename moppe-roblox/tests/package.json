@@ -1,11 +1,13 @@
 {
   "name": "moppe-roblox-tests",
   "private": true,
-  "description": "Tester utan Roblox: syntax/globala namn (luaparse) och spellogik i Lua (fengari)",
+  "description": "Tester utan Roblox: spellogik och hela spelet i en Roblox-emulator (fengari), bilder med three.js",
   "scripts": {
-    "syntax": "node check_syntax.js ../src",
-    "logic": "node run.js ../src/shared logic_tests.lua",
-    "test": "node check_syntax.js ../src && node run.js ../src/shared logic_tests.lua"
+    "logic": "node emu/host.js scenarios/logic.lua",
+    "game": "node emu/host.js scenarios/game.lua",
+    "render": "node emu/render.js",
+    "test": "node emu/host.js scenarios/logic.lua --quiet && node emu/host.js scenarios/game.lua --quiet"
   },
-  "dependencies": { "fengari": "0.1.4", "luaparse": "0.3.1" }
+  "dependencies": { "fengari": "0.1.4", "three": "0.160.0" },
+  "devDependencies": { "playwright": "*" }
 }
