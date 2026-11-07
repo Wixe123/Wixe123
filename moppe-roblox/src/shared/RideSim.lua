@@ -20,8 +20,9 @@ function RideSim.setProfile(R, p)
 	R.P = Economy.engine(p, p.cur)
 	-- the client calculates damage; only a repair on the server (p.rep counter) may lower it
 	local th = R.thermal[p.cur]
-	if R.rep ~= (p.rep or 0) then R.rep = p.rep or 0; th.dmg = p.dmg[p.cur] or 0; R.lastDmg = th.dmg
-	else th.dmg = math.max(th.dmg, p.dmg[p.cur] or 0) end
+	local dmg = p.mopeds[p.cur] and p.mopeds[p.cur].dmg or 0
+	if R.rep ~= (p.rep or 0) then R.rep = p.rep or 0; th.dmg = dmg; R.lastDmg = th.dmg
+	else th.dmg = math.max(th.dmg, dmg) end
 end
 
 function RideSim.kick(R, tries, rand)

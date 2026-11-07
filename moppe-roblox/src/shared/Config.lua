@@ -31,12 +31,13 @@ for _, m in ipairs(Config.MOPEDS) do Config.BY_ID[m.id] = m end
 
 Config.FAM = { ["V-AC"] = "Vertikal luftkyld skotermotor", ["H-LC"] = "Horisontell vätskekyld skotermotor", ["G-AC"] = "Växlad luftkyld motor" }
 
+Config.PAINT_DRY = 20 -- seconds before freshly painted parts can be fitted
 Config.STUD = 0.28 -- meter per stud (Roblox character ≈ 5 studs ≈ 1.4–1.8 m)
 Config.AMB = 15 -- outside temperature, °C (assumed)
 
 -- economy (in-game kronor, not real prices)
 Config.ECON = {
-	start = 2000,
+	start = 4000,
 	distKr = 5, distM = 100, -- 5 kr per 100 m with the engine running
 	cleanKr = 40, cleanM = 2000, -- 40 kr per 2 km without crash/overheating
 	crashKr = 50,

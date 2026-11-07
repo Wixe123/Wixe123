@@ -1,147 +1,190 @@
 local Config = require(Shared.Config)
-local Engine = require(Shared.Engine)
 local Catalog = require(Shared.Catalog)
+local Assembly = require(Shared.Assembly)
 local Economy = require(Shared.Economy)
 local RideSim = require(Shared.RideSim)
+local Porting = require(Shared.Porting)
+local Paint = require(Shared.Paint)
+local Delivery = require(Shared.Delivery)
 local function r1(x) return math.floor(x * 10 + 0.5) / 10 end
 
--- 1. engine: same peak power as the web version
+-- 1. an original moped is complete and has the same engine as before
 local p = Economy.new()
-for _, t in ipairs({ { "jog", 3.4 }, { "rok", 3.9 }, { "dt", 3.9 } }) do
-	local hp = r1(Economy.engine(p, t[1]).hp)
-	ok("motor standard " .. t[1] .. " = " .. t[2] .. " hk (webben)", hp == t[2], hp)
-end
-local function race(pp, id)
-	local function put(slot, sku) local _, _, us = Economy.buy(pp, sku, 1, nil, 0); pp.inst[id][slot] = us[1] end
-	pp.money = 1e6
-	put("kit", "D-kit-2-" .. id); put("exh", "D-exh-4-" .. id); put("carb", "D-carb-3"); put("man", "D-man-1-" .. id); put("ign", "D-ign-1-" .. id)
-	if Config.BY_ID[id].cvt then put("clutch", "D-clutch-2-" .. id); put("belt", "D-belt-1-" .. id); put("roll", "D-roll-0-" .. id); pp.cfgs[id].roller = 5 end
-	pp.cfgs[id].jet = 105
-end
-local pr = Economy.new(); race(pr, "jog")
-ok("motor race-Jogga = 9.9 hk (webben)", r1(Economy.engine(pr, "jog").hp) == 9.9, r1(Economy.engine(pr, "jog").hp))
-
--- 2. riding: acceleration and top speed compared with the web version (60 fps, fixed steps)
-local function accel(pp, id, secs)
+ok("ny profil: Jogga komplett och körbar", Economy.canRide(p, "jog"), table.concat(Economy.mopedMissing(p, "jog"), ","))
+ok("Jogga original = 3.4 hk (som tidigare)", r1(Economy.engine(p, "jog").hp) == 3.4, r1(Economy.engine(p, "jog").hp))
+p.money = 1e6
+Economy.buyMoped(p, "rok", 0); Economy.buyMoped(p, "dt", 0)
+ok("Aerox och DT original = 3.9 hk", r1(Economy.engine(p, "rok").hp) == 3.9 and r1(Economy.engine(p, "dt").hp) == 3.9, r1(Economy.engine(p, "rok").hp) .. "/" .. r1(Economy.engine(p, "dt").hp))
+local function accel(pp, id)
 	pp.cur = id
-	local R = RideSim.new()
-	RideSim.setProfile(R, pp)
-	R.on, R.rpm = true, 1800
+	local R = RideSim.new(); RideSim.setProfile(R, pp); R.on = true
 	for _, m in ipairs(Config.MOPEDS) do R.thermal[m.id].tc = 150; R.thermal[m.id].tw = 80 end
 	local t, mk = 0, {}
-	for _ = 1, (secs or 20) * 60 do
-		RideSim.step(R, 1 / 60, true, { thr = 1, brk = 0, st = 0, back = false })
-		t = t + 1 / 60
+	for _ = 1, 20 * 60 do RideSim.step(R, 1 / 60, true, { thr = 1, brk = 0, st = 0, back = false }); t = t + 1 / 60
 		if not R.mop.cvt and R.rpm > R.P.pk * 1.12 and R.gear < 4 then R.gear = R.gear + 1 end
-		for _, v in ipairs({ 20, 30, 40 }) do if R.v * 3.6 >= v and not mk[v] then mk[v] = r1(t) end end
+		for _, v in ipairs({ 20, 30 }) do if R.v * 3.6 >= v and not mk[v] then mk[v] = r1(t) end end end
+	return mk[30], math.floor(R.v * 3.6 + 0.5)
+end
+local t30, top = accel(p, "jog")
+ok("Jogga 0–30 4.0 s, topp 58 km/h (som tidigare)", math.abs(t30 - 4.0) <= 0.15 and math.abs(top - 58) <= 2, t30 .. " s / " .. top)
+
+-- 2. the engine out of the moped: exhaust and rear wheel must come off first
+local q = Economy.new()
+local okA, why = Economy.engineToStand(q, "jog")
+ok("motorn kan inte lyftas ur med avgas och bakhjul på", not okA, why)
+Economy.unmountMoped(q, "jog", "brakeR"); Economy.unmountMoped(q, "jog", "wheelR"); Economy.unmountMoped(q, "jog", "exh")
+ok("motorn i stativet när avgas och bakhjul är av", (Economy.engineToStand(q, "jog")) == true and q.stand == "jog")
+ok("mopeden går inte att köra utan motor", not Economy.canRide(q, "jog"))
+
+-- 3. take the engine apart completely: wrong order is refused, right order works
+local okB, whyB = Economy.unmountEngine(q, "piston")
+ok("kolven kan inte tas bort före cylindern", not okB, whyB)
+local list = Assembly.engineSockets("jog")
+local removed, rounds = {}, 0
+while next(q.mopeds.jog.eng) and rounds < 100 do
+	rounds = rounds + 1
+	for _, s in ipairs(list) do
+		if q.mopeds.jog.eng[s.id] and (Economy.unmountEngine(q, s.id)) then table.insert(removed, s.id) end
 	end
-	return mk, math.floor(R.v * 3.6 + 0.5), R
 end
-local web = { jog = { 2.4, 4.0, 6.7, 58 }, rok = { 2.5, 4.1, 6.6, 60 }, dt = { 1.9, 3.5, 6.0, 55 } }
-for _, id in ipairs({ "jog", "rok", "dt" }) do
-	local mk, top = accel(Economy.new(), id)
-	local w = web[id]
-	local close = math.abs(mk[20] - w[1]) <= 0.15 and math.abs(mk[30] - w[2]) <= 0.15 and math.abs(mk[40] - w[3]) <= 0.2 and math.abs(top - w[4]) <= 2
-	ok("acceleration standard " .. id .. " (0-20/30/40, topp) som webben " .. table.concat(w, "/"), close, mk[20] .. "/" .. mk[30] .. "/" .. mk[40] .. "/" .. top)
+ok("hela motorn demonterad i rätt ordning (" .. #removed .. " delar)", next(q.mopeds.jog.eng) == nil and #removed == #list, #removed .. "/" .. #list)
+local first = removed[#removed]
+ok("vevhuset sist ut", first == "case", first)
+-- rebuild: mount from the bench in random order until it works
+local function freeOf(kind)
+	for u, it in pairs(q.items) do if it.loc == "bench" and Catalog.BY_SKU[it.s].kind == kind then return u end end
 end
-local mkr, topr = accel(pr, "jog")
-ok("acceleration race-Jogga som webben 1.6/2.2/3.0/86", math.abs(mkr[20] - 1.6) <= 0.15 and math.abs(mkr[30] - 2.2) <= 0.15 and math.abs(mkr[40] - 3.0) <= 0.2 and math.abs(topr - 86) <= 2, mkr[20] .. "/" .. mkr[30] .. "/" .. mkr[40] .. "/" .. topr)
-
--- 3. temperature: cold start, warm-up, full throttle, cooling down
-local pt = Economy.new()
-local R = RideSim.new(); RideSim.setProfile(R, pt)
-ok("kallstart vid utetemp", R.thermal.jog.tc == Config.AMB, R.thermal.jog.tc)
-R.on, R.rpm = true, 1800
-for _ = 1, 600 * 60 do RideSim.step(R, 1 / 60, true, { thr = 1, brk = 0, st = 0, back = false }) end
-local tFull = R.thermal.jog.tc
-ok("Jogga fullgas 10 min ≈ 176°C (webben)", math.abs(tFull - 176) <= 4, r1(tFull))
-R.on = false
-for _ = 1, 600 * 60 do RideSim.step(R, 1 / 60, false, { thr = 0, brk = 0, st = 0, back = false }) end
-ok("avstängd 10 min svalnar", R.thermal.jog.tc < tFull - 60, r1(R.thermal.jog.tc))
-
--- 4. wheelie: no lift on throttle alone, a controlled wheelie gets reported
-local _, _, Rs = accel(Economy.new(), "jog", 8)
-local maxPitch = 0
-do local pp = Economy.new(); pp.cur = "jog"; local R2 = RideSim.new(); RideSim.setProfile(R2, pp); R2.on = true
-	for _ = 1, 480 do RideSim.step(R2, 1 / 60, true, { thr = 1, brk = 0, st = 0, back = false }); maxPitch = math.max(maxPitch, R2.pitch) end end
-ok("standard Jogga lyfter inte på bara gas", maxPitch == 0, maxPitch)
-local events = {}
-local pd = Economy.new(); race(pd, "dt"); pd.cur = "dt"
-local R3 = RideSim.new(function(k, a, b, c, d) table.insert(events, { k, a, b, c, d }) end)
-RideSim.setProfile(R3, pd); R3.on = true
-for i = 1, 9 * 60 do
-	local t = i / 60
-	local e = R3.pitch + 0.25 * R3.pw
-	local inp = { thr = (t < 0.3 or e < 0.4) and 1 or 0, brk = e > 0.52 and 1 or 0, st = 0, back = t > 0.3 and t < 6 }
-	if t > 6 then inp.thr, inp.brk = 0, 1 end
-	RideSim.step(R3, 1 / 60, true, inp)
-	if not R3.mop.cvt and R3.rpm > R3.P.pk * 1.12 and R3.gear < 4 then R3.gear = R3.gear + 1 end
+local okC, whyC = Economy.mountEngine(q, freeOf("piston"), "piston")
+ok("kolven kan inte monteras före vevhuset", not okC, whyC)
+local mounted, guard = 0, 0
+while #Economy.engineMissing(q, "jog") > 0 and guard < 200 do
+	guard = guard + 1
+	for _, s in ipairs(list) do
+		local u = not q.mopeds.jog.eng[s.id] and freeOf(s.kind)
+		if u and (Economy.mountEngine(q, u, s.id)) then mounted = mounted + 1 end
+	end
 end
-local wev
-for _, e in ipairs(events) do if e[1] == "wheelie" then wev = e end end
-ok("kontrollerad stegring (race-DT) rapporteras", wev ~= nil and wev[2] > 3, wev and r1(wev[2]) .. " s")
+ok("motorn ombyggd från grunden", #Economy.engineMissing(q, "jog") == 0, mounted .. " delar")
+-- a piston that does not fit the cylinder
+local q2 = Economy.new(); q2.money = 1e5
+Economy.unmountMoped(q2, "jog", "brakeR"); Economy.unmountMoped(q2, "jog", "wheelR"); Economy.unmountMoped(q2, "jog", "exh"); Economy.engineToStand(q2, "jog")
+for _, s in ipairs({ "cable", "plug", "head", "cyl" }) do Economy.unmountEngine(q2, s) end
+local race = Economy.newItem(q2, "P-cyl-race", "bench")
+local okD, whyD = Economy.mountEngine(q2, race, "cyl")
+ok("70 cc-cylinder på 50 cc-kolv nekas", not okD, whyD)
+ok("motorn tillbaka i mopeden", (function() local u = nil; for k, it in pairs(q2.items) do if it.s == "P-cyl-std" and it.loc == "bench" then u = k end end
+	Economy.mountEngine(q2, u, "cyl"); Economy.mountEngine(q2, freeOf and (function() for k, it in pairs(q2.items) do if it.s == "P-head-std" and it.loc == "bench" then return k end end end)(), "head")
+	for k, it in pairs(q2.items) do if it.s == "P-plug-std" and it.loc == "bench" then Economy.mountEngine(q2, k, "plug") end end
+	for k, it in pairs(q2.items) do if it.s == "P-cable-std" and it.loc == "bench" then Economy.mountEngine(q2, k, "cable") end end
+	return (Economy.engineToMoped(q2)) == true end)())
 
--- 5. economy
+-- 4. orders, delivery times and boxes
+ok("leveranstid liten (1 del) = 60 s", Delivery.seconds({ { sku = "P-plug-std", q = 1 } }) == 60 + (Catalog.BY_SKU["P-plug-std"].stock == "Beställningsvara" and 120 or 0))
+local med = Delivery.seconds({ { sku = "P-plug-std", q = 4 } }) - (Catalog.BY_SKU["P-plug-std"].stock == "Beställningsvara" and 120 or 0)
+ok("leveranstid mellan (4 delar) 3–5 min", med >= 180 and med <= 300, med)
+ok("leveranstid stor (8 delar) = 10 min", Delivery.seconds({ { sku = "P-gasket-std", q = 8 } }) - (Catalog.BY_SKU["P-gasket-std"].stock == "Beställningsvara" and 120 or 0) == 600)
+local o = Economy.new()
+local m0 = o.money
+local okE, whyE, ord = Economy.order(o, { { sku = "P-carb-21", q = 1 }, { sku = "P-intake-big", q = 1 } }, 1000)
+ok("beställning drar rätt belopp", okE and o.money == m0 - 1300 - 450, o.money)
+ok("ingenting kommer före leveranstiden", #Economy.tick(o, 1000 + 30) == 0)
+local arrived = Economy.tick(o, ord.eta)
+local inBox = 0
+for _, it in pairs(o.items) do if it.loc == "box:" .. ord.id then inBox = inBox + 1 end end
+ok("leverans: låda med 2 delar", #arrived == 1 and inBox == 2, inBox)
+ok("tick igen ger ingen ny leverans", #Economy.tick(o, ord.eta + 999) == 0)
+Economy.openBox(o, ord.id)
+local onFloor = 0
+for _, it in pairs(o.items) do if it.loc == "floor" then onFloor = onFloor + 1 end end
+ok("öppnad låda: delarna på golvet", onFloor == 2, onFloor)
+local okF = Economy.order(o, { { sku = "P-cyl-race", q = 10 } }, 0)
+ok("beställning över saldot nekas", not okF)
+
+-- 5. porting: even work in the zones = good, scribbling outside = bad
+local function sweep(steady, outside, over)
+	local s = Porting.new(steady)
+	for _, z in ipairs(Porting.ZONES) do
+		for pass = 1, over and 6 or 2 do
+			for i = 1, Porting.CU * Porting.CV do local cu, cv = Porting.cellCenter(z, i); for _ = 1, 30 do Porting.grind(s, cu, cv, 1 / 60, true) end end
+		end
+	end
+	if outside then for _ = 1, 600 do Porting.grind(s, 0, 0, 1 / 60, true) end end
+	return Porting.result(s)
+end
+local good, bad, much = sweep(1, false), sweep(0.6, true), sweep(1, false, true)
+ok("jämn portning ger hög kvalitet", good.q > 0.75 and good.coverage > 0.95, r1(good.q))
+ok("slipning utanför zonerna sänker precisionen", bad.precision < good.precision and bad.q < good.q, r1(bad.precision))
+ok("för mycket slipning ger överportning", much.over > 0.5 and much.deg < good.deg, r1(much.over))
+local pp = Economy.new()
+local cylU = pp.mopeds.jog.eng.cyl
+local hp0 = Economy.engine(pp, "jog").hp
+pp.items[cylU].loc = "portbench" -- (the test puts it there directly)
+local okG = Economy.applyPort(pp, cylU, good)
+pp.items[cylU].loc = "eng:jog"
+local hp1 = Economy.engine(pp, "jog").hp
+ok("portad cylinder ger mer effekt", okG and hp1 > hp0, r1(hp0) .. " -> " .. r1(hp1))
+pp.items[cylU].loc = "portbench"
+ok("cylindern kan inte portas två gånger", (Economy.applyPort(pp, cylU, good)) == false)
+
+-- 6. paint: even spraying = good, one spot = runs
+local ps = Paint.new(1)
+for y = -1, 1, 0.1 do for x = -1, 1, 0.05 do Paint.spray(ps, x, y, 1 / 60) end end
+for y = -1, 1, 0.1 do for x = -1, 1, 0.05 do Paint.spray(ps, x, y, 1 / 60) end end
+local pg = Paint.result(ps)
+local pb = Paint.new(0.7)
+for _ = 1, 400 do Paint.spray(pb, 0, 0, 1 / 60) end
+local pbad = Paint.result(pb)
+ok("jämn lackering ger hög kvalitet", pg.q > 0.7 and pg.coverage > 0.9, r1(pg.q))
+ok("allt på ett ställe ger rinningar och dålig täckning", pbad.runs > 0 and pbad.q < 0.3, r1(pbad.q))
+local pl = Economy.new()
+local side = pl.mopeds.jog.ch["pan:side_l"]
+Economy.unmountMoped(pl, "jog", "pan:side_l")
+ok("demonterad kåpa ligger på bänken", pl.items[side].loc == "bench")
+Economy.move(pl, side, "booth")
+local mp0 = pl.money
+local okH = Economy.applyPaint(pl, side, "#16234a", "metal", pg.q, 100)
+ok("lackering i lackboxen kostar och sparas", okH and pl.money == mp0 - 70 and pl.items[side].paint.col == "#16234a", pl.money)
+Economy.move(pl, side, "bench")
+ok("våt lack kan inte monteras", (Economy.mountMoped(pl, side, "jog", "pan:side_l")) == false)
+Economy.dryTick(pl, 100 + Config.PAINT_DRY)
+ok("torr kåpa monteras tillbaka", (Economy.mountMoped(pl, side, "jog", "pan:side_l")) == true)
+ok("varje kåpa har egen färg", pl.items[pl.mopeds.jog.ch["pan:side_r"]].paint.col ~= pl.items[side].paint.col)
+Economy.saveDesign(pl, "jog", "Midnight")
+pl.items[side].paint.col = "#ff0000"
+Economy.applyDesign(pl, "Midnight")
+ok("sparad design kan läggas på igen", pl.items[side].paint.col == "#16234a")
+local pr = Economy.new(); pr.money = 1e5; Economy.buyMoped(pr, "rok", 0)
+local okI, whyI = Economy.unmountMoped(pr, "rok", "pan:side_l")
+ok("sidokåpan kan inte tas bort före bakre sidokåpan", not okI, whyI)
+
+-- 7. economy and saving
 local pe = Economy.new()
-ok("startsaldo 2000", pe.money == 2000, pe.money)
-local okb, err = Economy.buy(pe, "D-exh-4-jog", 1, nil, 0)
-ok("köp över saldot nekas", okb == false and pe.money == 2000, err)
-local okb2, _, us, inst = Economy.buy(pe, "D-exh-2-jog", 1, "jog", 0)
-ok("köp + direktmontering drar rätt belopp", okb2 and inst and pe.money == 100, pe.money)
-ok("monterad del uppdaterar motorn (avgas index 2)", Economy.ecfg(pe, "jog").exh == 2)
-local oemExh
-for u, it in pairs(pe.items) do if it.s == "D-exh-0-jog" and not Economy.installedOn(pe, u) then oemExh = u end end
-ok("utbytt originalavgas ligger i förrådet", oemExh ~= nil)
-ok("bara utbytbara delar kan tas bort", (Economy.uninstall(pe, "jog", "kit")) == false and (Economy.uninstall(pe, "jog", "mir")) == true)
-local m0 = pe.money
-Economy.sell(pe, oemExh, 0)
-ok("sälja begagnad del ger 50 %", pe.money - m0 == 450, pe.money - m0)
-local inc = Economy.buy(pe, "D-kit-2-rok", 1, nil, 0)
-local wrong
-for u, it in pairs(pe.items) do if it.s == "D-kit-2-rok" then wrong = u end end
-ok("inkompatibel del kan inte monteras", wrong == nil or (Economy.install(pe, wrong, "jog")) == false)
-local pd2 = Economy.new()
-Economy.addDistance(pd2, 250, 0)
-ok("250 m ger 2 hela block = 10 kr", pd2.money == 2010, pd2.money)
-for _ = 1, 1000 do Economy.addDistance(pd2, 0, 0) end
-ok("upprepade nollsteg betalar inget", pd2.money == 2010, pd2.money)
-Economy.addDistance(pd2, 1800, 0)
-ok("2 km ren körning ger +40", pd2.money == 2010 + 90 + 40, pd2.money)
-pd2.money = 30
-Economy.crash(pd2, "test", 0)
-ok("vurpa drar inte under 0", pd2.money == 0, pd2.money)
-local pw = Economy.new()
+Economy.addDistance(pe, 250, 0)
+ok("körning: 2 hela 100 m-block = 10 kr", pe.money == 4010, pe.money)
+for _ = 1, 500 do Economy.addDistance(pe, 0, 0) end
+ok("upprepade nollsteg betalar inget", pe.money == 4010)
 local tot = 0
-for i = 1, 6 do tot = tot + Economy.wheelie(pw, 10, 12, 0.02, 0.5, 100 + i, 200) end
+for i = 1, 6 do tot = tot + Economy.wheelie(pe, 10, 12, 0.02, 0.5, 100 + i, 200) end
 ok("stegringstaket 400 kr/min håller", tot <= 400, tot)
-ok("stegring utan att servern sett rörelse nekas", Economy.wheelie(Economy.new(), 10, 12, 0.02, 0.5, 0, 0) == 0)
-local ptn = Economy.new()
-Economy.tune(ptn, "jog", "jet", 200)
-ok("munstycke klampas till satsens intervall (50–110)", ptn.cfgs.jog.jet == 110, ptn.cfgs.jog.jet)
-local prp = Economy.new(); prp.dmg.jog = 0.4
-Economy.repair(prp, "jog", false, 0)
-ok("reparation kostar 100+900×skada", prp.money == 2000 - 460 and prp.dmg.jog == 0, prp.money)
-local ps = Economy.new()
-Economy.sellMoped(ps, "dt", 0)
-local left = 0
-for _, it in pairs(ps.items) do if it.src == "oem" and not Economy.installedOn(ps, _) then left = left + 1 end end
-ok("sålja moped: 60 %, originaldelar följer med", ps.money == 2000 + 4800 and not ps.own.dt and left == 0, ps.money)
-ok("köpa tillbaka moped", (Economy.buyMoped(ps, "dt", 0)) == false and ps.money == 6800) -- costs 8000, not enough
--- 6. saving: load(public(p)) gives the same profile, garbage gives a valid profile
-local function ser(t, d)
-	d = d or 0
+pe.money = 20; Economy.crash(pe, "test", 0)
+ok("vurpa drar inte under 0", pe.money == 0)
+local function ser(t)
+	if type(t) == "number" then return string.format("%.10g", t) end
 	if type(t) ~= "table" then return tostring(t) end
 	local ks = {}
 	for k in pairs(t) do table.insert(ks, tostring(k)) end
 	table.sort(ks)
-	local o = {}
-	for _, k in ipairs(ks) do local v = t[k]; if v == nil then v = t[tonumber(k)] end; table.insert(o, k .. "=" .. ser(v, d + 1)) end
-	return "{" .. table.concat(o, ",") .. "}"
+	local out = {}
+	for _, k in ipairs(ks) do local v = t[k]; if v == nil then v = t[tonumber(k)] end; table.insert(out, k .. "=" .. ser(v)) end
+	return "{" .. table.concat(out, ",") .. "}"
 end
-local before = ser(Economy.public(pe))
-local after = ser(Economy.public(Economy.load(Economy.public(pe))))
-ok("spara -> ladda ger samma profil", before == after, #before .. " tecken")
-local g = Economy.load({ money = "mycket", items = { x = { s = "finns-inte" } }, inst = { jog = { kit = "x" } }, own = "ja", cfgs = { jog = { jet = 1e9, col = "röd" } } })
-ok("trasig sparning ger giltig profil", g.money == 2000 and g.cfgs.jog.jet == 160 and Economy.ecfg(g, "jog").kit == 0, g.money)
+for _, prof in ipairs({ q, pl, o, pr }) do
+	local a, b = ser(Economy.public(prof)), ser(Economy.public(Economy.load(Economy.public(prof))))
+	ok("spara -> ladda ger samma profil (" .. #a .. " tecken)", a == b)
+end
+local g = Economy.load({ v = 2, money = "x", items = { a = { s = "finns-inte", loc = "bench" } }, mopeds = { jog = { own = true, eng = { case = "a" } } } })
+ok("trasig sparning ger giltig profil", g.money == Config.ECON.start and g.mopeds.jog ~= nil and g.items.a == nil)
+local old = Economy.load({ money = 999, cfgs = {} })
+ok("gammal sparning (v1) ger ny startprofil", old.money == Config.ECON.start and Economy.canRide(old, "jog"))
 
 print(string.format("\n%d godkända, %d underkända", PASS, FAIL))

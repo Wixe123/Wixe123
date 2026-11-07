@@ -23,7 +23,7 @@ function Engine.calc(c)
 	return {
 		ex = ex, portPk = portPk, pk = pk, w = e.w, match = match, m = m, fuelF = fuelF,
 		resp = fuelF * (0.55 + 0.45 * match) * (0.7 + 0.3 * restr), restr = restr, over = math.max(0, cap / need - 1.6),
-		tmax = 4.2 * D * k.q * e.g * (0.75 + 0.25 * match),
+		tmax = 4.2 * D * k.q * e.g * (0.75 + 0.25 * match) * (c.tmf or 1), -- tmf: crankshaft, reed valve and porting quality
 		heat = 1 + math.max(0, 1 - m) * 2.2 + math.max(0, ex - 185) * 0.03 + (1 - match) * 0.3 + math.max(0, m - 1.25) * 0.3,
 		lim = math.min(c.icap or 1e9, math.max(9500, pk * 1.2 + 500)), -- ignition rev limit
 		cond = 1,
