@@ -20,7 +20,7 @@ local R = RideSim.new(function(kind, ...)
 end)
 R.whValue = RideSim.whValue
 CS.ride = R
-CS.changed.Event:Connect(function() if CS.profile then RideSim.setProfile(R, CS.profile) end end)
+CS.changed.Event:Connect(function() local p = CS.profile; if p and p.mopeds[p.cur] then RideSim.setProfile(R, p) end end)
 
 local function myMoped()
 	for _, m in ipairs(workspace:GetChildren()) do
@@ -36,7 +36,7 @@ end
 local K = {}
 local function key(k) return K[k] == true end
 UIS.InputBegan:Connect(function(io, gp)
-	if gp or io.UserInputType ~= Enum.UserInputType.Keyboard then return end
+	if gp or io.UserInputType ~= Enum.UserInputType.Keyboard or CS.mode then return end
 	local k = io.KeyCode.Name
 	K[k] = true
 	if not R.mop then return end
@@ -47,7 +47,7 @@ UIS.InputBegan:Connect(function(io, gp)
 	elseif k == "R" then
 		R.v, R.crash, R.wh, R.pitch, R.pw, R.lean = 0, nil, nil, 0, 0, 0
 		Report:FireServer("dirty")
-		task.spawn(function() Api:InvokeServer("spawn") end)
+		task.spawn(function() Api:InvokeServer("home") end) -- the moped back to the garage
 	end
 end)
 UIS.InputEnded:Connect(function(io) K[io.KeyCode.Name] = false end)

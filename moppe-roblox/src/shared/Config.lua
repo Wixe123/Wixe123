@@ -31,6 +31,10 @@ for _, m in ipairs(Config.MOPEDS) do Config.BY_ID[m.id] = m end
 
 Config.FAM = { ["V-AC"] = "Vertikal luftkyld skotermotor", ["H-LC"] = "Horisontell vätskekyld skotermotor", ["G-AC"] = "Växlad luftkyld motor" }
 
+-- player garages (metres): 6 plots in a row along an industrial street, doors towards -Z
+Config.PLOTS = {}
+for i = 1, 6 do Config.PLOTS[i] = { x = (i - 3.5) * 32, z = 0 } end
+Config.STREET_Z = -16 -- the street in front of the garages
 Config.PAINT_DRY = 20 -- seconds before freshly painted parts can be fitted
 Config.STUD = 0.28 -- meter per stud (Roblox character ≈ 5 studs ≈ 1.4–1.8 m)
 Config.AMB = 15 -- outside temperature, °C (assumed)

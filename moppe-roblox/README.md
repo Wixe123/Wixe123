@@ -1,86 +1,83 @@
-# Moppe Garage för Roblox
+# Moppe Mekaniker (Roblox)
 
-En Roblox-version av webbspelet i `../moppe/`. Samma motormodell, temperatur, ekonomi, delar och stegringsfysik, omskrivet i Luau.
+Ett mopedmekanikerspel i Roblox. Du har ett eget garage, beställer delar på datorn, väntar på leveransen, packar upp, bygger motorn själv genom att dra delarna på motorblocket, portar cylindern med din egen hand och lackerar kåporna i lackboxen. Sedan kör du ut och testar.
 
-## Kom igång (utan några verktyg)
+Motorns fysik (effekt, CVT/växlar, temperatur, stegring) är samma kod som webbspelet i `../moppe/`.
 
-1. Öppna **Roblox Studio** och logga in.
-2. Arkiv → Öppna från fil → välj `Moppe.rbxlx` i den här mappen.
-3. Tryck **Play**. Världen (garage, väg, bana, hus, träd) byggs när spelet startar.
-4. Klicka **Åk ut** i panelen till höger.
+## Kom igång
 
-### Sparning
+1. Öppna `Moppe.rbxlx` i **Roblox Studio** och tryck **Play**.
+2. För att spara i Studio: Game Settings → Security → **Enable Studio Access to API Services**.
+3. För snyggast ljus: välj Lighting och sätt **Technology = Future** (går inte att sätta från ett skript).
 
-Pengar och delar sparas med Roblox DataStore. I Studio behöver du slå på det:
-Game Settings → Security → **Enable Studio Access to API Services**. Utan det fungerar spelet men inget sparas (det står i spelet).
-Publicera spelet (Arkiv → Publish to Roblox) för att spara på riktigt.
+Du hamnar i ditt eget garage, och ditt namn står på skylten. Upp till 6 spelare får var sitt garage längs industrigatan och kan gå in och titta på varandras byggen.
 
-### Snyggare ljus (rekommenderas)
+## Så spelar du
 
-Välj Lighting i Explorer och sätt **Technology = Future**. Det kan inte sättas från ett skript.
-
-## Kontroller
-
-| Tangent | Gör |
+| Var | Vad |
 |---|---|
-| W / ↑ | Gas |
-| S / ↓ | Broms |
-| A / D | Styr |
-| Shift | Luta bakåt och rycka (stegring). Balansera med gas och broms |
-| K | Starta motorn (startar själv när du sätter dig) |
-| X | Stäng av motorn |
-| Q / E | Växla (DT 50) |
-| R | Tillbaka till garaget |
-| G | Visa/dölj panelen |
-| B | Butiken |
-| Mellanslag | Kliv av mopeden (Roblox standard) |
-
-Bromsen ligger bara på S, eftersom Mellanslag är Robloxs "hoppa av" och inte går att använda som broms.
+| Delar | Klicka för att plocka upp, och klicka på bänken, hyllan eller lackboxen för att lägga ner. Delen sitter i handen medan du bär den. |
+| Datorn | Moppelagret.se: sök, kategorier, produktbilder, lagerstatus, kundvagn och mina ordrar med nedräkning. |
+| Leverans | En låda dyker upp utanför garageporten när tiden är ute: 1 del ≈ 1 min, 3–6 delar ≈ 3–5 min, fler ≈ 10 min, och beställningsvaror +2 min. Klicka på lådan för att öppna den. |
+| Motorstativet | Motorläge: dra delar från brickan till motorn. Grön markering betyder att delen passar, röd säger vad som måste sitta först. Delen glider på plats och handen skruvar fast den. Högerklick tar bort en del. |
+| Mopeden | Klicka på en del eller kåpa för att få **Demontera / Lackera / Byt ut / Inspektera**. Du bär en del och klickar på mopeden för att montera den. "Lyft ur motorn" flyttar motorn till stativet. |
+| Portningsbänken | Lägg en cylinder där. Förstapersonsvy med handen och en rak slipmaskin. Slipa de lysande zonerna jämnt. Det finns ett träningsläge. |
+| Lackboxen | Lägg en kåpa där. Välj färg (bibliotek, RGB eller HEX) och lacktyp, och spraya med sprutpistolen. Lacken torkar i 20 s. |
+| M | Min moppe: status och vad som saknas, munstycke, reparation, **Kör ut**, designer, köp och sälj mopeder. |
+| Styling-läget | Stor 3D-vy av mopeden som går att rotera 360° och zooma, med listan över kåporna och designerna. |
+| Kör | W gas · S broms · A/D styr · Shift stegring · K starta · Q/E växla (DT) · R tillbaka till garaget · Mellanslag kliv av |
 
 ## Vad som finns
 
-- Tre mopeder byggda av delar: Jogga 50, Aerox 50 och Enduro DT 50. Strålkastaren lyser på riktigt, det kommer avgasrök efter gasen och hjulen snurrar.
+- **Motorbygge:**
+  - 33 sorters motordelar, var och en med egen 3D-modell och egen fästpunkt.
+  - Monteringsordningen gäller åt båda hållen: vevhus → lager → vevaxel → packboxar → nållager → kolv → kolvbult och ringar → fotpackning → cylinder → topplock → tändstift. Insug, tändning och kraftöverföring har egna kedjor.
+  - Kolven måste passa cylindern (50/70 cc).
+  - Motorn går bara att montera i mopeden när den är komplett.
+- **Mopeden:**
+  - Ram, gaffel, hjul, bromsar, dämpare, styre, sadel, tank, avgas, kylare och motor går att ta av och byta.
+  - Varje kåpa är en egen del med egen färg, och det finns 6–15 kåpor per modell.
+  - Där en kåpa saknas syns skruvar och fästpunkter.
+  - Mopeden går bara att köra när allt som behövs sitter på.
+- **Portning:** Kvaliteten räknas på jämnhet, precision och överportning. Bra arbete ger upp till cirka +10 % vridmoment och högre avgastiming, slarvigt arbete ger sämre effekt. Proffsslipmaskinen ger stadigare hand.
+- **Lack:**
+  - Färgbiblioteket har Gloss Black, Midnight Blue, Racing Red, Pearl White, Nardo Grey, Candy Purple, Neon Green, Chrome Silver, Metallic Gold med flera.
+  - Lacktyperna är blank, matt, metallic, pärlemor och krom.
+  - Kvaliteten räknas på täckning, jämnhet och rinningar.
+  - Designer sparas med namn och kan läggas på igen.
+- **Ekonomi:** Startkapital 4 000 kr. Pengar kommer från körning, ren körning och stegringar, och går till reparationer, delar, verktyg och mopeder. Allt kontrolleras på servern.
 - **Världen:**
-  - Roblox Terrain med gräs, kullar och en sjö med riktigt vatten.
-  - Ett stort garage på 24 × 16 m och 5 m i takhöjd, med tegelväggar, stålbalkar, hängande lampor, rullport, fönster, moppelyft, arbetsbänk, verktygsvagn, hyllor, däck, kompressor, oljefat och ett kontorshörn.
-  - Väg med trottoarkant, trottoar och gatlampor, en rundbana med röd-vita kantstenar och svenska hus med skorsten, staket och brevlåda.
-- Motormodell, CVT/växlar, temperatur med överhettning och kolvskär, stegring med momentbalans och vurpor. Allt är samma kod som webben, och testat mot den (se nedan).
-- Ekonomi: 5 kr per 100 m, 40 kr per 2 km ren körning, stegringsbonus (max 400 kr/min), reparationer, köpa och sälja delar och mopeder.
-- Butik med 3D-förhandsvisning av varje del och beräknad hk-skillnad för din moped. Förråd, montering och trimning (munstycke, porttiming, rullvikt), samt lack och startnummer.
+  - Sex garage (arbetsbänk, motorstativ, portningsbänk, lackbox, hyllor och dator) längs en industrigata.
+  - Dragstrip, testbana, industriområde med lager och containrar.
+  - Landsväg med åkrar och lada, parkering, bensinmack, svenska hus, granar och björkar, och en sjö.
 
-## Fusk och säkerhet
+## Avsiktliga skillnader mot önskemålen
 
-- **Pengar:** Servern bestämmer alltid över pengarna.
-- **Körsträcka:** Servern mäter den själv från mopedens position, högst 40 m/s och bara när du sitter på mopeden med motorn igång.
-- **Köp, montering och trimning:** Servern kontrollerar allt (pris, att delen passar, intervall).
-- **Stegringar:** Servern räknar ut belöningen själv och kollar att den faktiskt såg mopeden röra sig under stegringen.
-- **Svagheter:** Själva stegringsvinkeln och motorskadan räknas på spelarens dator, eftersom det är den som styr mopedens fysik. En fuskare kan alltså ljuga om en stegring (men inte om mer än 400 kr/min) eller dölja motorskador.
+- **Inga riktiga märken:** Yamaha, Stage6, Malossi, Polini, Yasuni, Doppler och andra riktiga varumärken och logotyper kan få spelet borttaget från Roblox. Därför finns påhittade märken (Fartek, Nordtrim, Vippa, Bruksmek, Kylstad, Snabbo, Origo). Butiken heter Moppelagret.se och liknar inte en riktig butik.
+- **3 modeller i stället för 8:** Jogga 50, Aerox 50 och Enduro DT 50. Kåpsystemet är gjort så att en ny modell bara är en lista i `src/shared/Panels.lua` (plus positioner).
+
+## Inte gjort än
+
+- **Dekaler** (placera, flytta, rotera, skala).
+- **Uppdrag:** bygga åt andra, reparera, leverera.
+- **Garageuppgraderingar.**
+- **Motorljud:** Det kräver ljudfiler uppladdade till Roblox.
+- **Riktiga 3D-modeller:** Allt är byggt av Roblox-delar (lådor, cylindrar, kilar). Riktiga modeller måste laddas upp som MeshParts i Studio.
 
 ## Testat och inte testat
 
-**Testat utan Roblox** (`tests/`, kör `npm install` och sedan `npm test` i den mappen):
-
-- Alla 11 skriptfiler parsar och använder inga okända globala namn.
-- Spellogiken (motor, åkning, temperatur, stegring, ekonomi, sparning) har körts i en Lua-motor med 33 tester:
-  - Effekten är samma som webben: 3,4 / 3,9 / 3,9 hk, och race-Jogga 9,9 hk.
-  - Accelerationen och toppfarten är samma som webben, till exempel Jogga 0–30 km/h på 4,0 s och topp 58 km/h.
-  - Temperaturen är samma som webben: Jogga cirka 176°C efter 10 minuter fullgas, och motorn svalnar när den är avstängd.
-  - Köp, montering, sälj, reparation, taket för stegringsbonus och avdrag vid vurpa fungerar.
-  - Spara och ladda ger samma profil, och en trasig sparning ger en giltig profil.
-
-**Inte testat:** Ingenting har körts i Roblox Studio.
-- **Det kan fortfarande finnas fel** i hur världen, mopederna, gränssnittet och fysiken ser ut och beter sig i Roblox.
-- **Mest osäkert är körkänslan.** Mopeden styrs med en LinearVelocity i markplanet och en AlignOrientation för riktning, lutning och stegring.
-
-## Kända begränsningar
-
-- **Mopedernas form:** De är byggda av vanliga Roblox-delar. Aerox-modellen från webben (OBJ) går inte att lägga in från ett skript. Den måste laddas upp som MeshPart i Studio.
-- **Ingen daglig utmaning** och ingen import av egen katalog. Det finns i webbversionen men inte här än.
-- **Demobutik:** Tillverkare och priser är påhittade och betalas med spelpengar.
+- **Spellogik, testad utan Roblox** (`tests/`, kör `npm install` och sedan `npm test`). 47 tester körs i en Lua-motor. De visar att:
+  - en originalmoped är komplett och har samma effekt och acceleration som webbspelet;
+  - en motor kan tas isär helt (30 delar) och byggas ihop igen, och att fel ordning och fel kolv nekas;
+  - leveranstider och lådor, portnings- och lackkvalitet, designer, ekonomin samt spara och ladda fungerar.
+- **Syntax och namn:** Alla skriptfiler är kontrollerade för syntax och okända globala namn.
+- **Ingenting har körts i Roblox Studio.** Det gäller interaktionen, kamerorna, handen, gränssnittet, modellerna och fysiken. Det finns med stor sannolikhet saker att justera, framför allt positioner, storlekar och kamerans vinklar.
 
 ## Utveckla vidare
 
-- Källkoden ligger i `src/`: `shared` (moduler), `server` och `client`.
-- Med Rojo: `rojo serve` i den här mappen och Rojo-pluginet i Studio.
-- Utan Rojo: kör `python3 tools/build_place.py` för att bygga om `Moppe.rbxlx`.
-- **Hålla i synk:** Logiken som även finns i webbspelet (motor, ekonomi, åkning) ligger i `src/shared/Engine.lua`, `Economy.lua` och `RideSim.lua`. Ändra båda versionerna samtidigt om du ändrar siffror.
+- `src/shared`: logik och modeller.
+  - Testbara moduler: `Config`, `Catalog`, `Panels`, `Assembly`, `Engine`, `Economy`, `RideSim`, `Porting`, `Paint`, `Delivery`.
+  - 3D-modeller: `Builder` och `GarageBuilder`.
+- `src/server`: `Main` (profiler, garage, API, validering) och `World` (världen).
+- `src/client`: `Interact`, `Shop`, `Porting`, `Paint`, `Ride` och `UI`.
+- Bygg om `Moppe.rbxlx` med `python3 tools/build_place.py`, eller använd Rojo (`default.project.json`).
