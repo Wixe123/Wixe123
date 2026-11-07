@@ -125,13 +125,43 @@ function E.raycast(origin, dir, params, root)
 		local t, n = E.rayPart(p, origin, unit)
 		if t and t <= len and (not best or t < best) then best, bp, bn = t, p, n end
 	end
-	local function walk(x)
-		for _, c in ipairs(x.children) do
-			if E.isA(c.cls, "BasePart") and c.cls ~= "Terrain" then test(c) end
-			if #c.children > 0 then walk(c) end
+	if root then
+		local function walk(x)
+			for _, c in ipairs(x.children) do
+				if E.isA(c.cls, "BasePart") and c.cls ~= "Terrain" then test(c) end
+				if #c.children > 0 then walk(c) end
+			end
+		end
+		walk(root)
+	else
+		-- flat list of workspace parts, rebuilt when the tree changes; cheap sphere test first
+		if E.partsDirty or not E.partList then
+			local list = {}
+			local function walk(x)
+				for _, c in ipairs(x.children) do
+					if E.isA(c.cls, "BasePart") and c.cls ~= "Terrain" then list[#list + 1] = c end
+					if #c.children > 0 then walk(c) end
+				end
+			end
+			walk(services.Workspace)
+			E.partList, E.partsDirty = list, false
+		end
+		local ox, oy, oz = origin.X, origin.Y, origin.Z
+		local ux, uy, uz = unit.X, unit.Y, unit.Z
+		for _, p in ipairs(E.partList) do
+			if p.parent then
+				local c, s = p.cframe, p.props.Size
+				local rx, ry, rz = c.px - ox, c.py - oy, c.pz - oz
+				local t = rx * ux + ry * uy + rz * uz
+				local rad2 = (s.x * s.x + s.y * s.y + s.z * s.z) / 4
+				if t > -1e9 and t < len + 1e4 then
+					local tt = math.max(0, math.min(len, t))
+					local dx, dy, dz = rx - ux * tt, ry - uy * tt, rz - uz * tt
+					if dx * dx + dy * dy + dz * dz <= rad2 then test(p) end
+				end
+			end
 		end
 	end
-	walk(root or services.Workspace)
 	-- terrain boxes
 	if E.terrainOps then
 		for _, op in ipairs(E.terrainOps) do

@@ -1,6 +1,8 @@
 // Browser side of render.js: draws an emulator snapshot with three.js and HTML.
 import * as THREE from 'three';
+import { RoomEnvironment } from '/three/examples/jsm/environments/RoomEnvironment.js';
 window.renderSnap = async function(S){
+  const FONT={GothamBold:'700',GothamBlack:'900',GothamMedium:'500',GothamSemibold:'600',SourceSansBold:'700',SourceSansSemibold:'600',ArialBold:'700',FredokaOne:'700',LuckiestGuy:'900',Bangers:'900',Oswald:'600',Highway:'600',SciFi:'600',Arcade:'700'};
   const W=S.view.w,H=S.view.h,INSET=S.view.inset;
   const canvas=document.getElementById('c');
   const R=new THREE.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffer:true});
@@ -13,7 +15,7 @@ window.renderSnap = async function(S){
   // ------------------------------------------------ materials
   const PAT={Concrete:1,Asphalt:1,Grass:1,Sand:1,Fabric:1,Slate:1,Granite:1,Pebble:1,Ground:1,LeafyGrass:1,Mud:1,Snow:1,Limestone:1,Pavement:1,Basalt:1,Sandstone:1,Rock:1,Salt:1,Cobblestone:2,Brick:3,Wood:4,WoodPlanks:5,DiamondPlate:6,Metal:7,CorrodedMetal:1,Plaster:1,Carpet:1,Rubber:1,Leather:1,CeramicTiles:8,Marble:1,ClayRoofTiles:8,RoofShingles:8};
   const ROUGH={Plastic:.55,SmoothPlastic:.35,Metal:.38,DiamondPlate:.4,CorrodedMetal:.85,Foil:.15,Glass:.05,Ice:.1,Marble:.3,Granite:.8,Neon:1,Wood:.75,WoodPlanks:.75,Rubber:.9,Leather:.6,Fabric:.95,Carpet:.95};
-  const METAL={Metal:.85,DiamondPlate:.85,CorrodedMetal:.4,Foil:1};
+  const METAL={Metal:.6,DiamondPlate:.6,CorrodedMetal:.3,Foil:.9};
   const matCache=new Map();
   function material(c,m,t,r,parts){
     const key=c.join(',')+m+t+r;
@@ -69,7 +71,8 @@ float tri(vec3 p,float s){vec3 a=abs(vN);return (n3(p.yzx*s)*a.x+n3(p.xzy*s)*a.y
     g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.computeVertexNormals();return g;}
   function geometry(s,z){
     let k=s;let g;
-    if(s==='Ball'||s==='Special:Sphere'){g=geoCache.get('ball')||new THREE.SphereGeometry(.5,24,16);geoCache.set('ball',g);return [g,new THREE.Vector3(Math.min(...z),Math.min(...z),Math.min(...z))]; }
+    if(s==='Special:Sphere'){g=geoCache.get('ball')||new THREE.SphereGeometry(.5,24,16);geoCache.set('ball',g);return [g,new THREE.Vector3(...z)];}
+    if(s==='Ball'){g=geoCache.get('ball')||new THREE.SphereGeometry(.5,24,16);geoCache.set('ball',g);return [g,new THREE.Vector3(Math.min(...z),Math.min(...z),Math.min(...z))]; }
     if(s==='Cylinder'){g=geoCache.get('cyl')||new THREE.CylinderGeometry(.5,.5,1,28).rotateZ(Math.PI/2);geoCache.set('cyl',g);const r=Math.min(z[1],z[2]);return [g,new THREE.Vector3(z[0],r,r)];}
     if(s==='Special:Cylinder'){g=geoCache.get('cyly')||new THREE.CylinderGeometry(.5,.5,1,28);geoCache.set('cyly',g);return [g,new THREE.Vector3(z[0],z[1],z[2])];}
     if(s==='Wedge'){g=geoCache.get('wedge')||wedgeGeo();geoCache.set('wedge',g);return [g,new THREE.Vector3(...z)];}
@@ -90,6 +93,7 @@ float tri(vec3 p,float s){vec3 a=abs(vN);return (n3(p.yzx*s)*a.x+n3(p.xzy*s)*a.y
   }
   // ------------------------------------------------ scene
   const scene=new THREE.Scene();
+  const pm=new THREE.PMREMGenerator(R);scene.environment=pm.fromScene(new RoomEnvironment(),0.04).texture;scene.environmentIntensity=0.55;
   const L=S.lighting;
   const sunDir=new THREE.Vector3(...L.sun).normalize();
   const day=Math.max(0,Math.min(1,(sunDir.y+0.1)*3));
@@ -165,7 +169,6 @@ float tri(vec3 p,float s){vec3 a=abs(vN);return (n3(p.yzx*s)*a.x+n3(p.xzy*s)*a.y
   R.render(scene,cam);
   // ------------------------------------------------ 2D GUI
   function css(c,t){return `rgba(${c[0]},${c[1]},${c[2]},${1-(t??0)})`;}
-  const FONT={GothamBold:'700',GothamBlack:'900',GothamMedium:'500',GothamSemibold:'600',SourceSansBold:'700',SourceSansSemibold:'600',ArialBold:'700',FredokaOne:'700',LuckiestGuy:'900',Bangers:'900',Oswald:'600',Highway:'600',SciFi:'600',Arcade:'700'};
   function weight(e){if(e.fw){return {Thin:100,ExtraLight:200,Light:300,Regular:400,Medium:500,SemiBold:600,Bold:700,ExtraBold:800,Heavy:900}[e.fw]||400;}return FONT[e.font]||'400';}
   function rich(s){return s.replace(/&/g,'&amp;').replace(/<(?!\/?(b|i|u|s|font|br)\b)/g,'&lt;').replace(/<font color="#?([0-9a-fA-F]{6})">/g,'<span style="color:#$1">').replace(/<font color="rgb\((\d+),(\d+),(\d+)\)">/g,'<span style="color:rgb($1,$2,$3)">').replace(/<font[^>]*>/g,'<span>').replace(/<\/font>/g,'</span>').replace(/<br\s*\/?>/g,'\n');}
   function htmlEl(e,root,ox,oy){
@@ -200,7 +203,7 @@ float tri(vec3 p,float s){vec3 a=abs(vN);return (n3(p.yzx*s)*a.x+n3(p.xzy*s)*a.y
     const r=e.corner||0;
     if(e.bgt<1){ctx.fillStyle=css(e.bg,e.bgt);ctx.beginPath();ctx.roundRect?ctx.roundRect(e.x,e.y,e.w,e.h,r):ctx.rect(e.x,e.y,e.w,e.h);ctx.fill();}
     if(e.stroke&&e.stroke[2]<1){ctx.strokeStyle=css(e.stroke[0],e.stroke[2]);ctx.lineWidth=e.stroke[1];ctx.beginPath();ctx.roundRect?ctx.roundRect(e.x,e.y,e.w,e.h,r):ctx.rect(e.x,e.y,e.w,e.h);ctx.stroke();}
-    if(e.text&&e.tt<1){ctx.fillStyle=css(e.tc,e.tt);ctx.font=`${weight(e)} ${e.ts}px Arial`;ctx.textBaseline='middle';
+    if(e.text&&e.tt<1){ctx.fillStyle=css(e.tc,e.tt);let fs=e.ts;ctx.font=`${weight(e)} ${fs}px Arial`;const longest=String(e.text).replace(/<[^>]+>/g,'').split('\n').reduce((a,b)=>b.length>a.length?b:a,'');while(fs>6&&ctx.measureText(longest).width>e.w-4){fs-=2;ctx.font=`${weight(e)} ${fs}px Arial`;}e={...e,ts:fs};ctx.textBaseline='middle';
       const xa=e.xa||'Center';ctx.textAlign=xa==='Left'?'left':(xa==='Right'?'right':'center');
       const tx=xa==='Left'?e.x+2:(xa==='Right'?e.x+e.w-2:e.x+e.w/2);
       const lines=String(e.text).replace(/<[^>]+>/g,'').split('\n');const lh=e.ts*1.1;let y0=e.y+e.h/2-(lines.length-1)*lh/2;

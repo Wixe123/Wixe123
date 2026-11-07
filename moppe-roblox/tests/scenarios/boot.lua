@@ -1,0 +1,10 @@
+E.startServer()
+E.run(1)
+E.addPlayer("Love", 101)
+E.run(4)
+E.check("character exists", E.player.Character ~= nil)
+local plot = E.services.Workspace.Garage.Plot1
+E.check("plot 1 owned", plot:GetAttribute("OwnerId") == 101)
+E.check("moped built", plot.Dynamic:FindFirstChild("Moped") ~= nil)
+E.lookFrom(E.T.Vector3.new(-140, 120, -260), E.T.Vector3.new(0, 0, -100), 60); E.shot("world_air")
+E.lookFrom(E.T.Vector3.new(-160, 14, -60), E.T.Vector3.new(-140, 3, -10), 60); E.shot("street")

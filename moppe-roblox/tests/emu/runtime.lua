@@ -7,6 +7,8 @@ local M, G, S, D = E.METHODS, E.GETTERS, E.SETTERS, E.DEFAULTS
 local Ins = M.Instance
 local function cls(t, c) t[c] = t[c] or {}; return t[c] end
 
+local prevRe = E.onReparent
+E.onReparent = function(o, old, p) E.partsDirty = true; if prevRe then prevRe(o, old, p) end end
 ---------------------------------------------------------------- DataModel
 local game = E.new("DataModel", nil, true)
 game.props.Name = "Game"
@@ -373,6 +375,7 @@ function E.addPlayer(name, userId)
 	local ps = E.new("PlayerScripts", nil, true); ps.props.Name = "PlayerScripts"
 	E.setParent(pg, plr); E.setParent(bp, plr); E.setParent(ps, plr)
 	E.setParent(plr, E.services.Players)
+	E.fireEv(E.services.Players, "PlayerAdded", plr)
 	E.delay(0.05, function()
 		for _, c in ipairs(E.services.StarterGui.children) do local cc = Ins.Clone(c); if cc then E.setParent(cc, pg) end end
 		for _, c in ipairs(sps.children) do
@@ -447,7 +450,11 @@ function E.physicsStep(dt)
 			end
 			-- touching a seat sits the character (Roblox behaviour)
 			if E.now > (E.jumpCooldown or 0) then
-				for _, d in ipairs(Ins.GetDescendants(ws)) do
+				if not E.seatCache or E.now - E.seatCacheT > 1 then
+					E.seatCache, E.seatCacheT = {}, E.now
+					for _, d in ipairs(Ins.GetDescendants(ws)) do if d.cls == "Seat" or d.cls == "VehicleSeat" then E.seatCache[#E.seatCache + 1] = d end end
+				end
+				for _, d in ipairs(E.seatCache) do
 					if (d.cls == "Seat" or d.cls == "VehicleSeat") and not d.props.Disabled and not d.occupant then
 						local l = d.cframe:PointToObjectSpace(root.cframe.Position - V3.new(0, 2, 0))
 						local s = d.props.Size
