@@ -4,10 +4,10 @@ local Porting = {}
 
 Porting.COLS, Porting.ROWS = 6, 3
 Porting.ZONES = {
-	{ id = "avgas", n = "Porta avgasporten", face = "front", w = 0.62, h = 0.36 },
-	{ id = "overV", n = "Överströmning vänster", face = "left", w = 0.4, h = 0.26 },
-	{ id = "overH", n = "Överströmning höger", face = "right", w = 0.4, h = 0.26 },
-	{ id = "insug", n = "Porta insuget", face = "back", w = 0.5, h = 0.3 },
+	{ id = "avgas", n = "Avgasport", face = "front", w = 0.62, h = 0.36 },
+	{ id = "overV", n = "Sidport vänster", face = "left", w = 0.4, h = 0.26 },
+	{ id = "overH", n = "Sidport höger", face = "right", w = 0.4, h = 0.26 },
+	{ id = "insug", n = "Insugsport", face = "back", w = 0.5, h = 0.3 },
 }
 Porting.BY_ID = {}
 for _, z in ipairs(Porting.ZONES) do Porting.BY_ID[z.id] = z end

@@ -49,33 +49,72 @@ scene.Name = "PortningLokal"
 local cells = {} -- zoneId -> { part per cell }
 local block, hand, tool, sparks
 local function baseCF() return S.origin() * GarageBuilder.PORT * CFrame.new(0, 1.9, 0) end
+local PORT_OUT = SIZE / 2 + 0.42 -- the port flanges stand out past the cooling fins
+-- the cylinder turns in the vise so the port you work on faces you (P.ang); the camera stays put
+P.ang, P.targetAng = 0, 0
+local rig = {} -- cylinder parts and their position relative to the unturned cylinder
+local function turnedCF() return baseCF() * CFrame.Angles(0, P.ang, 0) end
 local function faceCF(face)
-	-- outward face frame: LookVector points out of the face
-	return baseCF() * CFrame.Angles(0, math.rad(FACES[face]), 0) * CFrame.new(0, 0, -SIZE / 2)
+	-- outward face frame on the port flange: LookVector points out of the cylinder
+	return turnedCF() * CFrame.Angles(0, math.rad(FACES[face]), 0) * CFrame.new(0, -0.15, -PORT_OUT)
 end
+local outlines = {} -- zoneId -> neon bars around the port
 local function buildScene(sku)
 	scene:ClearAllChildren()
 	cells = {}
+	outlines = {}
+	P.ang, P.targetAng = 0, 0
 	local mk = Models.maker(scene)
 	local part = Parts.get(sku or "cylinder_origo50")
 	local lvl = part and part.stats.lvl or 0
 	local col = (lvl == 0 and Color3.fromRGB(128, 131, 137)) or (lvl == 1 and Color3.fromRGB(70, 72, 78)) or Color3.fromRGB(176, 180, 186)
-	block = mk.box("Cylinderblock", Vector3.new(SIZE, SIZE * 0.9, SIZE), baseCF(), col, Enum.Material.Metal)
-	for i = 0, 3 do mk.box("Fläns", Vector3.new(SIZE + 0.9, 0.12, SIZE + 0.9), baseCF() * CFrame.new(0, SIZE * 0.45 + 0.1 + i * 0.28, 0), col, Enum.Material.Metal) end
-	mk.cyl("Lopp", 0.06, SIZE * 0.34, baseCF() * CFrame.new(0, SIZE * 0.45 + 0.02, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(60, 60, 64), Enum.Material.Metal)
+	local M = Enum.Material
+	local b = baseCF()
+	-- the cylinder: core, square cooling fins, top deck with the bore and stud holes, base flange
+	block = mk.box("Cylinderkropp", Vector3.new(SIZE * 0.86, SIZE * 0.95, SIZE * 0.86), b, col, M.Metal)
+	for i = 0, 7 do
+		mk.box("Kylfläns", Vector3.new(SIZE + 0.55, 0.09, SIZE + 0.55), b * CFrame.new(0, -1.2 + i * 0.3, 0), col, M.Metal)
+	end
+	local topY = SIZE * 0.475
+	mk.box("Däck", Vector3.new(SIZE + 0.25, 0.26, SIZE + 0.25), b * CFrame.new(0, topY, 0), col, M.Metal)
+	mk.cyl("Lopp", 0.05, 0.9, b * CFrame.new(0, topY + 0.12, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(20, 20, 22), M.SmoothPlastic)
+	mk.cyl("Loppkant", 0.04, 0.98, b * CFrame.new(0, topY + 0.11, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(205, 210, 216), M.Metal)
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			mk.cyl("Pinnbultshål", 0.06, 0.13, b * CFrame.new(sx * 1.25, topY + 0.12, sz * 1.25) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(18, 18, 20), M.SmoothPlastic)
+		end
+	end
+	mk.box("Fot", Vector3.new(SIZE + 0.1, 0.2, SIZE + 0.1), b * CFrame.new(0, -SIZE * 0.475, 0), col, M.Metal)
+	-- the ports: a flange through the fins, a dark port opening, the surface you grind and a glowing outline
 	for _, z in ipairs(Porting.ZONES) do
 		local f = faceCF(z.face)
 		local w, h = z.w * SIZE * 1.3, z.h * SIZE * 1.3
-		mk.box("Port", Vector3.new(w + 0.1, h + 0.1, 0.05), f * CFrame.new(0, 0, -0.02), Color3.fromRGB(25, 25, 28), Enum.Material.SmoothPlastic)
+		mk.box("Portfläns", Vector3.new(w + 0.55, h + 0.55, 0.62), f * CFrame.new(0, 0, 0.31), col, M.Metal)
+		mk.box("Portöppning", Vector3.new(w + 0.06, h + 0.06, 0.05), f * CFrame.new(0, 0, -0.005), Color3.fromRGB(16, 16, 18), M.SmoothPlastic)
 		cells[z.id] = {}
 		for row = 1, Porting.ROWS do
 			for c = 1, Porting.COLS do
 				local cw, ch = w / Porting.COLS, h / Porting.ROWS
-				local p = mk.box("Cell", Vector3.new(cw * 0.92, ch * 0.9, 0.04), f * CFrame.new(-w / 2 + (c - 0.5) * cw, h / 2 - (row - 0.5) * ch, -0.06), Color3.fromRGB(70, 170, 255), Enum.Material.Neon)
+				local p = mk.box("Yta", Vector3.new(cw, ch, 0.03), f * CFrame.new(-w / 2 + (c - 0.5) * cw, h / 2 - (row - 0.5) * ch, -0.02), Color3.fromRGB(72, 74, 78), M.Concrete)
 				p.CastShadow = false
+				p:SetAttribute("Depth", 0)
 				cells[z.id][(row - 1) * Porting.COLS + c] = p
 			end
 		end
+		local t = 0.07
+		local bars = {
+			mk.box("Markering", Vector3.new(w + 0.2, t, 0.04), f * CFrame.new(0, h / 2 + 0.07, -0.04), Color3.fromRGB(60, 255, 120), M.Neon),
+			mk.box("Markering", Vector3.new(w + 0.2, t, 0.04), f * CFrame.new(0, -h / 2 - 0.07, -0.04), Color3.fromRGB(60, 255, 120), M.Neon),
+			mk.box("Markering", Vector3.new(t, h + 0.2, 0.04), f * CFrame.new(-w / 2 - 0.07, 0, -0.04), Color3.fromRGB(60, 255, 120), M.Neon),
+			mk.box("Markering", Vector3.new(t, h + 0.2, 0.04), f * CFrame.new(w / 2 + 0.07, 0, -0.04), Color3.fromRGB(60, 255, 120), M.Neon),
+		}
+		for _, bar in ipairs(bars) do bar.CastShadow = false end
+		outlines[z.id] = bars
+	end
+	rig = {}
+	local b0 = baseCF()
+	for _, d in ipairs(scene:GetChildren()) do
+		if d:IsA("BasePart") then rig[#rig + 1] = { d, b0:ToObjectSpace(d.CFrame) } end
 	end
 	-- hand and die grinder: anchored parts moved every frame from stored offsets (no welds, no physics)
 	hand = Models.hand(scene, CFrame.new(), false)
@@ -104,19 +143,27 @@ local function buildScene(sku)
 	sparks.Parent = att
 	scene.Parent = workspace
 end
-local function cellColor(d)
-	if d > Porting.OVER then return Color3.fromRGB(230, 60, 50), Enum.Material.Neon, 0 end
-	if d >= Porting.TARGET then return Color3.fromRGB(205, 210, 216), Enum.Material.Metal, 0 end
-	local glow = Color3.fromRGB(70, 170, 255):Lerp(Color3.fromRGB(150, 155, 162), d)
-	return glow, d > 0.85 and Enum.Material.Metal or Enum.Material.Neon, 0
+-- rough cast metal -> brighter as material comes off -> polished when done -> reddish if too deep
+local function cellLook(d)
+	if d > Porting.OVER then return Color3.fromRGB(196, 92, 70), Enum.Material.Metal end
+	if d >= Porting.TARGET then return Color3.fromRGB(222, 226, 232), Enum.Material.Metal end
+	return Color3.fromRGB(72, 74, 78):Lerp(Color3.fromRGB(176, 180, 186), d), d > 0.4 and Enum.Material.Metal or Enum.Material.Concrete
 end
 local function paintCells()
 	for zid, list in pairs(cells) do
 		local depths = P.state.cells[zid]
 		for i, p in ipairs(list) do
-			local c, m = cellColor(depths[i])
+			local c, m = cellLook(depths[i])
 			p.Color = c
 			p.Material = m
+			p:SetAttribute("Depth", depths[i])
+		end
+	end
+	-- outlines: bright green on the port you work on, faint on the others, off when a port is done
+	for i, z in ipairs(Porting.ZONES) do
+		local done = Porting.zoneProgress(P.state, z.id) >= 0.97
+		for _, bar in ipairs(outlines[z.id] or {}) do
+			bar.Transparency = done and 1 or (i == P.zone and 0 or 0.65)
 		end
 	end
 end
@@ -158,7 +205,14 @@ function P.setZone(i)
 	P.zone = ((i - 1) % #Porting.ZONES) + 1
 	local z = Porting.ZONES[P.zone]
 	local f = faceCF(z.face)
-	S.camTo(f * CFrame.new(0.6, 0.9, -4.6) * CFrame.Angles(0, math.pi, 0) * CFrame.Angles(math.rad(-10), math.rad(-6), 0), 45, 0.35)
+	-- turn the cylinder (shortest way) so this port faces the room; look from slightly above
+	local target = -math.rad(FACES[z.face])
+	while target - P.ang > math.pi do target = target - 2 * math.pi end
+	while target - P.ang < -math.pi do target = target + 2 * math.pi end
+	P.targetAng = target
+	local front = baseCF() * CFrame.new(0, -0.15, -PORT_OUT)
+	S.camTo(CFrame.lookAt(front.Position + Vector3.new(0.7, 2.1, -4.3), front.Position + Vector3.new(0, -0.1, 0)), 48, 0.35)
+	if outlines[z.id] then paintCells() end
 	refreshUI()
 end
 
@@ -259,6 +313,13 @@ end)
 local acc = 0
 RunService.RenderStepped:Connect(function(dt)
 	if S.mode ~= "port" or not P.state or not hand or not hand.Parent then return end
+	-- turn the cylinder towards the chosen port
+	if math.abs(P.targetAng - P.ang) > 1e-3 then
+		P.ang = P.ang + (P.targetAng - P.ang) * math.min(1, dt * 9)
+		if math.abs(P.targetAng - P.ang) < 0.01 then P.ang = P.targetAng end
+		local t = turnedCF()
+		for _, r in ipairs(rig) do r[1].CFrame = t * r[2] end
+	end
 	local z = Porting.ZONES[P.zone]
 	local f = faceCF(z.face)
 	local cam = workspace.CurrentCamera
@@ -275,7 +336,7 @@ RunService.RenderStepped:Connect(function(dt)
 	local wob = f.RightVector * math.sin(tnow * 23) * shake + f.UpVector * math.cos(tnow * 17) * shake
 	local tipPos = hit + wob + n * 0.02
 	-- the grinder points into the face from the camera side (tip at local -0.78 X); the hand holds its body
-	local back = (n * 2.5 + f.RightVector * 1.1 + f.UpVector * 0.9).Unit
+	local back = (n * 1.3 + f.RightVector * 1.6 + f.UpVector * 0.8).Unit
 	local up = f.UpVector - back * f.UpVector:Dot(back)
 	up = up.Unit
 	local toolCF = CFrame.fromMatrix(tipPos + back * 0.78, back, up)

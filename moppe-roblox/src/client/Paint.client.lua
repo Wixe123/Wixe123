@@ -16,6 +16,9 @@ local UI = require(script.Parent:WaitForChild("UIKit"))
 
 local gui = UI.screen("Lackering", 10, plr)
 gui.Enabled = false
+local heat
+local AssetService = game:GetService("AssetService")
+local MeshGen = require(Shared.MeshGen)
 local L = { color = { 200, 22, 30 }, finish = "blank", gloss = 0.7, dist = 1.0, spraying = false, state = nil, t = 0, even = 0 }
 
 ---------------------------------------------------------------- UI
@@ -59,7 +62,20 @@ local distText = UI.text(side, "", UDim2.new(1, 0, 0, 20), UDim2.fromOffset(0, 4
 local buttons = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromOffset(0, 530), BackgroundTransparency = 1, Name = "Knappar" }, side)
 UI.list(buttons, 6, true)
 local picker = UI.panel(gui, UDim2.fromOffset(420, 320), UDim2.fromScale(0.5, 0.5), { anchor = Vector2.new(0.5, 0.5), name = "Välj", visible = false })
+-- coverage map: where the panel still needs paint (grey), is done (colour) or has runs (red)
+local heatPanel = UI.panel(gui, UDim2.fromOffset(236, 170), UDim2.new(0, 12, 1, -12), { anchor = Vector2.new(0, 1), name = "Täckningskarta" })
+UI.text(heatPanel, "Var lacken sitter", UDim2.new(1, -20, 0, 24), UDim2.fromOffset(10, 4), { font = UI.BOLD, ts = 14 })
+local heatGrid = UI.new("Frame", { Size = UDim2.fromOffset(216, 126), Position = UDim2.fromOffset(10, 32), BackgroundTransparency = 1, Name = "Karta" }, heatPanel)
+UI.grid(heatGrid, UDim2.fromOffset(20, 19), UDim2.fromOffset(2, 2))
+heatPanel.Visible = false
+heat = {}
+for i = 1, Paint.COLS * Paint.ROWS do
+	local f = UI.new("Frame", { Size = UDim2.fromOffset(20, 19), BackgroundColor3 = Color3.fromRGB(150, 152, 156), BorderSizePixel = 0, LayoutOrder = i, Name = "R" .. i }, heatGrid)
+	UI.corner(f, 3)
+	heat[i] = f
+end
 
+local paintCells -- defined further down
 local function refreshColor()
 	local c = Color3.fromRGB(L.color[1], L.color[2], L.color[3])
 	preview.BackgroundColor3 = c
@@ -76,7 +92,7 @@ local function refreshColor()
 	for i, f in ipairs(Paint.FINISH) do
 		UI.button(finishes, f.n, UDim2.fromOffset(84, 30), nil, { kind = L.finish == f.id and "primary" or "secondary", ts = 13, order = i, name = f.id }, function() L.finish = f.id; refreshColor() end)
 	end
-	if L.cells then for _, p in pairs(L.cells) do p.Color = c end end
+	if L.state and L.visual then paintCells() end
 end
 for i, e in ipairs(Paint.LIBRARY) do
 	local b = UI.new("TextButton", { Size = UDim2.fromOffset(28, 28), BackgroundColor3 = Color3.fromRGB(e.c[1], e.c[2], e.c[3]), Text = "", LayoutOrder = i, Name = e.n, AutoButtonColor = true }, swatches)
@@ -109,44 +125,66 @@ local function buildScene(id)
 			end
 		end
 	end
-	local model = Models.item(it.sku, nil) -- unpainted (primer)
-	if model.PrimaryPart then model.PrimaryPart:Destroy() end -- the invisible handle must not catch the paint rays
+	-- invisible block version of the panel: decides which parts of the spray grid lie on the panel
+	local model = Models.item(it.sku, nil)
 	model:ScaleTo(2.2)
-	-- turn the panel so its broad side faces the booth opening (+Z)
 	local _, size0 = model:GetBoundingBox()
 	local turn = size0.X < size0.Z and CFrame.Angles(0, math.rad(-90), 0) or CFrame.new()
-	model:PivotTo(boothCF() * turn)
-	for _, d in ipairs(model:GetDescendants()) do if d:IsA("BasePart") then d.Color = Color3.fromRGB(160, 162, 166); d.Material = Enum.Material.SmoothPlastic end end
+	local panelCF = boothCF() * turn
+	model:PivotTo(panelCF)
+	if model.PrimaryPart then model.PrimaryPart:Destroy() end
+	for _, d in ipairs(model:GetDescendants()) do if d:IsA("BasePart") then d.Transparency = 1; d.CanQuery = true end end
 	model.Parent = scene
-	L.panelModel = model
 	local cf, size = model:GetBoundingBox()
 	local w, h, depth = size.X, size.Y, size.Z
 	local worldNormal = Vector3.new(0, 0, 1)
 	frame = CFrame.lookAt(cf.Position + worldNormal * (depth / 2 + 0.06), cf.Position + worldNormal * 5)
 	L.w, L.h = math.max(w, 1), math.max(h, 1)
-	-- coverage cells only where the panel is behind them
 	L.cells = {}
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Include
 	params.FilterDescendantsInstances = { model }
-	local mk = Models.maker(scene)
 	for row = 1, Paint.ROWS do
 		for col = 1, Paint.COLS do
 			local x = -L.w / 2 + (col - 0.5) * L.w / Paint.COLS
 			local y = L.h / 2 - (row - 0.5) * L.h / Paint.ROWS
 			local p0 = frame * Vector3.new(x, y, 0)
-			local hit = workspace:Raycast(p0 + frame.LookVector * 1, -frame.LookVector * (depth + 2), params)
-			if hit then
-				local p = mk.box("Lack", Vector3.new(L.w / Paint.COLS * 1.02, L.h / Paint.ROWS * 1.02, 0.03), CFrame.new(hit.Position + hit.Normal * 0.03) * frame.Rotation, Color3.fromRGB(L.color[1], L.color[2], L.color[3]), Enum.Material.SmoothPlastic)
-				p.Transparency = 1
-				p.CanQuery = false
-				L.cells[(row - 1) * Paint.COLS + col] = p
-			end
+			if workspace:Raycast(p0 + frame.LookVector * 1, -frame.LookVector * (depth + 2), params) then L.cells[(row - 1) * Paint.COLS + col] = true end
 		end
 	end
 	-- cells with no panel behind them count as painted so they do not lower the coverage
 	L.state = Paint.new()
 	for i = 1, Paint.COLS * Paint.ROWS do if not L.cells[i] then L.state.cells[i] = 1 end end
+	-- what you see: the smooth 3D panel (or the blocks if meshes are not available), in grey primer
+	L.visual = {}
+	local part = Parts.get(it.sku)
+	local data = part and MeshGen.panel(part.stats.fits, part.stats.panel)
+	local okMesh = data and pcall(function()
+		local em = AssetService:CreateEditableMesh()
+		local ids = {}
+		for i, v in ipairs(data.verts) do ids[i] = em:AddVertex(v * 2.2) end
+		for _, t in ipairs(data.tris) do em:AddTriangle(ids[t[1]], ids[t[2]], ids[t[3]]) end
+		local mp = AssetService:CreateMeshPartAsync(Content.fromObject(em))
+		mp.Name = "Kåpa"
+		mp.Anchored = true
+		mp.CanQuery = false
+		mp.Size = data.size * 2.2
+		mp.CFrame = panelCF
+		mp.Parent = scene
+		L.visual[1] = mp
+	end)
+	if not okMesh then
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") then
+				local v = d:Clone()
+				v.Transparency = 0
+				v.CanQuery = false
+				v.Parent = scene
+				L.visual[#L.visual + 1] = v
+			end
+		end
+	end
+	local mk = Models.maker(scene)
 	-- gun and hand rig
 	local hand = Models.hand(scene, CFrame.new(), true)
 	L.handRig = {}
@@ -173,15 +211,28 @@ local function buildScene(id)
 	scene.Parent = workspace
 	S.camTo(CFrame.lookAt(frame.Position + frame.LookVector * 4.6 + Vector3.new(0, 0.4, 0), frame.Position), 62, 0.4)
 end
-local function paintCells()
-	for i, p in pairs(L.cells) do
+local PRIMER = Color3.fromRGB(150, 152, 156)
+-- the panel turns from grey primer to the colour as coverage grows; the map in the panel shows where
+paintCells = function()
+	local cov = Paint.coverage(L.state)
+	local r = Paint.result(L.state)
+	local target = Color3.fromRGB(L.color[1], L.color[2], L.color[3])
+	local fin = Paint.FIN[L.finish]
+	local col = PRIMER:Lerp(target, math.clamp(cov * 1.05, 0, 1))
+	if r.runs > 0 then col = col:Lerp(Color3.new(0, 0, 0), math.min(0.3, r.runs * 2)) end
+	for _, v in ipairs(L.visual or {}) do
+		v.Color = col
+		v.Material = cov > 0.3 and Enum.Material[fin.mat] or Enum.Material.SmoothPlastic
+		v.Reflectance = cov > 0.3 and (fin.refl[1] + (fin.refl[2] - fin.refl[1]) * L.gloss) or 0
+	end
+	for i, f in pairs(heat) do
 		local x = L.state.cells[i]
-		p.Transparency = 1 - math.clamp(x, 0, 1) * 0.92
-		p.Color = Color3.fromRGB(L.color[1], L.color[2], L.color[3])
-		if x > 1.8 then p.Color = p.Color:Lerp(Color3.new(0, 0, 0), 0.35) end
-		local fin = Paint.FIN[L.finish]
-		p.Material = Enum.Material[fin.mat]
-		p.Reflectance = fin.refl[1] + (fin.refl[2] - fin.refl[1]) * L.gloss
+		if not L.cells[i] then f.BackgroundTransparency = 1
+		else
+			f.BackgroundTransparency = 0
+			if x > 1.8 then f.BackgroundColor3 = UI.C.red
+			else f.BackgroundColor3 = PRIMER:Lerp(target, math.clamp(x, 0, 1)) end
+		end
 	end
 end
 local function refreshStats()
@@ -217,7 +268,7 @@ local function begin()
 	L.even = inf.even or 0
 	L.t = 0
 	buildScene(inf.item)
-	side.Visible, info.Visible = true, true
+	side.Visible, info.Visible, heatPanel.Visible = true, true, true
 	refreshColor()
 	buildButtons()
 	paintCells()
@@ -246,7 +297,7 @@ end
 local function open()
 	if not S.setMode("paint") then return end
 	gui.Enabled = true
-	side.Visible, info.Visible = false, false
+	side.Visible, info.Visible, heatPanel.Visible = false, false, false
 	S.camTo(S.origin() * GarageBuilder.BOOTH * CFrame.new(0, 2, -9) * CFrame.Angles(math.rad(-8), math.pi, 0), 50, 0.4)
 	local hung
 	for _, it in pairs(S.profile.items) do if it.loc == "lack" then hung = true end end
@@ -257,6 +308,7 @@ local function close()
 	picker.Visible = false
 	L.spraying = false
 	L.cells = nil
+	L.visual = nil
 	for _, q in ipairs(L.hidden or {}) do if q.Parent then q.LocalTransparencyModifier = 0 end end
 	L.hidden = nil
 	scene:ClearAllChildren()

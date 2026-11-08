@@ -72,7 +72,15 @@ for i = 1, Config.MAX_PLAYERS do
 	dyn.Parent = folder
 	plots[i] = { i = i, origin = origin, folder = folder, refs = refs, dyn = dyn, owner = nil }
 	-- station prompts (the client opens the work modes; the server only checks actions)
-	local function prompt(part, action, text, key, obj)
+	local function prompt(part, action, text, key, obj, offset)
+		if offset then
+			-- separate spot on the part so two prompts on one station do not overlap
+			local att = Instance.new("Attachment")
+			att.Name = "Fäste_" .. action
+			att.Position = offset
+			att.Parent = part
+			part = att
+		end
 		local pp = Instance.new("ProximityPrompt")
 		pp.Name = "Prompt_" .. action
 		pp.ActionText = text
@@ -86,8 +94,9 @@ for i = 1, Config.MAX_PLAYERS do
 		return pp
 	end
 	local function find(name) return refs.model:FindFirstChild(name, true) end
-	prompt(find("Lyftbord"), "work", "Arbeta på mopeden", Enum.KeyCode.E, "Mopedlyft")
-	prompt(find("Lyftbord"), "ride", "Kör ut", Enum.KeyCode.F, "Mopedlyft")
+	prompt(find("Lyftbord"), "work", "Arbeta på mopeden", Enum.KeyCode.E, "Mopedlyft", Vector3.new(1.6, 1.2, 1.8))
+	local ridePrompt = prompt(find("Lyftbord"), "ride", "Kör ut", Enum.KeyCode.F, "Mopedlyft", Vector3.new(1.6, 1.2, -3.2))
+	ridePrompt.UIOffset = Vector2.new(0, 70)
 	prompt(find("Motorstativ"), "engine", "Bygg motor", Enum.KeyCode.E, "Motorstativ")
 	prompt(refs.screen, "shop", "Använd datorn", Enum.KeyCode.E, "Dator")
 	prompt(find("Skruvstäd"), "port", "Porta cylinder", Enum.KeyCode.E, "Portningsbänk")

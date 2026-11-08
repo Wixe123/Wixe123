@@ -579,7 +579,9 @@ function Profile.new()
 		orders = {}, nextOrder = 1, designs = {}, jobs = {}, nextJob = 1,
 		stats = { km = 0, built = 0, ported = 0, painted = 0, jobs = 0, earned = 0 },
 	}
-	Profile.giveMoped(p, "citi", { 200, 30, 40 })
+	-- the starter moped is the Sprint (shown with the imported Aerox body when complete)
+	Profile.giveMoped(p, "sprint", { 25, 70, 200 })
+	p.gotSprint = true
 	Profile.addItem(p, "verktyg_hylsor", "verktyg")
 	Profile.addItem(p, "verktyg_slip", "verktyg")
 	Profile.addItem(p, "verktyg_spruta", "verktyg")
@@ -625,7 +627,18 @@ function Profile.load(d)
 			end
 		end
 	end
-	if #p.mopeds == 0 then Profile.giveMoped(p, "citi", { 200, 30, 40 }) end
+	if #p.mopeds == 0 then Profile.giveMoped(p, "sprint", { 25, 70, 200 }) end
+	-- saves from before the Sprint was the starter get one free Sprint, once
+	p.gotSprint = d.gotSprint == true
+	if not p.gotSprint then
+		local has = false
+		for _, m in ipairs(p.mopeds) do if m.model == "sprint" then has = true end end
+		if not has and #p.mopeds < Profile.MAX_MOPEDS then
+			Profile.giveMoped(p, "sprint", { 25, 70, 200 })
+			d.cur = #p.mopeds
+		end
+		p.gotSprint = true
+	end
 	p.cur = math.max(1, math.min(#p.mopeds, math.floor(tonumber(d.cur) or 1)))
 	p.orders = {}
 	if type(d.orders) == "table" then

@@ -2238,10 +2238,10 @@ local Porting = {}
 
 Porting.COLS, Porting.ROWS = 6, 3
 Porting.ZONES = {
-	{ id = "avgas", n = "Porta avgasporten", face = "front", w = 0.62, h = 0.36 },
-	{ id = "overV", n = "Överströmning vänster", face = "left", w = 0.4, h = 0.26 },
-	{ id = "overH", n = "Överströmning höger", face = "right", w = 0.4, h = 0.26 },
-	{ id = "insug", n = "Porta insuget", face = "back", w = 0.5, h = 0.3 },
+	{ id = "avgas", n = "Avgasport", face = "front", w = 0.62, h = 0.36 },
+	{ id = "overV", n = "Sidport vänster", face = "left", w = 0.4, h = 0.26 },
+	{ id = "overH", n = "Sidport höger", face = "right", w = 0.4, h = 0.26 },
+	{ id = "insug", n = "Insugsport", face = "back", w = 0.5, h = 0.3 },
 }
 Porting.BY_ID = {}
 for _, z in ipairs(Porting.ZONES) do Porting.BY_ID[z.id] = z end
@@ -2908,7 +2908,9 @@ function Profile.new()
 		orders = {}, nextOrder = 1, designs = {}, jobs = {}, nextJob = 1,
 		stats = { km = 0, built = 0, ported = 0, painted = 0, jobs = 0, earned = 0 },
 	}
-	Profile.giveMoped(p, "citi", { 200, 30, 40 })
+	-- the starter moped is the Sprint (shown with the imported Aerox body when complete)
+	Profile.giveMoped(p, "sprint", { 25, 70, 200 })
+	p.gotSprint = true
 	Profile.addItem(p, "verktyg_hylsor", "verktyg")
 	Profile.addItem(p, "verktyg_slip", "verktyg")
 	Profile.addItem(p, "verktyg_spruta", "verktyg")
@@ -2954,7 +2956,18 @@ function Profile.load(d)
 			end
 		end
 	end
-	if #p.mopeds == 0 then Profile.giveMoped(p, "citi", { 200, 30, 40 }) end
+	if #p.mopeds == 0 then Profile.giveMoped(p, "sprint", { 25, 70, 200 }) end
+	-- saves from before the Sprint was the starter get one free Sprint, once
+	p.gotSprint = d.gotSprint == true
+	if not p.gotSprint then
+		local has = false
+		for _, m in ipairs(p.mopeds) do if m.model == "sprint" then has = true end end
+		if not has and #p.mopeds < Profile.MAX_MOPEDS then
+			Profile.giveMoped(p, "sprint", { 25, 70, 200 })
+			d.cur = #p.mopeds
+		end
+		p.gotSprint = true
+	end
 	p.cur = math.max(1, math.min(#p.mopeds, math.floor(tonumber(d.cur) or 1)))
 	p.orders = {}
 	if type(d.orders) == "table" then
@@ -3066,7 +3079,15 @@ for i = 1, Config.MAX_PLAYERS do
 	dyn.Parent = folder
 	plots[i] = { i = i, origin = origin, folder = folder, refs = refs, dyn = dyn, owner = nil }
 	-- station prompts (the client opens the work modes; the server only checks actions)
-	local function prompt(part, action, text, key, obj)
+	local function prompt(part, action, text, key, obj, offset)
+		if offset then
+			-- separate spot on the part so two prompts on one station do not overlap
+			local att = Instance.new("Attachment")
+			att.Name = "Fäste_" .. action
+			att.Position = offset
+			att.Parent = part
+			part = att
+		end
 		local pp = Instance.new("ProximityPrompt")
 		pp.Name = "Prompt_" .. action
 		pp.ActionText = text
@@ -3080,8 +3101,9 @@ for i = 1, Config.MAX_PLAYERS do
 		return pp
 	end
 	local function find(name) return refs.model:FindFirstChild(name, true) end
-	prompt(find("Lyftbord"), "work", "Arbeta på mopeden", Enum.KeyCode.E, "Mopedlyft")
-	prompt(find("Lyftbord"), "ride", "Kör ut", Enum.KeyCode.F, "Mopedlyft")
+	prompt(find("Lyftbord"), "work", "Arbeta på mopeden", Enum.KeyCode.E, "Mopedlyft", Vector3.new(1.6, 1.2, 1.8))
+	local ridePrompt = prompt(find("Lyftbord"), "ride", "Kör ut", Enum.KeyCode.F, "Mopedlyft", Vector3.new(1.6, 1.2, -3.2))
+	ridePrompt.UIOffset = Vector2.new(0, 70)
 	prompt(find("Motorstativ"), "engine", "Bygg motor", Enum.KeyCode.E, "Motorstativ")
 	prompt(refs.screen, "shop", "Använd datorn", Enum.KeyCode.E, "Dator")
 	prompt(find("Skruvstäd"), "port", "Porta cylinder", Enum.KeyCode.E, "Portningsbänk")
@@ -5249,6 +5271,9 @@ local UI = require(script.Parent:WaitForChild("UIKit"))
 
 local gui = UI.screen("Lackering", 10, plr)
 gui.Enabled = false
+local heat
+local AssetService = game:GetService("AssetService")
+local MeshGen = require(Shared.MeshGen)
 local L = { color = { 200, 22, 30 }, finish = "blank", gloss = 0.7, dist = 1.0, spraying = false, state = nil, t = 0, even = 0 }
 
 ---------------------------------------------------------------- UI
@@ -5292,7 +5317,20 @@ local distText = UI.text(side, "", UDim2.new(1, 0, 0, 20), UDim2.fromOffset(0, 4
 local buttons = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromOffset(0, 530), BackgroundTransparency = 1, Name = "Knappar" }, side)
 UI.list(buttons, 6, true)
 local picker = UI.panel(gui, UDim2.fromOffset(420, 320), UDim2.fromScale(0.5, 0.5), { anchor = Vector2.new(0.5, 0.5), name = "Välj", visible = false })
+-- coverage map: where the panel still needs paint (grey), is done (colour) or has runs (red)
+local heatPanel = UI.panel(gui, UDim2.fromOffset(236, 170), UDim2.new(0, 12, 1, -12), { anchor = Vector2.new(0, 1), name = "Täckningskarta" })
+UI.text(heatPanel, "Var lacken sitter", UDim2.new(1, -20, 0, 24), UDim2.fromOffset(10, 4), { font = UI.BOLD, ts = 14 })
+local heatGrid = UI.new("Frame", { Size = UDim2.fromOffset(216, 126), Position = UDim2.fromOffset(10, 32), BackgroundTransparency = 1, Name = "Karta" }, heatPanel)
+UI.grid(heatGrid, UDim2.fromOffset(20, 19), UDim2.fromOffset(2, 2))
+heatPanel.Visible = false
+heat = {}
+for i = 1, Paint.COLS * Paint.ROWS do
+	local f = UI.new("Frame", { Size = UDim2.fromOffset(20, 19), BackgroundColor3 = Color3.fromRGB(150, 152, 156), BorderSizePixel = 0, LayoutOrder = i, Name = "R" .. i }, heatGrid)
+	UI.corner(f, 3)
+	heat[i] = f
+end
 
+local paintCells -- defined further down
 local function refreshColor()
 	local c = Color3.fromRGB(L.color[1], L.color[2], L.color[3])
 	preview.BackgroundColor3 = c
@@ -5309,7 +5347,7 @@ local function refreshColor()
 	for i, f in ipairs(Paint.FINISH) do
 		UI.button(finishes, f.n, UDim2.fromOffset(84, 30), nil, { kind = L.finish == f.id and "primary" or "secondary", ts = 13, order = i, name = f.id }, function() L.finish = f.id; refreshColor() end)
 	end
-	if L.cells then for _, p in pairs(L.cells) do p.Color = c end end
+	if L.state and L.visual then paintCells() end
 end
 for i, e in ipairs(Paint.LIBRARY) do
 	local b = UI.new("TextButton", { Size = UDim2.fromOffset(28, 28), BackgroundColor3 = Color3.fromRGB(e.c[1], e.c[2], e.c[3]), Text = "", LayoutOrder = i, Name = e.n, AutoButtonColor = true }, swatches)
@@ -5342,44 +5380,66 @@ local function buildScene(id)
 			end
 		end
 	end
-	local model = Models.item(it.sku, nil) -- unpainted (primer)
-	if model.PrimaryPart then model.PrimaryPart:Destroy() end -- the invisible handle must not catch the paint rays
+	-- invisible block version of the panel: decides which parts of the spray grid lie on the panel
+	local model = Models.item(it.sku, nil)
 	model:ScaleTo(2.2)
-	-- turn the panel so its broad side faces the booth opening (+Z)
 	local _, size0 = model:GetBoundingBox()
 	local turn = size0.X < size0.Z and CFrame.Angles(0, math.rad(-90), 0) or CFrame.new()
-	model:PivotTo(boothCF() * turn)
-	for _, d in ipairs(model:GetDescendants()) do if d:IsA("BasePart") then d.Color = Color3.fromRGB(160, 162, 166); d.Material = Enum.Material.SmoothPlastic end end
+	local panelCF = boothCF() * turn
+	model:PivotTo(panelCF)
+	if model.PrimaryPart then model.PrimaryPart:Destroy() end
+	for _, d in ipairs(model:GetDescendants()) do if d:IsA("BasePart") then d.Transparency = 1; d.CanQuery = true end end
 	model.Parent = scene
-	L.panelModel = model
 	local cf, size = model:GetBoundingBox()
 	local w, h, depth = size.X, size.Y, size.Z
 	local worldNormal = Vector3.new(0, 0, 1)
 	frame = CFrame.lookAt(cf.Position + worldNormal * (depth / 2 + 0.06), cf.Position + worldNormal * 5)
 	L.w, L.h = math.max(w, 1), math.max(h, 1)
-	-- coverage cells only where the panel is behind them
 	L.cells = {}
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Include
 	params.FilterDescendantsInstances = { model }
-	local mk = Models.maker(scene)
 	for row = 1, Paint.ROWS do
 		for col = 1, Paint.COLS do
 			local x = -L.w / 2 + (col - 0.5) * L.w / Paint.COLS
 			local y = L.h / 2 - (row - 0.5) * L.h / Paint.ROWS
 			local p0 = frame * Vector3.new(x, y, 0)
-			local hit = workspace:Raycast(p0 + frame.LookVector * 1, -frame.LookVector * (depth + 2), params)
-			if hit then
-				local p = mk.box("Lack", Vector3.new(L.w / Paint.COLS * 1.02, L.h / Paint.ROWS * 1.02, 0.03), CFrame.new(hit.Position + hit.Normal * 0.03) * frame.Rotation, Color3.fromRGB(L.color[1], L.color[2], L.color[3]), Enum.Material.SmoothPlastic)
-				p.Transparency = 1
-				p.CanQuery = false
-				L.cells[(row - 1) * Paint.COLS + col] = p
-			end
+			if workspace:Raycast(p0 + frame.LookVector * 1, -frame.LookVector * (depth + 2), params) then L.cells[(row - 1) * Paint.COLS + col] = true end
 		end
 	end
 	-- cells with no panel behind them count as painted so they do not lower the coverage
 	L.state = Paint.new()
 	for i = 1, Paint.COLS * Paint.ROWS do if not L.cells[i] then L.state.cells[i] = 1 end end
+	-- what you see: the smooth 3D panel (or the blocks if meshes are not available), in grey primer
+	L.visual = {}
+	local part = Parts.get(it.sku)
+	local data = part and MeshGen.panel(part.stats.fits, part.stats.panel)
+	local okMesh = data and pcall(function()
+		local em = AssetService:CreateEditableMesh()
+		local ids = {}
+		for i, v in ipairs(data.verts) do ids[i] = em:AddVertex(v * 2.2) end
+		for _, t in ipairs(data.tris) do em:AddTriangle(ids[t[1]], ids[t[2]], ids[t[3]]) end
+		local mp = AssetService:CreateMeshPartAsync(Content.fromObject(em))
+		mp.Name = "Kåpa"
+		mp.Anchored = true
+		mp.CanQuery = false
+		mp.Size = data.size * 2.2
+		mp.CFrame = panelCF
+		mp.Parent = scene
+		L.visual[1] = mp
+	end)
+	if not okMesh then
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") then
+				local v = d:Clone()
+				v.Transparency = 0
+				v.CanQuery = false
+				v.Parent = scene
+				L.visual[#L.visual + 1] = v
+			end
+		end
+	end
+	local mk = Models.maker(scene)
 	-- gun and hand rig
 	local hand = Models.hand(scene, CFrame.new(), true)
 	L.handRig = {}
@@ -5406,15 +5466,28 @@ local function buildScene(id)
 	scene.Parent = workspace
 	S.camTo(CFrame.lookAt(frame.Position + frame.LookVector * 4.6 + Vector3.new(0, 0.4, 0), frame.Position), 62, 0.4)
 end
-local function paintCells()
-	for i, p in pairs(L.cells) do
+local PRIMER = Color3.fromRGB(150, 152, 156)
+-- the panel turns from grey primer to the colour as coverage grows; the map in the panel shows where
+paintCells = function()
+	local cov = Paint.coverage(L.state)
+	local r = Paint.result(L.state)
+	local target = Color3.fromRGB(L.color[1], L.color[2], L.color[3])
+	local fin = Paint.FIN[L.finish]
+	local col = PRIMER:Lerp(target, math.clamp(cov * 1.05, 0, 1))
+	if r.runs > 0 then col = col:Lerp(Color3.new(0, 0, 0), math.min(0.3, r.runs * 2)) end
+	for _, v in ipairs(L.visual or {}) do
+		v.Color = col
+		v.Material = cov > 0.3 and Enum.Material[fin.mat] or Enum.Material.SmoothPlastic
+		v.Reflectance = cov > 0.3 and (fin.refl[1] + (fin.refl[2] - fin.refl[1]) * L.gloss) or 0
+	end
+	for i, f in pairs(heat) do
 		local x = L.state.cells[i]
-		p.Transparency = 1 - math.clamp(x, 0, 1) * 0.92
-		p.Color = Color3.fromRGB(L.color[1], L.color[2], L.color[3])
-		if x > 1.8 then p.Color = p.Color:Lerp(Color3.new(0, 0, 0), 0.35) end
-		local fin = Paint.FIN[L.finish]
-		p.Material = Enum.Material[fin.mat]
-		p.Reflectance = fin.refl[1] + (fin.refl[2] - fin.refl[1]) * L.gloss
+		if not L.cells[i] then f.BackgroundTransparency = 1
+		else
+			f.BackgroundTransparency = 0
+			if x > 1.8 then f.BackgroundColor3 = UI.C.red
+			else f.BackgroundColor3 = PRIMER:Lerp(target, math.clamp(x, 0, 1)) end
+		end
 	end
 end
 local function refreshStats()
@@ -5450,7 +5523,7 @@ local function begin()
 	L.even = inf.even or 0
 	L.t = 0
 	buildScene(inf.item)
-	side.Visible, info.Visible = true, true
+	side.Visible, info.Visible, heatPanel.Visible = true, true, true
 	refreshColor()
 	buildButtons()
 	paintCells()
@@ -5479,7 +5552,7 @@ end
 local function open()
 	if not S.setMode("paint") then return end
 	gui.Enabled = true
-	side.Visible, info.Visible = false, false
+	side.Visible, info.Visible, heatPanel.Visible = false, false, false
 	S.camTo(S.origin() * GarageBuilder.BOOTH * CFrame.new(0, 2, -9) * CFrame.Angles(math.rad(-8), math.pi, 0), 50, 0.4)
 	local hung
 	for _, it in pairs(S.profile.items) do if it.loc == "lack" then hung = true end end
@@ -5490,6 +5563,7 @@ local function close()
 	picker.Visible = false
 	L.spraying = false
 	L.cells = nil
+	L.visual = nil
 	for _, q in ipairs(L.hidden or {}) do if q.Parent then q.LocalTransparencyModifier = 0 end end
 	L.hidden = nil
 	scene:ClearAllChildren()
@@ -5605,33 +5679,72 @@ scene.Name = "PortningLokal"
 local cells = {} -- zoneId -> { part per cell }
 local block, hand, tool, sparks
 local function baseCF() return S.origin() * GarageBuilder.PORT * CFrame.new(0, 1.9, 0) end
+local PORT_OUT = SIZE / 2 + 0.42 -- the port flanges stand out past the cooling fins
+-- the cylinder turns in the vise so the port you work on faces you (P.ang); the camera stays put
+P.ang, P.targetAng = 0, 0
+local rig = {} -- cylinder parts and their position relative to the unturned cylinder
+local function turnedCF() return baseCF() * CFrame.Angles(0, P.ang, 0) end
 local function faceCF(face)
-	-- outward face frame: LookVector points out of the face
-	return baseCF() * CFrame.Angles(0, math.rad(FACES[face]), 0) * CFrame.new(0, 0, -SIZE / 2)
+	-- outward face frame on the port flange: LookVector points out of the cylinder
+	return turnedCF() * CFrame.Angles(0, math.rad(FACES[face]), 0) * CFrame.new(0, -0.15, -PORT_OUT)
 end
+local outlines = {} -- zoneId -> neon bars around the port
 local function buildScene(sku)
 	scene:ClearAllChildren()
 	cells = {}
+	outlines = {}
+	P.ang, P.targetAng = 0, 0
 	local mk = Models.maker(scene)
 	local part = Parts.get(sku or "cylinder_origo50")
 	local lvl = part and part.stats.lvl or 0
 	local col = (lvl == 0 and Color3.fromRGB(128, 131, 137)) or (lvl == 1 and Color3.fromRGB(70, 72, 78)) or Color3.fromRGB(176, 180, 186)
-	block = mk.box("Cylinderblock", Vector3.new(SIZE, SIZE * 0.9, SIZE), baseCF(), col, Enum.Material.Metal)
-	for i = 0, 3 do mk.box("Fläns", Vector3.new(SIZE + 0.9, 0.12, SIZE + 0.9), baseCF() * CFrame.new(0, SIZE * 0.45 + 0.1 + i * 0.28, 0), col, Enum.Material.Metal) end
-	mk.cyl("Lopp", 0.06, SIZE * 0.34, baseCF() * CFrame.new(0, SIZE * 0.45 + 0.02, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(60, 60, 64), Enum.Material.Metal)
+	local M = Enum.Material
+	local b = baseCF()
+	-- the cylinder: core, square cooling fins, top deck with the bore and stud holes, base flange
+	block = mk.box("Cylinderkropp", Vector3.new(SIZE * 0.86, SIZE * 0.95, SIZE * 0.86), b, col, M.Metal)
+	for i = 0, 7 do
+		mk.box("Kylfläns", Vector3.new(SIZE + 0.55, 0.09, SIZE + 0.55), b * CFrame.new(0, -1.2 + i * 0.3, 0), col, M.Metal)
+	end
+	local topY = SIZE * 0.475
+	mk.box("Däck", Vector3.new(SIZE + 0.25, 0.26, SIZE + 0.25), b * CFrame.new(0, topY, 0), col, M.Metal)
+	mk.cyl("Lopp", 0.05, 0.9, b * CFrame.new(0, topY + 0.12, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(20, 20, 22), M.SmoothPlastic)
+	mk.cyl("Loppkant", 0.04, 0.98, b * CFrame.new(0, topY + 0.11, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(205, 210, 216), M.Metal)
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			mk.cyl("Pinnbultshål", 0.06, 0.13, b * CFrame.new(sx * 1.25, topY + 0.12, sz * 1.25) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(18, 18, 20), M.SmoothPlastic)
+		end
+	end
+	mk.box("Fot", Vector3.new(SIZE + 0.1, 0.2, SIZE + 0.1), b * CFrame.new(0, -SIZE * 0.475, 0), col, M.Metal)
+	-- the ports: a flange through the fins, a dark port opening, the surface you grind and a glowing outline
 	for _, z in ipairs(Porting.ZONES) do
 		local f = faceCF(z.face)
 		local w, h = z.w * SIZE * 1.3, z.h * SIZE * 1.3
-		mk.box("Port", Vector3.new(w + 0.1, h + 0.1, 0.05), f * CFrame.new(0, 0, -0.02), Color3.fromRGB(25, 25, 28), Enum.Material.SmoothPlastic)
+		mk.box("Portfläns", Vector3.new(w + 0.55, h + 0.55, 0.62), f * CFrame.new(0, 0, 0.31), col, M.Metal)
+		mk.box("Portöppning", Vector3.new(w + 0.06, h + 0.06, 0.05), f * CFrame.new(0, 0, -0.005), Color3.fromRGB(16, 16, 18), M.SmoothPlastic)
 		cells[z.id] = {}
 		for row = 1, Porting.ROWS do
 			for c = 1, Porting.COLS do
 				local cw, ch = w / Porting.COLS, h / Porting.ROWS
-				local p = mk.box("Cell", Vector3.new(cw * 0.92, ch * 0.9, 0.04), f * CFrame.new(-w / 2 + (c - 0.5) * cw, h / 2 - (row - 0.5) * ch, -0.06), Color3.fromRGB(70, 170, 255), Enum.Material.Neon)
+				local p = mk.box("Yta", Vector3.new(cw, ch, 0.03), f * CFrame.new(-w / 2 + (c - 0.5) * cw, h / 2 - (row - 0.5) * ch, -0.02), Color3.fromRGB(72, 74, 78), M.Concrete)
 				p.CastShadow = false
+				p:SetAttribute("Depth", 0)
 				cells[z.id][(row - 1) * Porting.COLS + c] = p
 			end
 		end
+		local t = 0.07
+		local bars = {
+			mk.box("Markering", Vector3.new(w + 0.2, t, 0.04), f * CFrame.new(0, h / 2 + 0.07, -0.04), Color3.fromRGB(60, 255, 120), M.Neon),
+			mk.box("Markering", Vector3.new(w + 0.2, t, 0.04), f * CFrame.new(0, -h / 2 - 0.07, -0.04), Color3.fromRGB(60, 255, 120), M.Neon),
+			mk.box("Markering", Vector3.new(t, h + 0.2, 0.04), f * CFrame.new(-w / 2 - 0.07, 0, -0.04), Color3.fromRGB(60, 255, 120), M.Neon),
+			mk.box("Markering", Vector3.new(t, h + 0.2, 0.04), f * CFrame.new(w / 2 + 0.07, 0, -0.04), Color3.fromRGB(60, 255, 120), M.Neon),
+		}
+		for _, bar in ipairs(bars) do bar.CastShadow = false end
+		outlines[z.id] = bars
+	end
+	rig = {}
+	local b0 = baseCF()
+	for _, d in ipairs(scene:GetChildren()) do
+		if d:IsA("BasePart") then rig[#rig + 1] = { d, b0:ToObjectSpace(d.CFrame) } end
 	end
 	-- hand and die grinder: anchored parts moved every frame from stored offsets (no welds, no physics)
 	hand = Models.hand(scene, CFrame.new(), false)
@@ -5660,19 +5773,27 @@ local function buildScene(sku)
 	sparks.Parent = att
 	scene.Parent = workspace
 end
-local function cellColor(d)
-	if d > Porting.OVER then return Color3.fromRGB(230, 60, 50), Enum.Material.Neon, 0 end
-	if d >= Porting.TARGET then return Color3.fromRGB(205, 210, 216), Enum.Material.Metal, 0 end
-	local glow = Color3.fromRGB(70, 170, 255):Lerp(Color3.fromRGB(150, 155, 162), d)
-	return glow, d > 0.85 and Enum.Material.Metal or Enum.Material.Neon, 0
+-- rough cast metal -> brighter as material comes off -> polished when done -> reddish if too deep
+local function cellLook(d)
+	if d > Porting.OVER then return Color3.fromRGB(196, 92, 70), Enum.Material.Metal end
+	if d >= Porting.TARGET then return Color3.fromRGB(222, 226, 232), Enum.Material.Metal end
+	return Color3.fromRGB(72, 74, 78):Lerp(Color3.fromRGB(176, 180, 186), d), d > 0.4 and Enum.Material.Metal or Enum.Material.Concrete
 end
 local function paintCells()
 	for zid, list in pairs(cells) do
 		local depths = P.state.cells[zid]
 		for i, p in ipairs(list) do
-			local c, m = cellColor(depths[i])
+			local c, m = cellLook(depths[i])
 			p.Color = c
 			p.Material = m
+			p:SetAttribute("Depth", depths[i])
+		end
+	end
+	-- outlines: bright green on the port you work on, faint on the others, off when a port is done
+	for i, z in ipairs(Porting.ZONES) do
+		local done = Porting.zoneProgress(P.state, z.id) >= 0.97
+		for _, bar in ipairs(outlines[z.id] or {}) do
+			bar.Transparency = done and 1 or (i == P.zone and 0 or 0.65)
 		end
 	end
 end
@@ -5714,7 +5835,14 @@ function P.setZone(i)
 	P.zone = ((i - 1) % #Porting.ZONES) + 1
 	local z = Porting.ZONES[P.zone]
 	local f = faceCF(z.face)
-	S.camTo(f * CFrame.new(0.6, 0.9, -4.6) * CFrame.Angles(0, math.pi, 0) * CFrame.Angles(math.rad(-10), math.rad(-6), 0), 45, 0.35)
+	-- turn the cylinder (shortest way) so this port faces the room; look from slightly above
+	local target = -math.rad(FACES[z.face])
+	while target - P.ang > math.pi do target = target - 2 * math.pi end
+	while target - P.ang < -math.pi do target = target + 2 * math.pi end
+	P.targetAng = target
+	local front = baseCF() * CFrame.new(0, -0.15, -PORT_OUT)
+	S.camTo(CFrame.lookAt(front.Position + Vector3.new(0.7, 2.1, -4.3), front.Position + Vector3.new(0, -0.1, 0)), 48, 0.35)
+	if outlines[z.id] then paintCells() end
 	refreshUI()
 end
 
@@ -5815,6 +5943,13 @@ end)
 local acc = 0
 RunService.RenderStepped:Connect(function(dt)
 	if S.mode ~= "port" or not P.state or not hand or not hand.Parent then return end
+	-- turn the cylinder towards the chosen port
+	if math.abs(P.targetAng - P.ang) > 1e-3 then
+		P.ang = P.ang + (P.targetAng - P.ang) * math.min(1, dt * 9)
+		if math.abs(P.targetAng - P.ang) < 0.01 then P.ang = P.targetAng end
+		local t = turnedCF()
+		for _, r in ipairs(rig) do r[1].CFrame = t * r[2] end
+	end
 	local z = Porting.ZONES[P.zone]
 	local f = faceCF(z.face)
 	local cam = workspace.CurrentCamera
@@ -5831,7 +5966,7 @@ RunService.RenderStepped:Connect(function(dt)
 	local wob = f.RightVector * math.sin(tnow * 23) * shake + f.UpVector * math.cos(tnow * 17) * shake
 	local tipPos = hit + wob + n * 0.02
 	-- the grinder points into the face from the camera side (tip at local -0.78 X); the hand holds its body
-	local back = (n * 2.5 + f.RightVector * 1.1 + f.UpVector * 0.9).Unit
+	local back = (n * 1.3 + f.RightVector * 1.6 + f.UpVector * 0.8).Unit
 	local up = f.UpVector - back * f.UpVector:Dot(back)
 	up = up.Unit
 	local toolCF = CFrame.fromMatrix(tipPos + back * 0.78, back, up)

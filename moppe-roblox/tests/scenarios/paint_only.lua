@@ -5,15 +5,35 @@ E.check("unmount side panel", E.api("unmountChassis", "pan:sidaV"))
 E.usePrompt("Lackera"); E.run(1)
 E.clickGui(E.findGui("Sidokåpa vänster", { button = true })); E.run(1)
 E.clickGui("Midnight Blue"); E.clickGui("^Metallic$")
-local cells = {}
-for _, p in ipairs(E.services.Workspace.LackLokal:GetChildren()) do if p.Name == "Lack" then cells[#cells + 1] = p end end
-local x, y, on = E.screenOf(cells[1].Position)
-HOST_ECHO(string.format("cells %d first on screen %s at %.0f,%.0f", #cells, tostring(on), x, y))
-E.mouseMove(E.screenOf(cells[1].Position))
-E.mouseButton(1, true)
-for pass = 1, 5 do for _, c in ipairs(cells) do local x2, y2 = E.screenOf(c.Position); E.mouseMove(x2, y2); E.step(1 / 30) end end
-E.mouseButton(1, false); E.run(0.3)
-HOST_ECHO(E.findGui("Resultat").Text)
+local function sprayPanel(passes)
+	local scene = E.services.Workspace.LackLokal
+	local mn, mx
+	for _, d in ipairs(scene:GetChildren()) do
+		if d:IsA("BasePart") and (d.Name == "Kåpa" or d.Transparency == 0) and d.Name ~= "Munstycke" then
+			local cf, sz = d.CFrame, d.Size
+			for _, sx in ipairs({ -0.5, 0.5 }) do for _, sy in ipairs({ -0.5, 0.5 }) do for _, sz2 in ipairs({ -0.5, 0.5 }) do
+				local x, y = E.screenOf(cf * E.T.Vector3.new(sx * sz.X, sy * sz.Y, sz2 * sz.Z))
+				mn = mn and E.T.Vector2.new(math.min(mn.X, x), math.min(mn.Y, y)) or E.T.Vector2.new(x, y)
+				mx = mx and E.T.Vector2.new(math.max(mx.X, x), math.max(mx.Y, y)) or E.T.Vector2.new(x, y)
+			end end end
+		end
+	end
+	E.mouseMove(mn.X + 5, mn.Y + 5)
+	E.mouseButton(1, true)
+	for pass = 1, passes do
+		for row = 0, 7 do
+			local y = mn.Y + (mx.Y - mn.Y) * (row + 0.5) / 8
+			for k = 0, 12 do
+				local x = (row % 2 == 0) and (mn.X + (mx.X - mn.X) * k / 12) or (mx.X - (mx.X - mn.X) * k / 12)
+				E.mouseMove(x, y); E.step(1 / 30)
+			end
+		end
+	end
+	E.mouseButton(1, false)
+	E.run(0.3)
+end
+sprayPanel(3)
+
 E.shot("paint_only")
 E.clickGui("^Klar$"); E.run(1)
 for _, o in ipairs(plr.PlayerGui.Hud.Notiser:GetChildren()) do local t = o:FindFirstChildOfClass("TextLabel"); if t then HOST_ECHO("toast: " .. t.Text) end end

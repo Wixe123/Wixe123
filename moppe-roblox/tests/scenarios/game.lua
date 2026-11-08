@@ -114,7 +114,7 @@ for zi = 1, 4 do
 	E.tap(zi == 1 and "F13" or "D")
 	E.run(0.5)
 	local cells = {}
-	for _, p in ipairs(scene:GetChildren()) do if p.Name == "Cell" then cells[#cells + 1] = p end end
+	for _, p in ipairs(scene:GetChildren()) do if p.Name == "Yta" then cells[#cells + 1] = p end end
 	-- the cells of the active zone are the ones facing the camera (closest)
 	local cam = E.currentCamera(plr.ctx)
 	table.sort(cells, function(a, b) return (a.Position - cam.CFrame.Position).Magnitude < (b.Position - cam.CFrame.Position).Magnitude end)
@@ -128,7 +128,7 @@ for zi = 1, 4 do
 		local x, y = E.screenOf(c.Position)
 		E.mouseMove(x, y)
 		local n = 0
-		while c.Material.Name == "Neon" and n < 90 do E.step(1 / 30); n = n + 1 end
+		while (c:GetAttribute("Depth") or 0) < 1 and n < 90 do E.step(1 / 30); n = n + 1 end
 	end
 	E.mouseButton(1, false)
 	E.run(0.2)
@@ -172,14 +172,35 @@ if pbtn then E.clickGui(pbtn) end
 E.run(1)
 E.clickGui("Midnight Blue")
 E.clickGui("^Metallic$")
-local cells = {}
-for _, p in ipairs(E.services.Workspace.LackLokal:GetChildren()) do if p.Name == "Lack" then cells[#cells + 1] = p end end
-check("paint cells on the panel", #cells > 10, #cells)
-E.mouseMove(E.screenOf(cells[1].Position))
-E.mouseButton(1, true)
-for pass = 1, 6 do for _, c in ipairs(cells) do local x, y = E.screenOf(c.Position); E.mouseMove(x, y); E.step(1 / 30) end end
-E.mouseButton(1, false)
-E.run(0.3)
+local function sprayPanel(passes)
+	local scene = E.services.Workspace.LackLokal
+	local mn, mx
+	for _, d in ipairs(scene:GetChildren()) do
+		if d:IsA("BasePart") and (d.Name == "Kåpa" or d.Transparency == 0) and d.Name ~= "Munstycke" then
+			local cf, sz = d.CFrame, d.Size
+			for _, sx in ipairs({ -0.5, 0.5 }) do for _, sy in ipairs({ -0.5, 0.5 }) do for _, sz2 in ipairs({ -0.5, 0.5 }) do
+				local x, y = E.screenOf(cf * E.T.Vector3.new(sx * sz.X, sy * sz.Y, sz2 * sz.Z))
+				mn = mn and E.T.Vector2.new(math.min(mn.X, x), math.min(mn.Y, y)) or E.T.Vector2.new(x, y)
+				mx = mx and E.T.Vector2.new(math.max(mx.X, x), math.max(mx.Y, y)) or E.T.Vector2.new(x, y)
+			end end end
+		end
+	end
+	E.mouseMove(mn.X + 5, mn.Y + 5)
+	E.mouseButton(1, true)
+	for pass = 1, passes do
+		for row = 0, 7 do
+			local y = mn.Y + (mx.Y - mn.Y) * (row + 0.5) / 8
+			for k = 0, 12 do
+				local x = (row % 2 == 0) and (mn.X + (mx.X - mn.X) * k / 12) or (mx.X - (mx.X - mn.X) * k / 12)
+				E.mouseMove(x, y); E.step(1 / 30)
+			end
+		end
+	end
+	E.mouseButton(1, false)
+	E.run(0.3)
+end
+sprayPanel(3)
+
 E.shot("g7_lackering")
 E.clickGui("^Klar$")
 E.run(1)
