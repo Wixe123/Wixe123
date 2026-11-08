@@ -775,7 +775,7 @@ function E.makeService(n)
 	local known = {
 		Workspace = 1, Players = 1, Lighting = 1, ReplicatedStorage = 1, ReplicatedFirst = 1, ServerScriptService = 1, ServerStorage = 1, StarterGui = 1,
 		StarterPack = 1, StarterPlayer = 1, SoundService = 1, Chat = 1, Teams = 1, RunService = 1, UserInputService = 1, TweenService = 1, DataStoreService = 1,
-		PhysicsService = 1, CollectionService = 1, Debris = 1, HttpService = 1, TextService = 1, ContextActionService = 1, GuiService = 1,
+		PhysicsService = 1, CollectionService = 1, AssetService = 1, Debris = 1, HttpService = 1, TextService = 1, ContextActionService = 1, GuiService = 1,
 		MarketplaceService = 1, ProximityPromptService = 1, LocalizationService = 1, TeleportService = 1, BadgeService = 1, TextChatService = 1,
 		VRService = 1, HapticService = 1, AnalyticsService = 1, PathfindingService = 1, ContentProvider = 1, MessagingService = 1, MemoryStoreService = 1,
 		PolicyService = 1, AvatarEditorService = 1, SocialService = 1, GroupService = 1, AssetService = 1, KeyframeSequenceProvider = 1, StarterPlayerScripts = 0,
@@ -789,5 +789,61 @@ end
 
 local CPm = cls(M, "ContentProvider")
 function CPm.PreloadAsync() end
+
+---------------------------------------------------------------- AssetService / EditableMesh (meshes made in code)
+local ContentMt = {}
+T.TYPE[ContentMt] = "Content"
+ContentMt.__index = function(c, k) if k == "Object" then return c.obj elseif k == "Uri" then return c.uri end error(tostring(k) .. " is not a valid member of Content", 2) end
+E.Content = {
+	fromObject = function(o) return setmetatable({ obj = o }, ContentMt) end,
+	fromUri = function(u) return setmetatable({ uri = u }, ContentMt) end,
+	none = setmetatable({}, ContentMt),
+}
+local ASm = cls(M, "AssetService")
+function ASm.CreateEditableMesh(o, opts)
+	local em = E.new("EditableMesh", nil, true)
+	em.extra = { verts = {}, tris = {} }
+	return em
+end
+local EMm = cls(M, "EditableMesh")
+function EMm.AddVertex(o, p)
+	if not T.isV3(p) then error("AddVertex: Vector3 expected", 2) end
+	local v = o.extra.verts
+	v[#v + 1] = p
+	return #v
+end
+function EMm.AddTriangle(o, a, b, c)
+	local n = #o.extra.verts
+	for _, x in ipairs({ a, b, c }) do if type(x) ~= "number" or x < 1 or x > n then error("AddTriangle: invalid vertex id " .. tostring(x), 2) end end
+	local t = o.extra.tris
+	t[#t + 1] = { a, b, c }
+	return #t
+end
+function EMm.GetSize(o)
+	local mn, mx
+	for _, v in ipairs(o.extra.verts) do mn = mn and mn:Min(v) or v; mx = mx and mx:Max(v) or v end
+	return mn and (mx - mn) or V3.zero
+end
+function EMm.AddNormal() return 1 end
+function EMm.Destroy(o) o.destroyed = true end
+function ASm.CreateMeshPartAsync(o, content, opts)
+	if T.typeName(content) ~= "Content" then error("CreateMeshPartAsync: Content expected (use Content.fromObject)", 2) end
+	local em = content.obj
+	if not (em and em.cls == "EditableMesh") then error("CreateMeshPartAsync: no EditableMesh in Content", 2) end
+	if #em.extra.tris == 0 then error("CreateMeshPartAsync: mesh has no triangles", 2) end
+	E.wait(0.05)
+	local mp = E.new("MeshPart", nil, true)
+	local size = EMm.GetSize(em)
+	local mn
+	for _, v in ipairs(em.extra.verts) do mn = mn and mn:Min(v) or v end
+	local center = mn + size / 2
+	-- mesh normalised to -0.5..0.5 so it scales with Size, like Roblox
+	local nv = {}
+	for i, v in ipairs(em.extra.verts) do local d = v - center; nv[i] = { d.X / math.max(size.X, 1e-6), d.Y / math.max(size.Y, 1e-6), d.Z / math.max(size.Z, 1e-6) } end
+	E.meshId = (E.meshId or 0) + 1
+	mp.extra = { mesh = { id = E.meshId, v = nv, t = em.extra.tris } }
+	mp.props.Size = size
+	return mp
+end
 
 return E

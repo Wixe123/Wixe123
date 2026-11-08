@@ -53,9 +53,8 @@ check("box opened", S.profile.orders[1].state == "oppnad")
 E.lookFrom(V3.new(-120, 6, -30), V3.new(-128, 1, -20), 50); E.shot("g3_paket"); E.lookFrom(nil)
 
 ---------------------------------------------------------------- take the engine out (through the API), rebuild the top end by dragging
-for _, sl in ipairs({ "bakbroms", "bakhjul", "avgas" }) do check("unmount " .. sl, E.api("unmountChassis", sl)) end
-check("engine to stand", E.api("engineToStand"))
-for _, sock in ipairs({ "tandkabel", "tandstift", "topplock", "cylinder", "kolvringar", "kolvbult", "kolv" }) do
+check("engine to stand (wheel, brake and exhaust stay on)", E.api("engineToStand"))
+for _, sock in ipairs({ "cylinder", "kolv" }) do
 	local ok, e = E.api("unmountEngine", "stand", sock)
 	check("unmount " .. sock, ok, e)
 end
@@ -123,6 +122,7 @@ for zi = 1, 4 do
 	for i = 1, 18 do mine[i] = cells[i] end
 	table.sort(mine, function(a, b) local ax, ay = E.screenOf(a.Position); local bx, by = E.screenOf(b.Position); if math.abs(ay - by) > 4 then return ay < by end return ax < bx end)
 	-- like a player: hold the grinder on each glowing cell until it turns to bare metal
+	E.mouseMove(E.screenOf(mine[1].Position))
 	E.mouseButton(1, true)
 	for _, c in ipairs(mine) do
 		local x, y = E.screenOf(c.Position)
@@ -132,10 +132,15 @@ for zi = 1, 4 do
 	end
 	E.mouseButton(1, false)
 	E.run(0.2)
+	HOST_ECHO("  zone " .. zi .. ": " .. (E.findGui("Procent") and E.findGui("Procent").Text or "?"))
 	if zi == 1 then E.shot("g6_portning") end
 end
+local klar = E.findGui("^Klar$", { button = true })
+HOST_ECHO("  Klar button: " .. (klar and klar:GetFullName() or "none"))
 E.clickGui("^Klar$")
 E.run(1)
+for _, o in ipairs(plr.PlayerGui.Hud.Notiser:GetChildren()) do local t = o:FindFirstChildOfClass("TextLabel"); if t then HOST_ECHO("  toast: " .. t.Text) end end
+for iid, it in pairs(S.profile.items) do if it.loc == "port" then HOST_ECHO("  on the vise: " .. it.sku) end end
 local cylId
 for iid, it in pairs(S.profile.items) do if it.sku == "cylinder_nordtrim70" then cylId = iid end end
 check("cylinder ported", S.profile.items[cylId].port ~= nil, S.profile.items[cylId].port and S.profile.items[cylId].port.label)
@@ -153,11 +158,6 @@ check("engine complete again", (function() local n = 0; for _ in pairs(S.profile
 E.clickGui("Sätt motorn i mopeden")
 E.run(1)
 E.tap("Escape"); E.run(0.5)
-for _, sl in ipairs({ "bakhjul", "bakbroms", "avgas" }) do
-	local id
-	for iid, it in pairs(S.profile.items) do if it.loc ~= "mount" and it.sku == sl .. "_origo" then id = iid end end
-	check("mount " .. sl, E.api("mountChassis", sl, id))
-end
 local Profile = E.makeGlobals(plr.ctx).require(E.services.ReplicatedStorage.Shared.Profile)
 local perf = Profile.perf(S.profile)
 HOST_ECHO(string.format("  after the 70 cc kit: %.1f hp, top %.0f km/h", perf.hp, perf.top))

@@ -342,7 +342,19 @@ local function partRec(p, cfOverride)
 	local mesh = M.Instance.FindFirstChildOfClass(p, "SpecialMesh")
 	if mesh then shape = "Special:" .. mesh.MeshType.Name end
 	local s = p.Size
-	return { s = shape, z = { s.X, s.Y, s.Z }, cf = cfArr(cfOverride or p.cframe), c = c3(p.Color), m = p.Material.Name, t = p.Transparency, r = p.Reflectance, n = p.props.Name }
+	local rec = { s = shape, z = { s.X, s.Y, s.Z }, cf = cfArr(cfOverride or p.cframe), c = c3(p.Color), m = p.Material.Name, t = p.Transparency, r = p.Reflectance, n = p.props.Name }
+	if p.cls == "MeshPart" and p.extra and p.extra.mesh then
+		local mesh = p.extra.mesh
+		rec.s = "Tri"
+		rec.mesh = mesh.id
+		if E.snapMeshes and not E.snapMeshes[mesh.id] then
+			local v, t = {}, {}
+			for _, x in ipairs(mesh.v) do v[#v + 1] = x[1]; v[#v + 1] = x[2]; v[#v + 1] = x[3] end
+			for _, x in ipairs(mesh.t) do t[#t + 1] = x[1] - 1; t[#t + 1] = x[2] - 1; t[#t + 1] = x[3] - 1 end
+			E.snapMeshes[mesh.id] = { v = v, t = t }
+		end
+	end
+	return rec
 end
 local function guiRec(o, root)
 	local L = o.L
@@ -402,6 +414,7 @@ function E.snapshot(opts)
 	opts = opts or {}
 	local ws = E.services.Workspace
 	local cam = E.currentCamera({ name = "client", player = E.player })
+	E.snapMeshes = {}
 	local snap = { view = E.VIEW, camera = { cf = cfArr(cam.CFrame), fov = cam.FieldOfView }, parts = {}, lights = {}, surf = {}, gui = {}, prompts = {}, bill = {}, hl = {}, fx = {} }
 	local L = E.services.Lighting
 	snap.lighting = { clock = L.ClockTime, bright = L.Brightness, amb = c3(L.Ambient), oamb = c3(L.OutdoorAmbient), fogEnd = L.FogEnd, fogStart = L.FogStart, fogColor = c3(L.FogColor), exp = L.ExposureCompensation, sun = { L:GetSunDirection().X, L:GetSunDirection().Y, L:GetSunDirection().Z } }
@@ -491,6 +504,8 @@ function E.snapshot(opts)
 		if pg then bills(pg) end
 	end
 	snap.coreGui = E.coreGui
+	snap.meshes = {}
+	for id, m in pairs(E.snapMeshes) do snap.meshes[#snap.meshes + 1] = { id = id, v = m.v, t = m.t } end
 	snap.mouse = { E.input.mouse.X, E.input.mouse.Y }
 	return snap
 end

@@ -13,9 +13,9 @@ MopedDef.SLOTS = {
 	{ id = "styre", kind = "styre", n = "Styre", req = { "gaffel" } },
 	{ id = "dampare", kind = "dampare", n = "Bakdämpare", req = { "ram" } },
 	{ id = "motor", kind = "motor", n = "Motor", req = { "ram", "dampare" } },
-	{ id = "bakhjul", kind = "bakhjul", n = "Bakhjul", req = { "motor" } },
+	{ id = "bakhjul", kind = "bakhjul", n = "Bakhjul", req = { "dampare" } },
 	{ id = "bakbroms", kind = "bakbroms", n = "Bakbroms", req = { "bakhjul" } },
-	{ id = "avgas", kind = "avgas", n = "Avgassystem", req = { "motor" } },
+	{ id = "avgas", kind = "avgas", n = "Avgassystem", req = { "ram" } },
 	{ id = "tank", kind = "tank", n = "Tank", req = { "ram" } },
 	{ id = "sadel", kind = "sadel", n = "Sadel", req = { "tank" } },
 }
@@ -166,15 +166,29 @@ function MopedDef.canMount(m, slot, sku)
 end
 local function filled(m, slot) if slot == "motor" then return m.engine ~= nil end return m.slots[slot] ~= nil end
 MopedDef.filled = filled
-function MopedDef.canRemove(m, slot)
-	if not filled(m, slot) then return false, "Inget monterat där" end
-	for _, id in ipairs(MopedDef.slotIds(m.model)) do
-		if filled(m, id) then
-			local info = MopedDef.slotInfo(m.model, id)
-			for _, r in ipairs(info.req) do
-				if r == slot then return false, "Ta bort " .. info.n:lower() .. " först" end
+-- mounted slots that sit on slot (directly or further out), outermost first
+function MopedDef.dependents(m, slot)
+	local ids = MopedDef.slotIds(m.model)
+	local out, inSet = {}, { [slot] = true }
+	local changed = true
+	while changed do
+		changed = false
+		for i = #ids, 1, -1 do
+			local id = ids[i]
+			if filled(m, id) and not inSet[id] then
+				for _, r in ipairs(MopedDef.slotInfo(m.model, id).req) do
+					if inSet[r] then inSet[id] = true; out[#out + 1] = id; changed = true; break end
+				end
 			end
 		end
+	end
+	return out
+end
+-- a part can be taken off; what sits on it comes off too, except the engine (lift it out first)
+function MopedDef.canRemove(m, slot)
+	if not filled(m, slot) then return false, "Inget monterat där" end
+	for _, d in ipairs(MopedDef.dependents(m, slot)) do
+		if d == "motor" then return false, "Lyft ur motorn först" end
 	end
 	return true
 end

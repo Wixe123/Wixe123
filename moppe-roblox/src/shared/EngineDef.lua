@@ -82,15 +82,27 @@ function EngineDef.canMount(map, sock, sku, items)
 end
 
 -- can the part in sock be removed? (nothing mounted may depend on it)
-function EngineDef.canRemove(map, sock)
-	if not map[sock] then return false, "Inget monterat där" end
-	for _, s in ipairs(EngineDef.SOCKETS) do
-		if map[s.id] then
-			for _, r in ipairs(s.req) do
-				if r == sock then return false, "Ta bort " .. s.name:lower() .. " först" end
+-- mounted sockets that sit on top of sock (directly or further out), outermost first
+function EngineDef.dependents(map, sock)
+	local out, inSet = {}, { [sock] = true }
+	local changed = true
+	while changed do
+		changed = false
+		for _, s in ipairs(EngineDef.SOCKETS) do
+			if map[s.id] and not inSet[s.id] then
+				for _, r in ipairs(s.req) do
+					if inSet[r] then inSet[s.id] = true; out[#out + 1] = s.id; changed = true; break end
+				end
 			end
 		end
 	end
+	-- outermost (last mounted) first
+	table.sort(out, function(a, b) return EngineDef.ORDER[a] > EngineDef.ORDER[b] end)
+	return out
+end
+-- a part can always be taken off; whatever sits on it comes off too (see dependents)
+function EngineDef.canRemove(map, sock)
+	if not map[sock] then return false, "Inget monterat där" end
 	return true
 end
 

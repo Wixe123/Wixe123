@@ -69,7 +69,10 @@ float tri(vec3 p,float s){vec3 a=abs(vN);return (n3(p.yzx*s)*a.x+n3(p.xzy*s)*a.y
     const f=[[0,2,1],[0,3,2],[0,1,4],[1,2,4],[2,3,4],[3,0,4]];
     const pos=[];for(const t of f)for(const i of t)pos.push(...v[i]);
     g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.computeVertexNormals();return g;}
-  function geometry(s,z){
+  const meshGeo=new Map();
+  for(const m of (S.meshes||[])){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(m.v,3));g.setIndex(m.t);g.computeVertexNormals();meshGeo.set(m.id,g);}
+  function geometry(s,z,p){
+    if(s==='Tri'&&p&&meshGeo.has(p.mesh))return [meshGeo.get(p.mesh),new THREE.Vector3(...z)];
     let k=s;let g;
     if(s==='Special:Sphere'){g=geoCache.get('ball')||new THREE.SphereGeometry(.5,24,16);geoCache.set('ball',g);return [g,new THREE.Vector3(...z)];}
     if(s==='Ball'){g=geoCache.get('ball')||new THREE.SphereGeometry(.5,24,16);geoCache.set('ball',g);return [g,new THREE.Vector3(Math.min(...z),Math.min(...z),Math.min(...z))]; }
@@ -82,7 +85,7 @@ float tri(vec3 p,float s){vec3 a=abs(vN);return (n3(p.yzx*s)*a.x+n3(p.xzy*s)*a.y
   function addParts(scene,parts,shadows){
     const byId=new Map();
     for(const p of parts){
-      const [g,sc]=geometry(p.s,p.z);
+      const [g,sc]=geometry(p.s,p.z,p);
       const mesh=new THREE.Mesh(g,material(p.c,p.m,p.t,p.r));
       const M=m4(p.cf);M.multiply(new THREE.Matrix4().makeScale(sc.x,sc.y,sc.z));
       mesh.matrixAutoUpdate=false;mesh.matrix.copy(M);

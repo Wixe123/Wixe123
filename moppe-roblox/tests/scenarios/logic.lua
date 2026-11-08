@@ -17,13 +17,14 @@ check("OEM about 3-4 hp", s.hp > 2.8 and s.hp < 4.2, s.hp)
 
 -- take the engine out and strip it completely
 local m = p.mopeds[1]
-check("engine cannot leave while rear wheel is on", not Profile.engineToStand(p))
-local ok, e = Profile.unmountChassis(p, "bakbroms"); check("remove rear brake", ok, e)
-ok, e = Profile.unmountChassis(p, "bakhjul"); check("remove rear wheel", ok, e)
-ok, e = Profile.unmountChassis(p, "avgas"); check("remove exhaust", ok, e)
-ok, e = Profile.engineToStand(p); check("engine to stand", ok, e)
+-- the engine lifts out directly: rear wheel, brake and exhaust stay on the moped
+local ok, e = Profile.engineToStand(p); check("engine lifts out without removing wheel, brake or exhaust", ok, e)
+check("rear wheel still on", m.slots.bakhjul ~= nil and m.slots.bakbroms ~= nil and m.slots.avgas ~= nil)
 check("moped no longer rideable", not Profile.canRide(p))
-check("cylinder cannot come off before head", not Profile.unmountEngine(p, "stand", "cylinder"))
+-- taking the cylinder off brings the head, plug and HT lead with it
+local okc, cid, extra = Profile.unmountEngine(p, "stand", "cylinder")
+check("cylinder comes off in one go", okc and #extra == 3, extra and table.concat(extra, ","))
+HOST_ECHO("  also came off: " .. table.concat(extra or {}, ", "))
 local removed = 0
 for i = #EngineDef.SOCKETS, 1, -1 do
 	local sock = EngineDef.SOCKETS[i].id
@@ -32,7 +33,7 @@ for i = #EngineDef.SOCKETS, 1, -1 do
 end
 -- some sockets later in the list depend on earlier ones (rem needs koppling) - repeat until empty
 for _ = 1, 5 do for i = #EngineDef.SOCKETS, 1, -1 do if Profile.unmountEngine(p, "stand", EngineDef.SOCKETS[i].id) then removed = removed + 1 end end end
-check("engine fully stripped (29 parts)", removed == 29 and EngineDef.isEmpty(p.stand), removed)
+check("engine fully stripped", EngineDef.isEmpty(p.stand), removed)
 
 -- build it again in order, using whatever free parts match
 local function freePart(kind, bore)
@@ -51,12 +52,6 @@ for _, sdef in ipairs(EngineDef.SOCKETS) do
 end
 check("engine rebuilt (29 parts)", mounted == 29 and EngineDef.complete(p.stand), mounted)
 ok, e = Profile.engineToMoped(p); check("engine back into moped", ok, e)
-for _, sl in ipairs({ "bakhjul", "bakbroms", "avgas" }) do
-	local id
-	for iid, it in pairs(p.items) do if Profile.isFree(p, it) and Parts.get(it.sku).kind == sl then id = iid end end
-	local ok4, e4 = Profile.mountChassis(p, sl, id, 0)
-	check("mount " .. sl, ok4, e4)
-end
 check("moped rideable again", Profile.canRide(p), table.concat(Profile.mopedProblems(p), ","))
 
 -- wrong piston for the cylinder
@@ -167,7 +162,7 @@ check("three job offers", #offers == 3)
 ok, e = Profile.acceptJob(w, offers[2].key); check("accept repair job", ok, e)
 check("customer engine on stand", EngineDef.complete(w.stand))
 check("repair not done yet", not Profile.completeJob(w, e.id))
-for _, sock in ipairs({ "tandkabel", "tandstift", "topplock", "cylinder" }) do Profile.unmountEngine(w, "stand", sock) end
+check("cylinder off with head, plug and lead", Profile.unmountEngine(w, "stand", "cylinder"))
 check("old rings off", Profile.unmountEngine(w, "stand", "kolvringar"))
 check("pin off", Profile.unmountEngine(w, "stand", "kolvbult"))
 check("old piston off", Profile.unmountEngine(w, "stand", "kolv"))

@@ -111,10 +111,17 @@ function Profile.unmountEngine(p, target, sock)
 	if not map then return err("Ingen motor där") end
 	local ok, e = EngineDef.canRemove(map, sock)
 	if not ok then return err(e) end
+	local extra = {}
+	for _, d in ipairs(EngineDef.dependents(map, sock)) do
+		local did = map[d]
+		map[d] = nil
+		p.items[did].loc = Profile.count(p, "bank") < Profile.BENCH_SLOTS and "bank" or "golv"
+		extra[#extra + 1] = EngineDef.BY_ID[d].name:lower()
+	end
 	local id = map[sock]
 	map[sock] = nil
 	p.items[id].loc = Profile.count(p, "bank") < Profile.BENCH_SLOTS and "bank" or "golv"
-	return true, id
+	return true, id, extra
 end
 function Profile.mountChassis(p, slot, id, now)
 	local m = p.mopeds[p.cur]
@@ -135,10 +142,17 @@ function Profile.unmountChassis(p, slot)
 	if slot == "motor" then return Profile.engineToStand(p) end
 	local ok, e = MopedDef.canRemove(m, slot)
 	if not ok then return err(e) end
+	local extra = {}
+	for _, d in ipairs(MopedDef.dependents(m, slot)) do
+		local did = m.slots[d]
+		m.slots[d] = nil
+		p.items[did].loc = Profile.count(p, "bank") < Profile.BENCH_SLOTS and "bank" or "golv"
+		extra[#extra + 1] = MopedDef.slotName(m.model, d):lower()
+	end
 	local id = m.slots[slot]
 	m.slots[slot] = nil
 	p.items[id].loc = Profile.count(p, "bank") < Profile.BENCH_SLOTS and "bank" or "golv"
-	return true, id
+	return true, id, extra
 end
 function Profile.engineToMoped(p)
 	local m = p.mopeds[p.cur]

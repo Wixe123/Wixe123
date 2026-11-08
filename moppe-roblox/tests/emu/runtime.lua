@@ -140,6 +140,7 @@ function E.makeGlobals(ctx)
 	for _, k in ipairs({ "Vector3", "Vector2", "CFrame", "Color3", "UDim", "UDim2", "NumberRange", "NumberSequence", "NumberSequenceKeypoint", "ColorSequence", "ColorSequenceKeypoint", "Rect", "TweenInfo", "RaycastParams", "OverlapParams", "PhysicalProperties", "Random", "Font", "BrickColor" }) do g[k] = T[k] end
 	g.Ray = { new = function(o, d) return setmetatable({ _Origin = o, _Direction = d }, E.RayMt) end }
 	g.Enum = E.Enum
+	g.Content = E.Content
 	g.typeof = typeof
 	g.task = makeTask()
 	g.wait = function(t) E.warnOnce("deprecated wait() (use task.wait)"); return E.wait(t) end

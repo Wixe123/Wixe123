@@ -18,8 +18,9 @@ Ett mopedmekanikerspel i Roblox, byggt från grunden. Du har ett eget garage. D�
 | Delar i garaget | Klicka på en del för att plocka upp den, så att du bär den i handen. Klicka på hyllan, bänken, golvet, skruvstädet eller lackstativet för att lägga ner den. |
 | Datorn (E) | Moppelagret.se: startsida, sökning, kategorier, produktbilder i 3D, produktsidor, lagerstatus och kundvagn. Under fliken Mina ordrar syns nedräkningen till leveransen, och under Uppdrag finns jobben. |
 | Leverans | En låda dyker upp vid garageporten. Tryck E för att öppna den. Delarna ligger sedan i lådan och kan plockas upp eller användas direkt. |
-| Motorstativet (E) | Dra en del från brickan till motorn. Grön markering betyder att delen passar nu. Röd betyder att något annat måste sitta först, och spelet säger vad. Släpp delen så glider den på plats och en hand drar åt den. Högerklicka på en del för att ta bort den. Checklistan visar ordningen. |
-| Mopedlyften (E) | Fungerar likadant för ram, gaffel, hjul, bromsar, dämpare, styre, tank, sadel, avgas och kåpor. Klicka på en del för att få Demontera, Lackera, Byt ut och Inspektera. Härifrån kan du också lyfta ur motorn eller sätta i den. |
+| Motorstativet (E) | Dra en del från brickan till motorn. Grön markering betyder att delen passar nu. Röd betyder att något annat måste sitta först, och spelet säger vad. Släpp delen så glider den på plats och en hand drar åt den. Högerklicka på en del för att ta bort den. Det som sitter ovanpå följer med: tar du loss cylindern hamnar topplock, tändstift och tändkabel också på bänken. |
+| Mopedlyften (E) | Fungerar likadant för ram, gaffel, hjul, bromsar, dämpare, styre, tank, sadel, avgas och kåpor. Klicka på en del för att få Demontera, Lackera, Byt ut och Inspektera. Med **Meka på motorn här** zoomar kameran in på motorn så att du kan jobba på motorblocket direkt i mopeden. **Lyft ur motorn** flyttar motorn till stativet utan att du behöver ta av bakhjul, bakbroms eller avgas. |
+| Kameran i arbetslägena | Dra med musen på tom yta för att snurra 360° runt mopeden eller motorn (högerknappen och piltangenterna fungerar också). Rullhjulet zoomar. |
 | Portningsbänken (E) | Spänn fast en cylinder i skruvstädet. Du ser handen med den raka slipmaskinen och de fyra portarna, som lyser. Håll vänster musknapp för att slipa. Kvaliteten räknas på jämnhet, precision och överportning. Det finns också ett träningsläge. |
 | Lackboxen (E) | Häng en kåpa på stativet och välj färg: från biblioteket, med RGB-reglage eller med HEX-kod. Välj lacktyp (blank, matt, metallic, pärlemor eller krom) och glans, och spraya. Lacken torkar på 20 s. |
 | Kör ut (F vid lyften) | W gas, S broms, A och D styr, Mellanslag kliver av och R tar dig tillbaka till garaget. Hastighetsmätaren visar också varv och temperatur, och det finns en minikarta. |
@@ -65,11 +66,11 @@ Ett mopedmekanikerspel i Roblox, byggt från grunden. Du har ett eget garage. D�
 - **Dekaler saknas.**
 - **Garageuppgraderingar saknas.**
 - **Hjälp i andras garage saknas.** Andra spelare kan bara titta.
-- **Allt är byggt av Roblox-delar,** inte av importerade 3D-modeller.
+- **Inga importerade modellfiler.** Kåporna är riktiga 3D-mesher med rundade former, men de skapas i spelet med Robloxs EditableMesh (`src/shared/MeshGen.lua` och `src/client/MeshSkin.client.lua`), så inga filer behöver laddas upp. Om Roblox inte tillåter EditableMesh i ditt spel (det kan kräva att kontot är verifierat för publicerade spel) visas de kantiga blocken i stället, och Output säger det. Motor, ram och hjul är fortfarande byggda av Roblox-delar.
 
 ## Testat och inte testat
 
-- **Spelregler** (`tests/scenarios/logic.lua`, 67 kontroller, alla godkända):
+- **Spelregler** (`tests/scenarios/logic.lua`, 62 kontroller, alla godkända):
   - profil, montering och demontering av hela motorn i rätt ordning, fel kolvdiameter;
   - butik och leveranstider;
   - portnings- och lackkvalitet;
@@ -77,7 +78,7 @@ Ett mopedmekanikerspel i Roblox, byggt från grunden. Du har ett eget garage. D�
   - uppdrag och sparning.
 - **Hela spelet i en Roblox-emulator** (`tests/emu/`):
   - Alla skript körs mot Robloxs API-lista, så felstavade egenskaper, fel värdetyper, skrivskyddade egenskaper och anrop som inte finns ger fel precis som i Roblox.
-  - `tests/scenarios/game.lua` spelar igenom spelet med klick, tangenter, E-knappar och dra-och-släpp (65 kontroller, alla godkända, inga skriptfel):
+  - `tests/scenarios/game.lua` spelar igenom spelet med klick, tangenter, E-knappar och dra-och-släpp (54 kontroller, alla godkända, inga skriptfel):
     - beställer, väntar på leveransen och öppnar lådan;
     - byter kolv, ringar och cylinder genom att dra delarna;
     - portar och lackerar;

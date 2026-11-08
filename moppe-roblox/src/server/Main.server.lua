@@ -388,10 +388,10 @@ end
 function H.unmountEngine(plr, p, target, sock)
 	if not inGarage(plr) then return false, "Gå in i ditt garage" end
 	if riding[plr] and target ~= "stand" then return false, "Mopeden är ute" end
-	local ok, e = Profile.unmountEngine(p, target, sock)
+	local ok, e, extra = Profile.unmountEngine(p, target, sock)
 	if not ok then return ok, e end
 	changed(plr, { target == "stand" and "engine" or "moped", "items" })
-	return true, e
+	return true, e, extra
 end
 function H.mountChassis(plr, p, slot, id)
 	if not inGarage(plr) or riding[plr] then return false, "Mopeden måste stå på lyften" end
@@ -402,10 +402,10 @@ function H.mountChassis(plr, p, slot, id)
 end
 function H.unmountChassis(plr, p, slot)
 	if not inGarage(plr) or riding[plr] then return false, "Mopeden måste stå på lyften" end
-	local ok, e = Profile.unmountChassis(p, slot)
+	local ok, e, extra = Profile.unmountChassis(p, slot)
 	if not ok then return ok, e end
 	changed(plr, { "moped", "items", "engine" })
-	return true, e
+	return true, e, extra
 end
 function H.engineToMoped(plr, p)
 	if not inGarage(plr) or riding[plr] then return false, "Mopeden måste stå på lyften" end
@@ -582,7 +582,7 @@ Api.OnServerInvoke = function(plr, action, ...)
 		warn("Api " .. action .. " failed: " .. tostring(res[2]))
 		return false, "Något gick fel"
 	end
-	return res[2], res[3]
+	return res[2], res[3], res[4]
 end
 
 -- prompts that the server handles itself

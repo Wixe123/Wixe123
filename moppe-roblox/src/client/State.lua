@@ -56,13 +56,13 @@ end
 function S.toast(text, kind) S.toastEv:Fire(text, kind or "info") end
 -- call the server; shows the error as a toast; returns ok, result
 function S.api(action, ...)
-	local ok, a, b = pcall(function(...) return Api:InvokeServer(action, ...) end, ...)
+	local ok, a, b, c = pcall(function(...) return Api:InvokeServer(action, ...) end, ...)
 	if not ok then
 		S.toast("Ingen kontakt med servern", "error")
 		return false
 	end
 	if not a and b then S.toast(b, "error") end
-	return a, b
+	return a, b, c
 end
 
 -- my garage

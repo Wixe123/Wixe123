@@ -1,7 +1,7 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
 <Item class="Workspace" referent="RBX1"><Properties><string name="Name">Workspace</string></Properties></Item>
 <Item class="Lighting" referent="RBX2"><Properties><string name="Name">Lighting</string><token name="Technology">4</token><float name="ClockTime">14.5</float><float name="Brightness">2.2</float><bool name="GlobalShadows">true</bool></Properties></Item>
-<Item class="ReplicatedStorage" referent="RBX15"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX14"><Properties><string name="Name">Shared</string></Properties><Item class="ModuleScript" referent="RBX3"><Properties><string name="Name">Config</string><ProtectedString name="Source"><![CDATA[-- Game-wide constants. 1 stud = 0.3 m for vehicles and parts.
+<Item class="ReplicatedStorage" referent="RBX16"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX15"><Properties><string name="Name">Shared</string></Properties><Item class="ModuleScript" referent="RBX3"><Properties><string name="Name">Config</string><ProtectedString name="Source"><![CDATA[-- Game-wide constants. 1 stud = 0.3 m for vehicles and parts.
 local Config = {}
 
 Config.STUD = 0.3
@@ -115,15 +115,27 @@ function EngineDef.canMount(map, sock, sku, items)
 end
 
 -- can the part in sock be removed? (nothing mounted may depend on it)
-function EngineDef.canRemove(map, sock)
-	if not map[sock] then return false, "Inget monterat där" end
-	for _, s in ipairs(EngineDef.SOCKETS) do
-		if map[s.id] then
-			for _, r in ipairs(s.req) do
-				if r == sock then return false, "Ta bort " .. s.name:lower() .. " först" end
+-- mounted sockets that sit on top of sock (directly or further out), outermost first
+function EngineDef.dependents(map, sock)
+	local out, inSet = {}, { [sock] = true }
+	local changed = true
+	while changed do
+		changed = false
+		for _, s in ipairs(EngineDef.SOCKETS) do
+			if map[s.id] and not inSet[s.id] then
+				for _, r in ipairs(s.req) do
+					if inSet[r] then inSet[s.id] = true; out[#out + 1] = s.id; changed = true; break end
+				end
 			end
 		end
 	end
+	-- outermost (last mounted) first
+	table.sort(out, function(a, b) return EngineDef.ORDER[a] > EngineDef.ORDER[b] end)
+	return out
+end
+-- a part can always be taken off; whatever sits on it comes off too (see dependents)
+function EngineDef.canRemove(map, sock)
+	if not map[sock] then return false, "Inget monterat där" end
 	return true
 end
 
@@ -566,7 +578,170 @@ function Map.onRoad(x, z) local d, r = Map.nearestRoad(x, z); return d <= r.w / 
 
 return Map
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX7"><Properties><string name="Name">Models</string><ProtectedString name="Source"><![CDATA[-- 3D models built from Roblox parts: every engine part, every chassis part, panels, the whole moped,
+<Item class="ModuleScript" referent="RBX7"><Properties><string name="Name">MeshGen</string><ProtectedString name="Source"><![CDATA[-- Smooth 3D shapes for the moped panels, generated as triangle meshes (no uploaded files needed).
+-- Each panel is one or more "sweeps": a rounded cross-section (superellipse) moved along a path.
+-- The client turns them into MeshParts with EditableMesh (see MeshSkin.client.lua); the block parts
+-- from MopedDef stay as the fallback and as the click targets.
+local MeshGen = {}
+local V3 = Vector3.new
+local rad, cos, sin, tan, abs = math.rad, math.cos, math.sin, math.tan, math.abs
+
+MeshGen.RING = 18 -- points around each cross-section
+
+-- path: list of { p = Vector3, w = half width (along side), h = half depth, n = roundness (2 = ellipse, 4+ = boxy) }
+-- side: world direction of the width axis (default X)
+local function sweep(path, side)
+	side = side or V3(1, 0, 0)
+	local verts, tris = {}, {}
+	local N = MeshGen.RING
+	for i, s in ipairs(path) do
+		local prev = path[math.max(1, i - 1)].p
+		local nxt = path[math.min(#path, i + 1)].p
+		local t = (nxt - prev).Unit
+		local nrm = side:Cross(t).Unit
+		local sd = t:Cross(nrm).Unit
+		local n = s.n or 3
+		for k = 0, N - 1 do
+			local a = k / N * math.pi * 2
+			local ca, sa = cos(a), sin(a)
+			local x = s.w * (ca >= 0 and 1 or -1) * abs(ca) ^ (2 / n)
+			local y = s.h * (sa >= 0 and 1 or -1) * abs(sa) ^ (2 / n)
+			verts[#verts + 1] = s.p + sd * x + nrm * y
+		end
+	end
+	local rings = #path
+	for i = 0, rings - 2 do
+		for k = 0, N - 1 do
+			local a = i * N + k + 1
+			local b = i * N + (k + 1) % N + 1
+			local c = (i + 1) * N + k + 1
+			local d = (i + 1) * N + (k + 1) % N + 1
+			tris[#tris + 1] = { a, c, b }
+			tris[#tris + 1] = { b, c, d }
+		end
+	end
+	-- caps
+	for _, e in ipairs({ { 0, true }, { rings - 1, false } }) do
+		local base = e[1] * N
+		local center = V3()
+		for k = 1, N do center = center + verts[base + k] end
+		verts[#verts + 1] = center / N
+		local ci = #verts
+		for k = 0, N - 1 do
+			local a, b = base + k + 1, base + (k + 1) % N + 1
+			-- start cap faces backwards along the path, end cap forwards (outward winding)
+			if e[2] then tris[#tris + 1] = { ci, a, b } else tris[#tris + 1] = { ci, b, a } end
+		end
+	end
+	return { verts = verts, tris = tris }
+end
+MeshGen.sweep = sweep
+
+-- helpers for paths
+-- a vertical shield: from y0 to y1, leaning back by lean degrees, widths at bottom/middle/top
+local function shield(x, y0, y1, zMid, yMid, lean, wB, wM, wT, h, n)
+	local pts = {}
+	local steps = 7
+	for i = 0, steps do
+		local f = i / steps
+		local y = y0 + (y1 - y0) * f
+		local w = f < 0.5 and (wB + (wM - wB) * (f / 0.5)) or (wM + (wT - wM) * ((f - 0.5) / 0.5))
+		-- slightly bulged front
+		local bulge = 0.05 * sin(f * math.pi)
+		pts[#pts + 1] = { p = V3(x, y, zMid + (y - yMid) * tan(rad(lean)) - bulge), w = w, h = h, n = n }
+	end
+	return pts
+end
+-- along Z with a profile of {z, y, w, h}
+local function body(x, prof, n)
+	local pts = {}
+	for _, q in ipairs(prof) do pts[#pts + 1] = { p = V3(x, q[2], q[1]), w = q[3], h = q[4], n = q[5] or n } end
+	return pts
+end
+-- an arc around an axle (fenders): angles in degrees, 90 = straight up, >90 towards the front
+local function arc(cx, cy, cz, r, a0, a1, w, h, n)
+	local pts = {}
+	local steps = 10
+	for i = 0, steps do
+		local a = rad(a0 + (a1 - a0) * i / steps)
+		pts[#pts + 1] = { p = V3(cx, cy + r * sin(a), cz + r * cos(a)), w = w * (1 - 0.25 * abs(i / steps - 0.5)), h = h, n = n }
+	end
+	return pts
+end
+local function mirrorX(path)
+	local out = {}
+	for i, s in ipairs(path) do out[i] = { p = V3(-s.p.X, s.p.Y, s.p.Z), w = s.w, h = s.h, n = s.n } end
+	return out
+end
+
+-- panel shapes in moped space (same coordinates as MopedDef): model -> panelId -> { sweeps }
+local P = {}
+MeshGen.PANELS = P
+P.citi = {
+	front = { shield(0, 1.08, 3.02, -1.98, 2.12, 14, 0.42, 0.55, 0.36, 0.17, 2.8) },
+	ben = { shield(0, 1.3, 2.75, -1.72, 2.05, 14, 0.44, 0.5, 0.33, 0.04, 3) },
+	fot = { body(0, { { -1.66, 1.26, 0.46, 0.09 }, { -1.0, 1.26, 0.48, 0.09 }, { -0.05, 1.26, 0.48, 0.09 } }, 5) },
+	sidaV = { body(-0.26, { { 0.02, 1.62, 0.2, 0.2 }, { 0.35, 1.9, 0.25, 0.38 }, { 0.9, 2.18, 0.26, 0.46 }, { 1.6, 2.24, 0.26, 0.42 }, { 2.2, 2.28, 0.24, 0.34 }, { 2.45, 2.3, 0.2, 0.22 } }, 3) },
+	sidaH = { body(0.26, { { 0.02, 1.62, 0.2, 0.2 }, { 0.35, 1.9, 0.25, 0.38 }, { 0.9, 2.18, 0.26, 0.46 }, { 1.6, 2.24, 0.26, 0.42 }, { 2.2, 2.28, 0.24, 0.34 }, { 2.45, 2.3, 0.2, 0.22 } }, 3) },
+	bak = { body(0, { { 2.4, 2.34, 0.42, 0.22 }, { 2.7, 2.38, 0.34, 0.17 }, { 2.92, 2.4, 0.18, 0.09 } }, 3) },
+	skarm = { arc(0, 0.8, -2.1, 0.92, 35, 158, 0.22, 0.05, 3) },
+	styrkapa = { body(0, { { -1.95, 3.4, 0.36, 0.12 }, { -1.75, 3.43, 0.5, 0.17 }, { -1.45, 3.45, 0.46, 0.15 }, { -1.3, 3.45, 0.3, 0.1 } }, 3) },
+}
+P.sprint = {
+	front = {
+		shield(0, 1.2, 3.25, -2.15, 2.35, 18, 0.46, 0.6, 0.4, 0.24, 3.2),
+		body(0, { { -2.32, 1.74, 0.44, 0.2 }, { -2.6, 1.7, 0.32, 0.13 }, { -2.88, 1.66, 0.12, 0.05 } }, 2.6),
+	},
+	flankV = { body(-0.6, { { -2.25, 2.0, 0.06, 0.5 }, { -1.98, 2.25, 0.06, 0.62 }, { -1.7, 2.35, 0.06, 0.45 } }, 3) },
+	flankH = { body(0.6, { { -2.25, 2.0, 0.06, 0.5 }, { -1.98, 2.25, 0.06, 0.62 }, { -1.7, 2.35, 0.06, 0.45 } }, 3) },
+	ben = { shield(0, 1.4, 2.85, -1.84, 2.15, 16, 0.46, 0.52, 0.36, 0.04, 3) },
+	fot = { body(0, { { -1.72, 1.31, 0.46, 0.09 }, { -1.0, 1.31, 0.48, 0.09 }, { -0.12, 1.31, 0.48, 0.09 } }, 5) },
+	tunnel = { body(0, { { -1.62, 1.48, 0.12, 0.08 }, { -1.0, 1.52, 0.22, 0.15 }, { -0.22, 1.52, 0.22, 0.15 } }, 3) },
+	sidaV = { body(-0.27, { { 0.0, 1.66, 0.2, 0.22 }, { 0.4, 1.98, 0.27, 0.42 }, { 1.0, 2.26, 0.28, 0.48 }, { 1.8, 2.42, 0.28, 0.45 }, { 2.4, 2.72, 0.26, 0.36 }, { 2.7, 2.95, 0.2, 0.2 } }, 3.4) },
+	sidaH = { body(0.27, { { 0.0, 1.66, 0.2, 0.22 }, { 0.4, 1.98, 0.27, 0.42 }, { 1.0, 2.26, 0.28, 0.48 }, { 1.8, 2.42, 0.28, 0.45 }, { 2.4, 2.72, 0.26, 0.36 }, { 2.7, 2.95, 0.2, 0.2 } }, 3.4) },
+	bak = { body(0, { { 2.72, 2.85, 0.4, 0.18 }, { 2.95, 2.82, 0.3, 0.14 }, { 3.12, 2.8, 0.14, 0.07 } }, 3) },
+	skarm = { arc(0, 0.85, -2.25, 0.96, 32, 160, 0.21, 0.05, 3) },
+	styrkapa = { body(0, { { -2.08, 3.52, 0.3, 0.1 }, { -1.85, 3.56, 0.5, 0.17 }, { -1.5, 3.58, 0.46, 0.15 }, { -1.38, 3.58, 0.3, 0.1 } }, 3.2) },
+	under = { body(0, { { -1.55, 1.1, 0.3, 0.05 }, { -0.9, 1.08, 0.4, 0.07 }, { -0.25, 1.1, 0.3, 0.05 } }, 4) },
+	spoiler = { body(0, { { 2.7, 3.2, 0.3, 0.03 }, { 2.88, 3.24, 0.36, 0.04 }, { 3.06, 3.28, 0.3, 0.03 } }, 4) },
+}
+P.klassik = {
+	front = {
+		shield(0, 1.15, 3.05, -1.95, 2.15, 12, 0.5, 0.62, 0.44, 0.08, 2.6),
+		body(0, { { -2.26, 2.55, 0.08, 0.1 }, { -2.18, 2.55, 0.2, 0.3 }, { -2.02, 2.55, 0.2, 0.3 }, { -1.98, 2.55, 0.12, 0.18 } }, 2),
+	},
+	fot = { body(0, { { -1.7, 1.28, 0.48, 0.08 }, { -1.0, 1.28, 0.5, 0.08 }, { -0.1, 1.28, 0.5, 0.08 } }, 5) },
+	sidaV = { body(-0.3, { { 0.45, 2.0, 0.08, 0.12 }, { 0.75, 2.02, 0.28, 0.4 }, { 1.4, 2.05, 0.37, 0.52 }, { 2.05, 2.08, 0.32, 0.44 }, { 2.45, 2.1, 0.1, 0.14 } }, 2.1) },
+	sidaH = { body(0.3, { { 0.45, 2.0, 0.08, 0.12 }, { 0.75, 2.02, 0.28, 0.4 }, { 1.4, 2.05, 0.37, 0.52 }, { 2.05, 2.08, 0.32, 0.44 }, { 2.45, 2.1, 0.1, 0.14 } }, 2.1) },
+	bak = { body(0, { { 1.85, 2.45, 0.1, 0.08 }, { 2.15, 2.45, 0.36, 0.26 }, { 2.5, 2.42, 0.3, 0.22 }, { 2.75, 2.4, 0.08, 0.06 } }, 2) },
+	skarm = { arc(0, 0.8, -2.15, 0.9, 40, 150, 0.29, 0.14, 2.2) },
+	styrkapa = {
+		body(0, { { -1.93, 3.4, 0.34, 0.11 }, { -1.72, 3.42, 0.47, 0.15 }, { -1.42, 3.43, 0.42, 0.13 }, { -1.3, 3.43, 0.26, 0.08 } }, 2.6),
+		body(0, { { -2.06, 3.6, 0.06, 0.06 }, { -2.0, 3.6, 0.2, 0.2 }, { -1.86, 3.6, 0.21, 0.21 }, { -1.78, 3.6, 0.12, 0.12 } }, 2),
+	},
+}
+
+-- one panel as a single mesh: vertices relative to its bounding-box centre, plus that centre and the size
+function MeshGen.panel(model, panelId)
+	local defs = P[model] and P[model][panelId]
+	if not defs then return nil end
+	local verts, tris = {}, {}
+	for _, path in ipairs(defs) do
+		local m = sweep(path)
+		local off = #verts
+		for _, v in ipairs(m.verts) do verts[#verts + 1] = v end
+		for _, t in ipairs(m.tris) do tris[#tris + 1] = { t[1] + off, t[2] + off, t[3] + off } end
+	end
+	local mn, mx = verts[1], verts[1]
+	for _, v in ipairs(verts) do mn = mn:Min(v); mx = mx:Max(v) end
+	local center = (mn + mx) / 2
+	for i, v in ipairs(verts) do verts[i] = v - center end
+	return { verts = verts, tris = tris, center = center, size = mx - mn }
+end
+
+return MeshGen
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX8"><Properties><string name="Name">Models</string><ProtectedString name="Source"><![CDATA[-- 3D models built from Roblox parts: every engine part, every chassis part, panels, the whole moped,
 -- tools, the first-person hand and the delivery box. Each part kind has one builder; it is used on the engine,
 -- on the moped, on the shelf, in the hand and as the product picture in the shop.
 local Parts = require(script.Parent.Parts)
@@ -1245,7 +1420,7 @@ end
 
 return Models
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX8"><Properties><string name="Name">MopedDef</string><ProtectedString name="Source"><![CDATA[-- Moped models, their chassis slots and their panels (kåpor).
+<Item class="ModuleScript" referent="RBX9"><Properties><string name="Name">MopedDef</string><ProtectedString name="Source"><![CDATA[-- Moped models, their chassis slots and their panels (kåpor).
 -- Moped space (studs): origin on the ground midway between the axles, -Z = forward, +X = right.
 local Parts = require(script.Parent.Parts)
 local EngineDef = require(script.Parent.EngineDef)
@@ -1260,9 +1435,9 @@ MopedDef.SLOTS = {
 	{ id = "styre", kind = "styre", n = "Styre", req = { "gaffel" } },
 	{ id = "dampare", kind = "dampare", n = "Bakdämpare", req = { "ram" } },
 	{ id = "motor", kind = "motor", n = "Motor", req = { "ram", "dampare" } },
-	{ id = "bakhjul", kind = "bakhjul", n = "Bakhjul", req = { "motor" } },
+	{ id = "bakhjul", kind = "bakhjul", n = "Bakhjul", req = { "dampare" } },
 	{ id = "bakbroms", kind = "bakbroms", n = "Bakbroms", req = { "bakhjul" } },
-	{ id = "avgas", kind = "avgas", n = "Avgassystem", req = { "motor" } },
+	{ id = "avgas", kind = "avgas", n = "Avgassystem", req = { "ram" } },
 	{ id = "tank", kind = "tank", n = "Tank", req = { "ram" } },
 	{ id = "sadel", kind = "sadel", n = "Sadel", req = { "tank" } },
 }
@@ -1413,15 +1588,29 @@ function MopedDef.canMount(m, slot, sku)
 end
 local function filled(m, slot) if slot == "motor" then return m.engine ~= nil end return m.slots[slot] ~= nil end
 MopedDef.filled = filled
-function MopedDef.canRemove(m, slot)
-	if not filled(m, slot) then return false, "Inget monterat där" end
-	for _, id in ipairs(MopedDef.slotIds(m.model)) do
-		if filled(m, id) then
-			local info = MopedDef.slotInfo(m.model, id)
-			for _, r in ipairs(info.req) do
-				if r == slot then return false, "Ta bort " .. info.n:lower() .. " först" end
+-- mounted slots that sit on slot (directly or further out), outermost first
+function MopedDef.dependents(m, slot)
+	local ids = MopedDef.slotIds(m.model)
+	local out, inSet = {}, { [slot] = true }
+	local changed = true
+	while changed do
+		changed = false
+		for i = #ids, 1, -1 do
+			local id = ids[i]
+			if filled(m, id) and not inSet[id] then
+				for _, r in ipairs(MopedDef.slotInfo(m.model, id).req) do
+					if inSet[r] then inSet[id] = true; out[#out + 1] = id; changed = true; break end
+				end
 			end
 		end
+	end
+	return out
+end
+-- a part can be taken off; what sits on it comes off too, except the engine (lift it out first)
+function MopedDef.canRemove(m, slot)
+	if not filled(m, slot) then return false, "Inget monterat där" end
+	for _, d in ipairs(MopedDef.dependents(m, slot)) do
+		if d == "motor" then return false, "Lyft ur motorn först" end
 	end
 	return true
 end
@@ -1455,7 +1644,7 @@ end
 
 return MopedDef
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX9"><Properties><string name="Name">Paint</string><ProtectedString name="Source"><![CDATA[-- Paint booth: colour library, finishes and spray coverage. Quality from coverage, evenness and runs.
+<Item class="ModuleScript" referent="RBX10"><Properties><string name="Name">Paint</string><ProtectedString name="Source"><![CDATA[-- Paint booth: colour library, finishes and spray coverage. Quality from coverage, evenness and runs.
 local Paint = {}
 
 Paint.LIBRARY = {
@@ -1550,7 +1739,7 @@ end
 
 return Paint
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX10"><Properties><string name="Name">Parts</string><ProtectedString name="Source"><![CDATA[-- Every part and tool that exists, with shop data and the stats Performance uses.
+<Item class="ModuleScript" referent="RBX11"><Properties><string name="Name">Parts</string><ProtectedString name="Source"><![CDATA[-- Every part and tool that exists, with shop data and the stats Performance uses.
 -- All brands are made up (real brand names and logos could get the game taken down from Roblox).
 local Parts = {}
 
@@ -1770,7 +1959,7 @@ end
 
 return Parts
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX11"><Properties><string name="Name">Performance</string><ProtectedString name="Source"><![CDATA[-- Engine and moped performance from the mounted parts. A simplified, game-balanced model:
+<Item class="ModuleScript" referent="RBX12"><Properties><string name="Name">Performance</string><ProtectedString name="Source"><![CDATA[-- Engine and moped performance from the mounted parts. A simplified, game-balanced model:
 -- the cylinder gives the base power and rev range; carburettor, intake, exhaust, ignition and porting scale it,
 -- parts that are too small for the cylinder hold it back, and the CVT (variator, rollers, clutch) decides
 -- where the engine runs at each speed. The same functions drive the riding simulation.
@@ -1960,7 +2149,7 @@ end
 
 return Performance
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX12"><Properties><string name="Name">Porting</string><ProtectedString name="Source"><![CDATA[-- Cylinder porting: four port windows, each a grid of cells that are ground down to the marked depth.
+<Item class="ModuleScript" referent="RBX13"><Properties><string name="Name">Porting</string><ProtectedString name="Source"><![CDATA[-- Cylinder porting: four port windows, each a grid of cells that are ground down to the marked depth.
 -- The client sends the cell depths when done; the server computes the quality from them with result().
 local Porting = {}
 
@@ -2055,7 +2244,7 @@ end
 
 return Porting
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX13"><Properties><string name="Name">Profile</string><ProtectedString name="Source"><![CDATA[-- A player's saved garage and every rule for changing it. Pure Lua (no Roblox objects), so the server is the only
+<Item class="ModuleScript" referent="RBX14"><Properties><string name="Name">Profile</string><ProtectedString name="Source"><![CDATA[-- A player's saved garage and every rule for changing it. Pure Lua (no Roblox objects), so the server is the only
 -- one that changes a profile and the rules can be tested without Roblox. Functions return ok, err (Swedish message).
 local Config = require(script.Parent.Config)
 local Parts = require(script.Parent.Parts)
@@ -2168,10 +2357,17 @@ function Profile.unmountEngine(p, target, sock)
 	if not map then return err("Ingen motor där") end
 	local ok, e = EngineDef.canRemove(map, sock)
 	if not ok then return err(e) end
+	local extra = {}
+	for _, d in ipairs(EngineDef.dependents(map, sock)) do
+		local did = map[d]
+		map[d] = nil
+		p.items[did].loc = Profile.count(p, "bank") < Profile.BENCH_SLOTS and "bank" or "golv"
+		extra[#extra + 1] = EngineDef.BY_ID[d].name:lower()
+	end
 	local id = map[sock]
 	map[sock] = nil
 	p.items[id].loc = Profile.count(p, "bank") < Profile.BENCH_SLOTS and "bank" or "golv"
-	return true, id
+	return true, id, extra
 end
 function Profile.mountChassis(p, slot, id, now)
 	local m = p.mopeds[p.cur]
@@ -2192,10 +2388,17 @@ function Profile.unmountChassis(p, slot)
 	if slot == "motor" then return Profile.engineToStand(p) end
 	local ok, e = MopedDef.canRemove(m, slot)
 	if not ok then return err(e) end
+	local extra = {}
+	for _, d in ipairs(MopedDef.dependents(m, slot)) do
+		local did = m.slots[d]
+		m.slots[d] = nil
+		p.items[did].loc = Profile.count(p, "bank") < Profile.BENCH_SLOTS and "bank" or "golv"
+		extra[#extra + 1] = MopedDef.slotName(m.model, d):lower()
+	end
 	local id = m.slots[slot]
 	m.slots[slot] = nil
 	p.items[id].loc = Profile.count(p, "bank") < Profile.BENCH_SLOTS and "bank" or "golv"
-	return true, id
+	return true, id, extra
 end
 function Profile.engineToMoped(p)
 	local m = p.mopeds[p.cur]
@@ -2706,7 +2909,7 @@ return Profile
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="ServerScriptService" referent="RBX18"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX16"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[-- The server: one garage per player, saved profiles, every change to a profile (validated here only),
+<Item class="ServerScriptService" referent="RBX19"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX17"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[-- The server: one garage per player, saved profiles, every change to a profile (validated here only),
 -- the physical things other players see (moped, engine, parts, boxes), deliveries, riding and jobs.
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
@@ -3096,10 +3299,10 @@ end
 function H.unmountEngine(plr, p, target, sock)
 	if not inGarage(plr) then return false, "Gå in i ditt garage" end
 	if riding[plr] and target ~= "stand" then return false, "Mopeden är ute" end
-	local ok, e = Profile.unmountEngine(p, target, sock)
+	local ok, e, extra = Profile.unmountEngine(p, target, sock)
 	if not ok then return ok, e end
 	changed(plr, { target == "stand" and "engine" or "moped", "items" })
-	return true, e
+	return true, e, extra
 end
 function H.mountChassis(plr, p, slot, id)
 	if not inGarage(plr) or riding[plr] then return false, "Mopeden måste stå på lyften" end
@@ -3110,10 +3313,10 @@ function H.mountChassis(plr, p, slot, id)
 end
 function H.unmountChassis(plr, p, slot)
 	if not inGarage(plr) or riding[plr] then return false, "Mopeden måste stå på lyften" end
-	local ok, e = Profile.unmountChassis(p, slot)
+	local ok, e, extra = Profile.unmountChassis(p, slot)
 	if not ok then return ok, e end
 	changed(plr, { "moped", "items", "engine" })
-	return true, e
+	return true, e, extra
 end
 function H.engineToMoped(plr, p)
 	if not inGarage(plr) or riding[plr] then return false, "Mopeden måste stå på lyften" end
@@ -3290,7 +3493,7 @@ Api.OnServerInvoke = function(plr, action, ...)
 		warn("Api " .. action .. " failed: " .. tostring(res[2]))
 		return false, "Något gick fel"
 	end
-	return res[2], res[3]
+	return res[2], res[3], res[4]
 end
 
 -- prompts that the server handles itself
@@ -3466,7 +3669,7 @@ game:BindToClose(function()
 	for plr in pairs(profiles) do save(plr) end
 end)
 ]]></ProtectedString></Properties></Item>
-<Item class="Script" referent="RBX17"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[-- Builds the world around the garages: ground, roads from Map (with markings and street lights), the town on
+<Item class="Script" referent="RBX18"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[-- Builds the world around the garages: ground, roads from Map (with markings and street lights), the town on
 -- Storgatan, the petrol station, the supermarket, the industrial area, the harbour, the country road to the farm,
 -- the test track and the drag strip. Everything is anchored parts; terrain is only used for water.
 local RS = game:GetService("ReplicatedStorage")
@@ -3774,7 +3977,7 @@ spawn.Parent = world
 world:SetAttribute("Built", true)
 ]]></ProtectedString></Properties></Item>
 </Item>
-<Item class="StarterPlayer" referent="RBX29"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX28"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX19"><Properties><string name="Name">Assembly</string><ProtectedString name="Source"><![CDATA[-- Building by hand: the engine on the stand ("engine") and the moped on the lift ("work").
+<Item class="StarterPlayer" referent="RBX31"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX30"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX20"><Properties><string name="Name">Assembly</string><ProtectedString name="Source"><![CDATA[-- Building by hand: the engine on the stand ("engine") and the moped on the lift ("work").
 -- Drag a part from the tray onto the engine/moped. Where it belongs shows up green (fits now) or red (with what
 -- has to go on first). Let go on the marker and the part slides into place while a hand tightens it.
 -- Right-click a mounted part to take it off; left-click it for Demontera / Lackera / Byt ut / Inspektera.
@@ -3890,7 +4093,7 @@ UI.list(checkList, 3)
 
 local bottom = UI.new("Frame", { Size = UDim2.fromOffset(820, 44), Position = UDim2.new(0.5, 0, 1, -12), AnchorPoint = Vector2.new(0.5, 1), BackgroundTransparency = 1, Name = "Knappar" }, gui)
 UI.list(bottom, 8, true, Enum.HorizontalAlignment.Center)
-local hint = UI.text(gui, "Rotera: R / högerklick och dra   ·   Zoom: rullhjul   ·   Ta bort: högerklicka på en del", UDim2.fromOffset(600, 20), UDim2.new(0.5, 0, 1, -84), { anchor = Vector2.new(0.5, 0), ts = 13, color = UI.C.dim, xa = Enum.TextXAlignment.Center })
+local hint = UI.text(gui, "Snurra 360°: dra på tom yta (eller pilarna)   ·   Zoom: rullhjul   ·   Ta bort: högerklicka på en del", UDim2.fromOffset(600, 20), UDim2.new(0.5, 0, 1, -84), { anchor = Vector2.new(0.5, 0), ts = 13, color = UI.C.dim, xa = Enum.TextXAlignment.Center })
 
 local menu -- context menu
 local function closeMenu() if menu then menu:Destroy(); menu = nil end end
@@ -4027,12 +4230,13 @@ local function mountedAt(inst)
 end
 local function unmount(mp)
 	local map, target = engineMap()
-	local ok
-	if mp.kind == "engine" then ok = S.api("unmountEngine", target, mp.id)
-	else ok = S.api("unmountChassis", mp.id) end
+	local ok, _, extra
+	if mp.kind == "engine" then ok, _, extra = S.api("unmountEngine", target, mp.id)
+	else ok, _, extra = S.api("unmountChassis", mp.id) end
 	if ok then
 		handAnim(mp.model:GetBoundingBox().Position, true)
-		S.toast("Demonterad – delen ligger på arbetsbänken", "ok")
+		local more = (type(extra) == "table" and #extra > 0) and (" Även " .. table.concat(extra, ", ") .. " togs loss.") or ""
+		S.toast("Demonterad – delen ligger på arbetsbänken." .. more, "ok")
 	end
 	return ok
 end
@@ -4188,7 +4392,22 @@ function A.refresh()
 			if j.type == "reparation" or j.type == "bygg" then btn("Lämna motorn till kunden", "yellow", function() S.api("completeJob", j.id) end, 3) end
 		end
 	else
-		if m.engine then btn("Lyft ur motorn", "secondary", function() if S.api("engineToStand") then S.toast("Motorn står på motorstativet", "ok") end end, 1)
+		if m.engine then
+			btn(A.engineZoom and "Visa hela mopeden" or "Meka på motorn här", "secondary", function()
+				A.engineZoom = not A.engineZoom
+				if A.engineZoom then
+					A.focus = (engineCF() * CFrame.new(0, 0.2, 0.2)).Position
+					A.dist = 5
+					A.cat = "Motorblock"
+				else
+					A.focus = (S.origin() * GarageBuilder.LIFT * CFrame.new(0, 2.2, 0)).Position
+					A.dist = 11
+					A.cat = "Alla"
+				end
+				updateCam()
+				A.refresh()
+			end, 0)
+			btn("Lyft ur motorn", "secondary", function() if S.api("engineToStand") then S.toast("Motorn står på motorstativet", "ok") end end, 1)
 		elseif EngineDef.complete(p.stand) then btn("Montera motorn från stativet", "green", function() S.api("engineToMoped") end, 1) end
 		if #Profile.mopedProblems(p, m) == 0 then btn("Kör ut", "green", function() S.endMode(); S.open:Fire("ride") end, 2) end
 	end
@@ -4203,6 +4422,7 @@ local function open(mode)
 	A.mode = mode
 	A.cat = "Alla"
 	A.filterKind = nil
+	A.engineZoom = false
 	fx.Parent = workspace
 	if mode == "engine" then
 		A.focus = (S.origin() * GarageBuilder.STAND * CFrame.new(0, 0.1, 0.5)).Position
@@ -4237,11 +4457,15 @@ local rotating = false
 UIS.InputBegan:Connect(function(input, gp)
 	if not A.mode then return end
 	if input.KeyCode == Enum.KeyCode.R and not gp then A.yaw = A.yaw + math.rad(45); updateCam() end
+	if not gp and (input.KeyCode == Enum.KeyCode.Left or input.KeyCode == Enum.KeyCode.Q) then A.yaw = A.yaw + math.rad(20); updateCam() end
+	if not gp and (input.KeyCode == Enum.KeyCode.Right or input.KeyCode == Enum.KeyCode.E) then A.yaw = A.yaw - math.rad(20); updateCam() end
+	if not gp and input.KeyCode == Enum.KeyCode.Up then A.pitch = math.clamp(A.pitch + 0.15, -0.45, 1.45); updateCam() end
+	if not gp and input.KeyCode == Enum.KeyCode.Down then A.pitch = math.clamp(A.pitch - 0.15, -0.45, 1.45); updateCam() end
 	if input.UserInputType == Enum.UserInputType.MouseButton2 and not gp then
 		local mp = mountedAt(plr:GetMouse().Target)
 		if mp then
 			local okR, why
-			if mp.kind == "engine" then okR, why = EngineDef.canRemove(engineMap(), mp.id) else okR, why = MopedDef.canRemove(S.moped(), mp.id) end
+			if mp.kind == "engine" then okR, why = EngineDef.canRemove((engineMap()), mp.id) else okR, why = MopedDef.canRemove(S.moped(), mp.id) end
 			if okR then unmount(mp) else S.toast(why, "error") end
 		else
 			rotating = true
@@ -4253,21 +4477,24 @@ UIS.InputBegan:Connect(function(input, gp)
 		if mp then
 			local pos = UIS:GetMouseLocation()
 			contextMenu(mp, pos.X, pos.Y - 58)
+		else
+			-- drag on empty space: orbit 360 degrees around the moped/engine
+			rotating = true
 		end
 	end
 end)
 UIS.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton2 then rotating = false end
+	if input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.MouseButton1 then rotating = false end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 and drag then dropDrag() end
 end)
 UIS.InputChanged:Connect(function(input, gp)
 	if not A.mode then return end
 	if input.UserInputType == Enum.UserInputType.MouseWheel then
-		A.dist = math.clamp(A.dist - input.Position.Z * 0.8, A.mode == "engine" and 2.5 or 5, A.mode == "engine" and 12 or 22)
+		A.dist = math.clamp(A.dist - input.Position.Z * 0.8, (A.mode == "engine" or A.engineZoom) and 2.5 or 5, A.mode == "engine" and 12 or 22)
 		updateCam()
 	elseif input.UserInputType == Enum.UserInputType.MouseMovement and rotating then
 		A.yaw = A.yaw - input.Delta.X * 0.01
-		A.pitch = math.clamp(A.pitch + input.Delta.Y * 0.008, -0.2, 1.2)
+		A.pitch = math.clamp(A.pitch + input.Delta.Y * 0.008, -0.45, 1.45)
 		updateCam()
 	end
 end)
@@ -4295,7 +4522,7 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 ]]></ProtectedString></Properties></Item>
-<Item class="LocalScript" referent="RBX20"><Properties><string name="Name">Hud</string><ProtectedString name="Source"><![CDATA[-- HUD: start menu, money, toasts and tips, the garage side menu with Moped Info, and the windows
+<Item class="LocalScript" referent="RBX21"><Properties><string name="Name">Hud</string><ProtectedString name="Source"><![CDATA[-- HUD: start menu, money, toasts and tips, the garage side menu with Moped Info, and the windows
 -- "Min moppe" (status, tuning, mopeds, designs), "Statistik" and "Inställningar".
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
@@ -4597,7 +4824,7 @@ end)
 S.modeEv.Event:Connect(function(mode) if mode then closeWin() end end)
 updateInfo()
 ]]></ProtectedString></Properties></Item>
-<Item class="LocalScript" referent="RBX21"><Properties><string name="Name">Interact</string><ProtectedString name="Source"><![CDATA[-- Walking around the garage: hover a part to see what it is, click to pick it up (it sits in your hand),
+<Item class="LocalScript" referent="RBX22"><Properties><string name="Name">Interact</string><ProtectedString name="Source"><![CDATA[-- Walking around the garage: hover a part to see what it is, click to pick it up (it sits in your hand),
 -- click a shelf, the bench, the floor, the vise or the paint stand to put it down. Prompts and the side menu
 -- open the work modes; the side menu walks you to the station first.
 local Players = game:GetService("Players")
@@ -4732,7 +4959,98 @@ UIS.InputBegan:Connect(function(input)
 	if input.KeyCode == Enum.KeyCode.Escape and S.mode then S.endMode() end
 end)
 ]]></ProtectedString></Properties></Item>
-<Item class="LocalScript" referent="RBX22"><Properties><string name="Name">Paint</string><ProtectedString name="Source"><![CDATA[-- Paint booth: the panel hangs on the stand (shown enlarged). Pick a colour (library, RGB sliders or HEX),
+<Item class="LocalScript" referent="RBX23"><Properties><string name="Name">MeshSkin</string><ProtectedString name="Source"><![CDATA[-- Gives every moped in the world smooth 3D panels. The server builds panels from blocks (they are the
+-- click targets and the fallback); this client builds a MeshPart for each panel with EditableMesh, shows it
+-- with the panel's paint, and hides the blocks locally. If Roblox refuses EditableMesh, the blocks stay.
+local RS = game:GetService("ReplicatedStorage")
+local AssetService = game:GetService("AssetService")
+local Shared = RS:WaitForChild("Shared")
+local MeshGen = require(Shared.MeshGen)
+local MopedDef = require(Shared.MopedDef)
+
+local templates = {} -- "model/panel" -> { part = MeshPart, center, size } or false
+local disabled = false
+
+local function template(model, panel)
+	local key = model .. "/" .. panel
+	if templates[key] ~= nil then return templates[key] end
+	templates[key] = false
+	if disabled then return false end
+	local data = MeshGen.panel(model, panel)
+	if not data then return false end
+	local ok, res = pcall(function()
+		local em = AssetService:CreateEditableMesh()
+		local ids = {}
+		for i, v in ipairs(data.verts) do ids[i] = em:AddVertex(v) end
+		for _, t in ipairs(data.tris) do em:AddTriangle(ids[t[1]], ids[t[2]], ids[t[3]]) end
+		local part = AssetService:CreateMeshPartAsync(Content.fromObject(em))
+		return part
+	end)
+	if not ok or not res then
+		disabled = true
+		warn("Moppe: släta kåpor gick inte att skapa (EditableMesh), visar block i stället: " .. tostring(res))
+		return false
+	end
+	res.Name = "Kåpa3D"
+	res.Anchored = true
+	res.CanCollide = false
+	res.CanQuery = false
+	res.CanTouch = false
+	res.CastShadow = true
+	templates[key] = { part = res, center = data.center, size = data.size }
+	return templates[key]
+end
+
+local function skin(moped)
+	if moped:GetAttribute("Skinned") then return end
+	local modelId = moped:GetAttribute("Model")
+	local def = modelId and MopedDef.MODELS[modelId]
+	local root = moped.PrimaryPart
+	if not (def and root) then return end
+	moped:SetAttribute("Skinned", true)
+	local rootCF = root.CFrame * CFrame.new(0, -def.r, 0)
+	for _, sub in ipairs(moped:GetChildren()) do
+		local panel = sub:IsA("Model") and sub.Name:match("^pan:(.+)$")
+		if panel then
+			local t = template(modelId, panel)
+			if t then
+				local blocks = {}
+				for _, d in ipairs(sub:GetDescendants()) do
+					if d:IsA("BasePart") and d:GetAttribute("Panel") then blocks[#blocks + 1] = d end
+				end
+				local paintFrom = blocks[1]
+				local mp = t.part:Clone()
+				mp.Size = t.size
+				mp.CFrame = rootCF * CFrame.new(t.center)
+				if paintFrom then
+					mp.Color = paintFrom.Color
+					mp.Material = paintFrom.Material
+					mp.Reflectance = paintFrom.Reflectance
+				end
+				-- welded to the root so it follows when the moped is ridden (anchored root keeps it still)
+				mp.Anchored = false
+				mp.Massless = true
+				local w = Instance.new("WeldConstraint")
+				w.Part0 = root
+				w.Part1 = mp
+				w.Parent = mp
+				mp.Parent = sub
+				for _, b in ipairs(blocks) do b.LocalTransparencyModifier = 1 end
+			end
+		end
+	end
+end
+
+local function watch(inst)
+	if inst:IsA("Model") and inst.Name == "Moped" and inst:IsDescendantOf(workspace) then
+		-- wait until the server has filled the model
+		task.delay(0.3, function() if inst.Parent then skin(inst) end end)
+	end
+end
+workspace.DescendantAdded:Connect(watch)
+for _, d in ipairs(workspace:GetDescendants()) do watch(d) end
+]]></ProtectedString></Properties></Item>
+<Item class="LocalScript" referent="RBX24"><Properties><string name="Name">Paint</string><ProtectedString name="Source"><![CDATA[-- Paint booth: the panel hangs on the stand (shown enlarged). Pick a colour (library, RGB sliders or HEX),
 -- a finish and the gloss, then hold the left button and spray with the gun in your hand. Coverage builds up
 -- where you spray; too much in one place makes runs. Mouse wheel moves the gun closer or further away.
 local Players = game:GetService("Players")
@@ -5055,7 +5373,7 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 end)
 ]]></ProtectedString></Properties></Item>
-<Item class="LocalScript" referent="RBX23"><Properties><string name="Name">Porting</string><ProtectedString name="Source"><![CDATA[-- Cylinder porting in first person: the cylinder sits in the vise (shown enlarged), the four port windows glow
+<Item class="LocalScript" referent="RBX25"><Properties><string name="Name">Porting</string><ProtectedString name="Source"><![CDATA[-- Cylinder porting in first person: the cylinder sits in the vise (shown enlarged), the four port windows glow
 -- where material should come off, and your hand holds the die grinder at the mouse. Hold the left button to
 -- grind. Cells fade from glowing blue to polished metal when done, and turn red if you go too deep.
 -- A shaky hand (cheap grinder) makes it harder; training mode lets you practise without a cylinder.
@@ -5190,6 +5508,9 @@ local function refreshUI()
 	end
 	local res = Porting.result(P.state)
 	UI.check(zones, "Jämn finish", res.even > 0.75 and res.cover > 0.9, 10, false)
+end
+-- the buttons are built once per session (rebuilding them would swallow clicks)
+local function buildButtons()
 	UI.clear(buttons)
 	UI.button(buttons, "Klar", UDim2.fromOffset(140, 40), nil, { kind = "green", order = 1 }, function() P.finish() end)
 	UI.button(buttons, P.training and "Avsluta träning" or "Träningsläge", UDim2.fromOffset(170, 40), nil, { kind = "secondary", order = 2 }, function() P.toggleTraining() end)
@@ -5255,9 +5576,11 @@ function P.begin()
 	end
 	P.state = Porting.new()
 	P.t = 0
+	P.started = os.clock()
 	buildScene(sku)
 	topInfo.Visible, zones.Visible, stats.Visible, hint.Visible = true, true, true, true
 	P.setZone(1)
+	buildButtons()
 	refreshStats()
 end
 function P.toggleTraining()
@@ -5271,7 +5594,7 @@ function P.finish()
 		S.endMode("port")
 		return
 	end
-	if P.t < 6 then S.toast("Ta det lugnt – portning tar tid. Slipa klart först.", "error"); return end
+	if os.clock() - (P.started or 0) < 6 or P.t < 1 then S.toast("Ta det lugnt – portning tar tid. Slipa klart först.", "error"); return end
 	local ok, res = S.api("portDone", P.state)
 	if ok then
 		S.toast(string.format("Portningen klar: %s (%d %%). Effekten syns i Moped Info när cylindern sitter i motorn.", res.label, math.floor(res.q * 100)), res.q >= 0.5 and "ok" or "error")
@@ -5350,15 +5673,22 @@ RunService.RenderStepped:Connect(function(dt)
 		if acc > 0.1 then acc = 0; paintCells(); refreshStats() end
 	end
 end)
--- refresh the checklist when a zone completes
+-- refresh the checklist only when a zone's done-state changes
 task.spawn(function()
+	local last = ""
 	while true do
 		task.wait(0.5)
-		if S.mode == "port" and P.state and gui.Enabled and zones.Visible then refreshUI() end
+		if S.mode == "port" and P.state and gui.Enabled and zones.Visible then
+			local sig = tostring(P.zone)
+			for _, z in ipairs(Porting.ZONES) do sig = sig .. (zoneDone(z) and "1" or "0") end
+			local res = Porting.result(P.state)
+			sig = sig .. ((res.even > 0.75 and res.cover > 0.9) and "1" or "0")
+			if sig ~= last then last = sig; refreshUI() end
+		end
 	end
 end)
 ]]></ProtectedString></Properties></Item>
-<Item class="LocalScript" referent="RBX24"><Properties><string name="Name">Ride</string><ProtectedString name="Source"><![CDATA[-- Riding: the client drives its own moped (network owner). Speed comes from Performance (the same model as the
+<Item class="LocalScript" referent="RBX26"><Properties><string name="Name">Ride</string><ProtectedString name="Source"><![CDATA[-- Riding: the client drives its own moped (network owner). Speed comes from Performance (the same model as the
 -- numbers in Moped Info), the moped follows the ground with raycasts, stops at walls, leans in curves and the
 -- suspension bobs. Engine temperature rises with throttle; too hot wears the piston and can seize it.
 -- HUD: speedometer with rpm and temperature, minimap with roads and the delivery target.
@@ -5602,7 +5932,7 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 end)
 ]]></ProtectedString></Properties></Item>
-<Item class="LocalScript" referent="RBX25"><Properties><string name="Name">Shop</string><ProtectedString name="Source"><![CDATA[-- Moppelagret.se on the garage computer: start page, search, categories, product pictures and pages, stock,
+<Item class="LocalScript" referent="RBX27"><Properties><string name="Name">Shop</string><ProtectedString name="Source"><![CDATA[-- Moppelagret.se on the garage computer: start page, search, categories, product pictures and pages, stock,
 -- cart, orders with delivery countdown, and the job board (Uppdrag).
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
@@ -5913,7 +6243,7 @@ end)
 S.modeEv.Event:Connect(function(mode) if mode ~= "shop" then gui.Enabled = false end end)
 S.changed.Event:Connect(function() if gui.Enabled then W.refresh() end end)
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX26"><Properties><string name="Name">State</string><ProtectedString name="Source"><![CDATA[-- Client state shared by all LocalScripts: the profile from the server, API calls, the current work mode,
+<Item class="ModuleScript" referent="RBX28"><Properties><string name="Name">State</string><ProtectedString name="Source"><![CDATA[-- Client state shared by all LocalScripts: the profile from the server, API calls, the current work mode,
 -- toasts, camera and movement locking.
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
@@ -5971,13 +6301,13 @@ end
 function S.toast(text, kind) S.toastEv:Fire(text, kind or "info") end
 -- call the server; shows the error as a toast; returns ok, result
 function S.api(action, ...)
-	local ok, a, b = pcall(function(...) return Api:InvokeServer(action, ...) end, ...)
+	local ok, a, b, c = pcall(function(...) return Api:InvokeServer(action, ...) end, ...)
 	if not ok then
 		S.toast("Ingen kontakt med servern", "error")
 		return false
 	end
 	if not a and b then S.toast(b, "error") end
-	return a, b
+	return a, b, c
 end
 
 -- my garage
@@ -6064,7 +6394,7 @@ end
 
 return S
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX27"><Properties><string name="Name">UIKit</string><ProtectedString name="Source"><![CDATA[-- Small UI toolkit: dark rounded panels, blue buttons, green money, product pictures in ViewportFrames.
+<Item class="ModuleScript" referent="RBX29"><Properties><string name="Name">UIKit</string><ProtectedString name="Source"><![CDATA[-- Small UI toolkit: dark rounded panels, blue buttons, green money, product pictures in ViewportFrames.
 -- Everything is designed for 1280x720 and scaled with UIScale on other screen sizes.
 local RS = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")

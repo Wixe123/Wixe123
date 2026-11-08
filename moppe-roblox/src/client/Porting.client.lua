@@ -133,6 +133,9 @@ local function refreshUI()
 	end
 	local res = Porting.result(P.state)
 	UI.check(zones, "Jämn finish", res.even > 0.75 and res.cover > 0.9, 10, false)
+end
+-- the buttons are built once per session (rebuilding them would swallow clicks)
+local function buildButtons()
 	UI.clear(buttons)
 	UI.button(buttons, "Klar", UDim2.fromOffset(140, 40), nil, { kind = "green", order = 1 }, function() P.finish() end)
 	UI.button(buttons, P.training and "Avsluta träning" or "Träningsläge", UDim2.fromOffset(170, 40), nil, { kind = "secondary", order = 2 }, function() P.toggleTraining() end)
@@ -198,9 +201,11 @@ function P.begin()
 	end
 	P.state = Porting.new()
 	P.t = 0
+	P.started = os.clock()
 	buildScene(sku)
 	topInfo.Visible, zones.Visible, stats.Visible, hint.Visible = true, true, true, true
 	P.setZone(1)
+	buildButtons()
 	refreshStats()
 end
 function P.toggleTraining()
@@ -214,7 +219,7 @@ function P.finish()
 		S.endMode("port")
 		return
 	end
-	if P.t < 6 then S.toast("Ta det lugnt – portning tar tid. Slipa klart först.", "error"); return end
+	if os.clock() - (P.started or 0) < 6 or P.t < 1 then S.toast("Ta det lugnt – portning tar tid. Slipa klart först.", "error"); return end
 	local ok, res = S.api("portDone", P.state)
 	if ok then
 		S.toast(string.format("Portningen klar: %s (%d %%). Effekten syns i Moped Info när cylindern sitter i motorn.", res.label, math.floor(res.q * 100)), res.q >= 0.5 and "ok" or "error")
@@ -293,10 +298,17 @@ RunService.RenderStepped:Connect(function(dt)
 		if acc > 0.1 then acc = 0; paintCells(); refreshStats() end
 	end
 end)
--- refresh the checklist when a zone completes
+-- refresh the checklist only when a zone's done-state changes
 task.spawn(function()
+	local last = ""
 	while true do
 		task.wait(0.5)
-		if S.mode == "port" and P.state and gui.Enabled and zones.Visible then refreshUI() end
+		if S.mode == "port" and P.state and gui.Enabled and zones.Visible then
+			local sig = tostring(P.zone)
+			for _, z in ipairs(Porting.ZONES) do sig = sig .. (zoneDone(z) and "1" or "0") end
+			local res = Porting.result(P.state)
+			sig = sig .. ((res.even > 0.75 and res.cover > 0.9) and "1" or "0")
+			if sig ~= last then last = sig; refreshUI() end
+		end
 	end
 end)

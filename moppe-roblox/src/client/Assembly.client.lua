@@ -114,7 +114,7 @@ UI.list(checkList, 3)
 
 local bottom = UI.new("Frame", { Size = UDim2.fromOffset(820, 44), Position = UDim2.new(0.5, 0, 1, -12), AnchorPoint = Vector2.new(0.5, 1), BackgroundTransparency = 1, Name = "Knappar" }, gui)
 UI.list(bottom, 8, true, Enum.HorizontalAlignment.Center)
-local hint = UI.text(gui, "Rotera: R / högerklick och dra   ·   Zoom: rullhjul   ·   Ta bort: högerklicka på en del", UDim2.fromOffset(600, 20), UDim2.new(0.5, 0, 1, -84), { anchor = Vector2.new(0.5, 0), ts = 13, color = UI.C.dim, xa = Enum.TextXAlignment.Center })
+local hint = UI.text(gui, "Snurra 360°: dra på tom yta (eller pilarna)   ·   Zoom: rullhjul   ·   Ta bort: högerklicka på en del", UDim2.fromOffset(600, 20), UDim2.new(0.5, 0, 1, -84), { anchor = Vector2.new(0.5, 0), ts = 13, color = UI.C.dim, xa = Enum.TextXAlignment.Center })
 
 local menu -- context menu
 local function closeMenu() if menu then menu:Destroy(); menu = nil end end
@@ -251,12 +251,13 @@ local function mountedAt(inst)
 end
 local function unmount(mp)
 	local map, target = engineMap()
-	local ok
-	if mp.kind == "engine" then ok = S.api("unmountEngine", target, mp.id)
-	else ok = S.api("unmountChassis", mp.id) end
+	local ok, _, extra
+	if mp.kind == "engine" then ok, _, extra = S.api("unmountEngine", target, mp.id)
+	else ok, _, extra = S.api("unmountChassis", mp.id) end
 	if ok then
 		handAnim(mp.model:GetBoundingBox().Position, true)
-		S.toast("Demonterad – delen ligger på arbetsbänken", "ok")
+		local more = (type(extra) == "table" and #extra > 0) and (" Även " .. table.concat(extra, ", ") .. " togs loss.") or ""
+		S.toast("Demonterad – delen ligger på arbetsbänken." .. more, "ok")
 	end
 	return ok
 end
@@ -412,7 +413,22 @@ function A.refresh()
 			if j.type == "reparation" or j.type == "bygg" then btn("Lämna motorn till kunden", "yellow", function() S.api("completeJob", j.id) end, 3) end
 		end
 	else
-		if m.engine then btn("Lyft ur motorn", "secondary", function() if S.api("engineToStand") then S.toast("Motorn står på motorstativet", "ok") end end, 1)
+		if m.engine then
+			btn(A.engineZoom and "Visa hela mopeden" or "Meka på motorn här", "secondary", function()
+				A.engineZoom = not A.engineZoom
+				if A.engineZoom then
+					A.focus = (engineCF() * CFrame.new(0, 0.2, 0.2)).Position
+					A.dist = 5
+					A.cat = "Motorblock"
+				else
+					A.focus = (S.origin() * GarageBuilder.LIFT * CFrame.new(0, 2.2, 0)).Position
+					A.dist = 11
+					A.cat = "Alla"
+				end
+				updateCam()
+				A.refresh()
+			end, 0)
+			btn("Lyft ur motorn", "secondary", function() if S.api("engineToStand") then S.toast("Motorn står på motorstativet", "ok") end end, 1)
 		elseif EngineDef.complete(p.stand) then btn("Montera motorn från stativet", "green", function() S.api("engineToMoped") end, 1) end
 		if #Profile.mopedProblems(p, m) == 0 then btn("Kör ut", "green", function() S.endMode(); S.open:Fire("ride") end, 2) end
 	end
@@ -427,6 +443,7 @@ local function open(mode)
 	A.mode = mode
 	A.cat = "Alla"
 	A.filterKind = nil
+	A.engineZoom = false
 	fx.Parent = workspace
 	if mode == "engine" then
 		A.focus = (S.origin() * GarageBuilder.STAND * CFrame.new(0, 0.1, 0.5)).Position
@@ -461,11 +478,15 @@ local rotating = false
 UIS.InputBegan:Connect(function(input, gp)
 	if not A.mode then return end
 	if input.KeyCode == Enum.KeyCode.R and not gp then A.yaw = A.yaw + math.rad(45); updateCam() end
+	if not gp and (input.KeyCode == Enum.KeyCode.Left or input.KeyCode == Enum.KeyCode.Q) then A.yaw = A.yaw + math.rad(20); updateCam() end
+	if not gp and (input.KeyCode == Enum.KeyCode.Right or input.KeyCode == Enum.KeyCode.E) then A.yaw = A.yaw - math.rad(20); updateCam() end
+	if not gp and input.KeyCode == Enum.KeyCode.Up then A.pitch = math.clamp(A.pitch + 0.15, -0.45, 1.45); updateCam() end
+	if not gp and input.KeyCode == Enum.KeyCode.Down then A.pitch = math.clamp(A.pitch - 0.15, -0.45, 1.45); updateCam() end
 	if input.UserInputType == Enum.UserInputType.MouseButton2 and not gp then
 		local mp = mountedAt(plr:GetMouse().Target)
 		if mp then
 			local okR, why
-			if mp.kind == "engine" then okR, why = EngineDef.canRemove(engineMap(), mp.id) else okR, why = MopedDef.canRemove(S.moped(), mp.id) end
+			if mp.kind == "engine" then okR, why = EngineDef.canRemove((engineMap()), mp.id) else okR, why = MopedDef.canRemove(S.moped(), mp.id) end
 			if okR then unmount(mp) else S.toast(why, "error") end
 		else
 			rotating = true
@@ -477,21 +498,24 @@ UIS.InputBegan:Connect(function(input, gp)
 		if mp then
 			local pos = UIS:GetMouseLocation()
 			contextMenu(mp, pos.X, pos.Y - 58)
+		else
+			-- drag on empty space: orbit 360 degrees around the moped/engine
+			rotating = true
 		end
 	end
 end)
 UIS.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton2 then rotating = false end
+	if input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.MouseButton1 then rotating = false end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 and drag then dropDrag() end
 end)
 UIS.InputChanged:Connect(function(input, gp)
 	if not A.mode then return end
 	if input.UserInputType == Enum.UserInputType.MouseWheel then
-		A.dist = math.clamp(A.dist - input.Position.Z * 0.8, A.mode == "engine" and 2.5 or 5, A.mode == "engine" and 12 or 22)
+		A.dist = math.clamp(A.dist - input.Position.Z * 0.8, (A.mode == "engine" or A.engineZoom) and 2.5 or 5, A.mode == "engine" and 12 or 22)
 		updateCam()
 	elseif input.UserInputType == Enum.UserInputType.MouseMovement and rotating then
 		A.yaw = A.yaw - input.Delta.X * 0.01
-		A.pitch = math.clamp(A.pitch + input.Delta.Y * 0.008, -0.2, 1.2)
+		A.pitch = math.clamp(A.pitch + input.Delta.Y * 0.008, -0.45, 1.45)
 		updateCam()
 	end
 end)
