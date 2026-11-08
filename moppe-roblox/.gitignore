@@ -1,0 +1,3 @@
+# Roblox Studio skapar en låsfil medan platsen är öppen
+*.rbxlx.lock
+*.rbxl.lock
