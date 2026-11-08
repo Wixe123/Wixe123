@@ -13,10 +13,12 @@ for i, m in ipairs(p.mopeds) do
 	local mm = Models.moped(E.services.Workspace, m, p.items, CF.new(base + V3.new(0, 0.12, (i - 2) * 9)) * CF.Angles(0, math.rad(90), 0))
 	mm:SetAttribute("OwnerId", 0)
 end
-E.run(1)
+E.run(3)
 local n = 0
-for _, d in ipairs(E.services.Workspace:GetDescendants()) do if d.Name == "Kåpa3D" then n = n + 1 end end
-E.check("mesh panels created", n >= 25, n)
+local aerox = 0
+for _, d in ipairs(E.services.Workspace:GetDescendants()) do if d.Name == "Kåpa3D" then n = n + 1 elseif d.Name:match("^Aerox_") then aerox = aerox + 1 end end
+E.check("smooth panels on Citi and Klassik", n >= 14, n)
+E.check("imported Aerox body on the complete Sprint", aerox >= 8, aerox)
 for i, nme in ipairs({ "citi", "sprint", "klassik" }) do
 	local z = base.Z + (i - 2) * 9
 	E.lookFrom(V3.new(base.X, 2.4, z + 8.5), V3.new(base.X, 1.9, z), 38); E.shot("mesh_side_" .. nme)
