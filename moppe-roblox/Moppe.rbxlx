@@ -5075,8 +5075,19 @@ local MopedDef = require(Shared.MopedDef)
 local EngineDef = require(Shared.EngineDef)
 local AeroxMesh = require(Shared.AeroxMesh)
 
+local S = require(script.Parent:WaitForChild("State"))
 local templates = {} -- "model/panel" -> { part = MeshPart, center, size } or false
-local disabled = false
+local disabled = false -- smooth panels failed
+local aeroxFailed = false
+
+-- MeshPart from an EditableMesh; box collision (no heavy collision geometry for big meshes)
+local function meshPart(em)
+	local ok, part = pcall(function()
+		return AssetService:CreateMeshPartAsync(Content.fromObject(em), { CollisionFidelity = Enum.CollisionFidelity.Box, RenderFidelity = Enum.RenderFidelity.Precise })
+	end)
+	if ok and part then return part end
+	return AssetService:CreateMeshPartAsync(Content.fromObject(em))
+end
 
 local function template(model, panel)
 	local key = model .. "/" .. panel
@@ -5090,12 +5101,12 @@ local function template(model, panel)
 		local ids = {}
 		for i, v in ipairs(data.verts) do ids[i] = em:AddVertex(v) end
 		for _, t in ipairs(data.tris) do em:AddTriangle(ids[t[1]], ids[t[2]], ids[t[3]]) end
-		local part = AssetService:CreateMeshPartAsync(Content.fromObject(em))
-		return part
+		return meshPart(em)
 	end)
 	if not ok or not res then
 		disabled = true
 		warn("Moppe: släta kåpor gick inte att skapa (EditableMesh), visar block i stället: " .. tostring(res))
+		S.toast("Släta 3D-kåpor kunde inte skapas: " .. tostring(res), "error")
 		return false
 	end
 	res.Name = "Kåpa3D"
@@ -5119,10 +5130,47 @@ local CLASS_LOOK = {
 	disc = { Color3.fromRGB(205, 210, 216), Enum.Material.Metal, 0.2 },
 }
 local body = nil -- list of { part, class, center } or false
+-- if you import aerox.obj yourself in Studio (a Model named "Aerox" in ReplicatedStorage or Workspace),
+-- that one is used: it has full detail. It is fitted onto the Sprint's wheels by its bounding box.
+local GROUP_CLASS = {}
+for _, n in ipairs({ "1195", "1198", "1200", "1201", "1172", "1432", "1524", "1193", "1509" }) do GROUP_CLASS[n] = "paint" end
+for _, n in ipairs({ "1189", "1191" }) do GROUP_CLASS[n] = "seat" end
+GROUP_CLASS["1254"] = "ex"
+GROUP_CLASS["1530"], GROUP_CLASS["1467"] = "tire", "tire"
+GROUP_CLASS["1529"], GROUP_CLASS["1466"] = "rim", "rim"
+GROUP_CLASS["1528"], GROUP_CLASS["1441"] = "disc", "disc"
+local SCALE = 4.5 / 6.02 -- studs per model unit (Sprint wheelbase / model wheelbase)
+local function importedBody()
+	local imp = RS:FindFirstChild("Aerox") or workspace:FindFirstChild("Aerox")
+	if not (imp and imp:IsA("Model")) then return nil end
+	local cf, sz = imp:GetBoundingBox()
+	local lengthX = sz.X > sz.Z -- imported lying sideways?
+	local len = lengthX and sz.X or sz.Z
+	local k = (8.628 * SCALE) / len
+	local center = Vector3.new(0, 3.0355 * SCALE, 0.112 * SCALE)
+	local turn = CFrame.Angles(0, lengthX and math.pi / 2 or math.pi, 0)
+	local list = {}
+	for _, d in ipairs(imp:GetDescendants()) do
+		if d:IsA("MeshPart") or (d:IsA("BasePart") and d:FindFirstChildOfClass("SpecialMesh")) then
+			local rel = cf:ToObjectSpace(d.CFrame)
+			local placed = turn * (rel.Rotation + rel.Position * k)
+			local num = d.Name:match("(%d+)")
+			local part = d:Clone()
+			for _, c in ipairs(part:GetChildren()) do if not c:IsA("SpecialMesh") then c:Destroy() end end
+			part.Anchored, part.CanCollide, part.CanQuery, part.CanTouch = true, false, false, false
+			list[#list + 1] = { part = part, class = (num and GROUP_CLASS[num]) or "dark", center = center + placed.Position, size = d.Size * k, rot = placed.Rotation }
+		end
+	end
+	if #list == 0 then return nil end
+	return list
+end
+
 local function bodyTemplates()
 	if body ~= nil then return body end
 	body = false
-	if disabled then return false end
+	local imported = importedBody()
+	if imported then body = imported; return body end
+	if aeroxFailed then return false end
 	local list = {}
 	local ok, err = pcall(function()
 		for cls, chunks in pairs(AeroxMesh.classes) do
@@ -5135,7 +5183,7 @@ local function bodyTemplates()
 				local ids = {}
 				for i, v in ipairs(verts) do ids[i] = em:AddVertex(v - center) end
 				for _, t in ipairs(tris) do em:AddTriangle(ids[t[1]], ids[t[2]], ids[t[3]]) end
-				local part = AssetService:CreateMeshPartAsync(Content.fromObject(em))
+				local part = meshPart(em)
 				part.Name = "Aerox_" .. cls
 				part.Anchored = true
 				part.CanCollide = false
@@ -5146,8 +5194,10 @@ local function bodyTemplates()
 		end
 	end)
 	if not ok then
-		disabled = true
-		warn("Moppe: Aerox-modellen gick inte att skapa (EditableMesh), visar delarna i stället: " .. tostring(err))
+		aeroxFailed = true
+		local msg = "Aerox-modellen kunde inte visas: " .. tostring(err)
+		warn("Moppe: " .. msg)
+		S.toast(msg .. " — importera aerox.obj i Studio (se README) så används den i stället.", "error")
 		return false
 	end
 	body = list
@@ -5183,7 +5233,7 @@ local function skinAerox(moped, root, rootCF)
 	for _, e in ipairs(list) do
 		local mp = e.part:Clone()
 		mp.Size = e.size
-		mp.CFrame = rootCF * CFrame.new(e.center)
+		mp.CFrame = rootCF * CFrame.new(e.center) * (e.rot or CFrame.new())
 		if e.class == "paint" and paint then
 			mp.Color, mp.Material, mp.Reflectance = paint.Color, paint.Material, paint.Reflectance
 		else
@@ -5419,15 +5469,19 @@ local function buildScene(id)
 		local ids = {}
 		for i, v in ipairs(data.verts) do ids[i] = em:AddVertex(v * 2.2) end
 		for _, t in ipairs(data.tris) do em:AddTriangle(ids[t[1]], ids[t[2]], ids[t[3]]) end
-		local mp = AssetService:CreateMeshPartAsync(Content.fromObject(em))
+		local okP, mp = pcall(function() return AssetService:CreateMeshPartAsync(Content.fromObject(em), { CollisionFidelity = Enum.CollisionFidelity.PreciseConvexDecomposition }) end)
+		if not okP then mp = AssetService:CreateMeshPartAsync(Content.fromObject(em)) end
 		mp.Name = "Kåpa"
 		mp.Anchored = true
-		mp.CanQuery = false
+		mp.CanQuery = true
 		mp.Size = data.size * 2.2
 		mp.CFrame = panelCF
 		mp.Parent = scene
 		L.visual[1] = mp
 	end)
+	L.mask = model
+	L.smooth = okMesh == true
+	L.dots = {}
 	if not okMesh then
 		for _, d in ipairs(model:GetDescendants()) do
 			if d:IsA("BasePart") then
@@ -5473,12 +5527,12 @@ paintCells = function()
 	local r = Paint.result(L.state)
 	local target = Color3.fromRGB(L.color[1], L.color[2], L.color[3])
 	local fin = Paint.FIN[L.finish]
-	local col = PRIMER:Lerp(target, math.clamp(cov * 1.05, 0, 1))
+	local col = PRIMER:Lerp(target, math.clamp((cov - 0.45) * 2.2, 0, 1))
 	if r.runs > 0 then col = col:Lerp(Color3.new(0, 0, 0), math.min(0.3, r.runs * 2)) end
 	for _, v in ipairs(L.visual or {}) do
 		v.Color = col
-		v.Material = cov > 0.3 and Enum.Material[fin.mat] or Enum.Material.SmoothPlastic
-		v.Reflectance = cov > 0.3 and (fin.refl[1] + (fin.refl[2] - fin.refl[1]) * L.gloss) or 0
+		v.Material = cov > 0.6 and Enum.Material[fin.mat] or Enum.Material.SmoothPlastic
+		v.Reflectance = cov > 0.6 and (fin.refl[1] + (fin.refl[2] - fin.refl[1]) * L.gloss) or 0
 	end
 	for i, f in pairs(heat) do
 		local x = L.state.cells[i]
@@ -5510,6 +5564,8 @@ local function buildButtons()
 		local s2 = Paint.new()
 		for i = 1, Paint.COLS * Paint.ROWS do if not L.cells[i] then s2.cells[i] = 1 end end
 		L.state = s2
+		for _, d in ipairs(L.dots or {}) do d:Destroy() end
+		L.dots = {}
 		paintCells()
 		refreshStats()
 	end)
@@ -5564,6 +5620,8 @@ local function close()
 	L.spraying = false
 	L.cells = nil
 	L.visual = nil
+	L.mask = nil
+	L.dots = nil
 	for _, q in ipairs(L.hidden or {}) do if q.Parent then q.LocalTransparencyModifier = 0 end end
 	L.hidden = nil
 	scene:ClearAllChildren()
@@ -5622,6 +5680,41 @@ RunService.RenderStepped:Connect(function(dt)
 		local l = frame:PointToObjectSpace(hit)
 		local u, v = (l.X + L.w / 2) / L.w, (L.h / 2 - l.Y) / L.h
 		if u > -0.15 and u < 1.15 and v > -0.15 and v < 1.15 then Paint.spray(L.state, u, v, dt, L.dist, L.even) else L.state.t = L.state.t + dt end
+		-- paint spots where the spray hits the panel (you see exactly where you have painted)
+		-- the block version of the panel decides where the panel is; the spot sits on the smooth surface if it is there
+		local maskParams = RaycastParams.new()
+		maskParams.FilterType = Enum.RaycastFilterType.Include
+		maskParams.FilterDescendantsInstances = { L.mask }
+		local visParams = RaycastParams.new()
+		visParams.FilterType = Enum.RaycastFilterType.Include
+		visParams.FilterDescendantsInstances = L.visual or {}
+		local fin = Paint.FIN[L.finish]
+		for _ = 1, 3 do
+			local jitter = frame.RightVector * (math.random() - 0.5) * 0.6 * L.dist + frame.UpVector * (math.random() - 0.5) * 0.6 * L.dist
+			local aim = hit + jitter
+			-- the smooth panel if it is shown (precise collision), otherwise the block version
+			local res
+			if L.smooth then res = workspace:Raycast(gunPos, (aim - gunPos) * 1.5, visParams)
+			elseif L.mask then res = workspace:Raycast(gunPos, (aim - gunPos) * 1.5, maskParams) end
+			if res then
+				local dot
+				if #L.dots >= 900 then dot = table.remove(L.dots, 1) else
+					dot = Instance.new("Part")
+					dot.Shape = Enum.PartType.Cylinder
+					dot.Anchored, dot.CanCollide, dot.CanQuery, dot.CanTouch, dot.CastShadow = true, false, false, false, false
+					dot.Name = "Lackprick"
+					dot.Parent = scene
+				end
+				local d = (0.13 + math.random() * 0.09) * L.dist
+				dot.Size = Vector3.new(0.02, d, d)
+				dot.CFrame = CFrame.lookAt(res.Position + res.Normal * 0.015, res.Position + res.Normal) * CFrame.Angles(0, math.pi / 2, 0)
+				dot.Color = Color3.fromRGB(L.color[1], L.color[2], L.color[3])
+				dot.Material = Enum.Material[fin.mat]
+				dot.Reflectance = fin.refl[1] + (fin.refl[2] - fin.refl[1]) * L.gloss
+				dot.Transparency = 0.12
+				L.dots[#L.dots + 1] = dot
+			end
+		end
 		L.t = L.t + dt
 		acc = acc + dt
 		if acc > 0.08 then acc = 0; paintCells(); refreshStats() end
@@ -5670,7 +5763,7 @@ local qualRow = UI.text(stats, "", UDim2.new(1, 0, 0, 22), UDim2.fromOffset(0, 1
 local buttons = UI.new("Frame", { Size = UDim2.fromOffset(700, 44), Position = UDim2.new(0.5, 0, 1, -12), AnchorPoint = Vector2.new(0.5, 1), BackgroundTransparency = 1, Name = "Knappar" }, gui)
 UI.list(buttons, 8, true, Enum.HorizontalAlignment.Center)
 local hint = UI.panel(gui, UDim2.fromOffset(380, 56), UDim2.new(1, -12, 1, -64), { anchor = Vector2.new(1, 1), name = "Tips", transp = 0.2 })
-UI.text(hint, "Håll vänster musknapp för att slipa. A/D eller zonlistan byter port.", UDim2.new(1, -20, 1, 0), UDim2.fromOffset(12, 0), { ts = 13, wrap = true })
+UI.text(hint, "Håll vänster musknapp och för slipen över den gröna ytan. Den slocknar när porten är klar. A/D byter port.", UDim2.new(1, -20, 1, 0), UDim2.fromOffset(12, 0), { ts = 13, wrap = true })
 local picker = UI.panel(gui, UDim2.fromOffset(420, 300), UDim2.fromScale(0.5, 0.5), { anchor = Vector2.new(0.5, 0.5), name = "Välj", visible = false })
 
 ---------------------------------------------------------------- the enlarged cylinder, cells, hand and grinder
@@ -5739,8 +5832,27 @@ local function buildScene(sku)
 			mk.box("Markering", Vector3.new(t, h + 0.2, 0.04), f * CFrame.new(w / 2 + 0.07, 0, -0.04), Color3.fromRGB(60, 255, 120), M.Neon),
 		}
 		for _, bar in ipairs(bars) do bar.CastShadow = false end
+		-- glowing green layer over the port: it fades away as you grind the port to size
+		local glow = mk.box("Glöd", Vector3.new(w, h, 0.02), f * CFrame.new(0, 0, -0.045), Color3.fromRGB(70, 255, 130), M.Neon)
+		glow.Transparency = 0.45
+		glow.CastShadow = false
+		bars[#bars + 1] = glow
 		outlines[z.id] = bars
 	end
+	-- strong work light on the cylinder
+	local lamp = mk.box("Arbetslampa", Vector3.new(0.2, 0.2, 0.2), b * CFrame.new(0.5, 4.5, -4.5), Color3.new(1, 1, 1), M.SmoothPlastic)
+	lamp.Transparency = 1
+	local spot = Instance.new("SpotLight")
+	spot.Face = Enum.NormalId.Bottom
+	spot.Angle = 70
+	spot.Range = 18
+	spot.Brightness = 4
+	spot.Shadows = true
+	spot.Parent = lamp
+	local fill = Instance.new("PointLight")
+	fill.Range = 10
+	fill.Brightness = 1.5
+	fill.Parent = lamp
 	rig = {}
 	local b0 = baseCF()
 	for _, d in ipairs(scene:GetChildren()) do
@@ -5756,7 +5868,7 @@ local function buildScene(sku)
 	Models.tool(tool, "slip", CFrame.new(), P.speed > 1.1)
 	P.toolRig = {}
 	for _, d in ipairs(tool:GetDescendants()) do if d:IsA("BasePart") then d.CanQuery = false; P.toolRig[#P.toolRig + 1] = { d, d.CFrame } end end
-	local tipPart = mk.box("Spets", Vector3.new(0.05, 0.05, 0.05), CFrame.new(), Color3.new(1, 1, 1), Enum.Material.SmoothPlastic)
+	local tipPart = mk.ball("Spets", 0.16, CFrame.new(), Color3.fromRGB(255, 170, 60), Enum.Material.Neon)
 	tipPart.Transparency = 1
 	tipPart.CanQuery = false
 	P.tip = tipPart
@@ -5791,9 +5903,15 @@ local function paintCells()
 	end
 	-- outlines: bright green on the port you work on, faint on the others, off when a port is done
 	for i, z in ipairs(Porting.ZONES) do
-		local done = Porting.zoneProgress(P.state, z.id) >= 0.97
+		local prog = Porting.zoneProgress(P.state, z.id)
+		local done = prog >= 0.97
 		for _, bar in ipairs(outlines[z.id] or {}) do
-			bar.Transparency = done and 1 or (i == P.zone and 0 or 0.65)
+			if bar.Name == "Glöd" then
+				-- the green fades out where the port has been ground
+				bar.Transparency = done and 1 or (0.45 + 0.5 * prog) + (i == P.zone and 0 or 0.25)
+			else
+				bar.Transparency = done and 1 or (i == P.zone and 0 or 0.65)
+			end
 		end
 	end
 end
@@ -5841,7 +5959,7 @@ function P.setZone(i)
 	while target - P.ang < -math.pi do target = target + 2 * math.pi end
 	P.targetAng = target
 	local front = baseCF() * CFrame.new(0, -0.15, -PORT_OUT)
-	S.camTo(CFrame.lookAt(front.Position + Vector3.new(0.7, 2.1, -4.3), front.Position + Vector3.new(0, -0.1, 0)), 48, 0.35)
+	S.camTo(CFrame.lookAt(front.Position + Vector3.new(0.5, 1.5, -3.4), front.Position + Vector3.new(0, -0.15, 0)), 50, 0.35)
 	if outlines[z.id] then paintCells() end
 	refreshUI()
 end
@@ -5978,6 +6096,7 @@ RunService.RenderStepped:Connect(function(dt)
 	for _, r in ipairs(P.handRig) do r[1].CFrame = handCF * r[2] end
 	P.tip.CFrame = CFrame.new(tipPos)
 	sparks.Rate = 0
+	P.tip.Transparency = P.grinding and 0.15 or 0.7
 	if P.grinding then
 		local l = f:PointToObjectSpace(tipPos)
 		local w, h = z.w * SIZE * 1.3, z.h * SIZE * 1.3

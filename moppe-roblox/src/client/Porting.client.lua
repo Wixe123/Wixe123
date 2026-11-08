@@ -40,7 +40,7 @@ local qualRow = UI.text(stats, "", UDim2.new(1, 0, 0, 22), UDim2.fromOffset(0, 1
 local buttons = UI.new("Frame", { Size = UDim2.fromOffset(700, 44), Position = UDim2.new(0.5, 0, 1, -12), AnchorPoint = Vector2.new(0.5, 1), BackgroundTransparency = 1, Name = "Knappar" }, gui)
 UI.list(buttons, 8, true, Enum.HorizontalAlignment.Center)
 local hint = UI.panel(gui, UDim2.fromOffset(380, 56), UDim2.new(1, -12, 1, -64), { anchor = Vector2.new(1, 1), name = "Tips", transp = 0.2 })
-UI.text(hint, "Håll vänster musknapp för att slipa. A/D eller zonlistan byter port.", UDim2.new(1, -20, 1, 0), UDim2.fromOffset(12, 0), { ts = 13, wrap = true })
+UI.text(hint, "Håll vänster musknapp och för slipen över den gröna ytan. Den slocknar när porten är klar. A/D byter port.", UDim2.new(1, -20, 1, 0), UDim2.fromOffset(12, 0), { ts = 13, wrap = true })
 local picker = UI.panel(gui, UDim2.fromOffset(420, 300), UDim2.fromScale(0.5, 0.5), { anchor = Vector2.new(0.5, 0.5), name = "Välj", visible = false })
 
 ---------------------------------------------------------------- the enlarged cylinder, cells, hand and grinder
@@ -109,8 +109,27 @@ local function buildScene(sku)
 			mk.box("Markering", Vector3.new(t, h + 0.2, 0.04), f * CFrame.new(w / 2 + 0.07, 0, -0.04), Color3.fromRGB(60, 255, 120), M.Neon),
 		}
 		for _, bar in ipairs(bars) do bar.CastShadow = false end
+		-- glowing green layer over the port: it fades away as you grind the port to size
+		local glow = mk.box("Glöd", Vector3.new(w, h, 0.02), f * CFrame.new(0, 0, -0.045), Color3.fromRGB(70, 255, 130), M.Neon)
+		glow.Transparency = 0.45
+		glow.CastShadow = false
+		bars[#bars + 1] = glow
 		outlines[z.id] = bars
 	end
+	-- strong work light on the cylinder
+	local lamp = mk.box("Arbetslampa", Vector3.new(0.2, 0.2, 0.2), b * CFrame.new(0.5, 4.5, -4.5), Color3.new(1, 1, 1), M.SmoothPlastic)
+	lamp.Transparency = 1
+	local spot = Instance.new("SpotLight")
+	spot.Face = Enum.NormalId.Bottom
+	spot.Angle = 70
+	spot.Range = 18
+	spot.Brightness = 4
+	spot.Shadows = true
+	spot.Parent = lamp
+	local fill = Instance.new("PointLight")
+	fill.Range = 10
+	fill.Brightness = 1.5
+	fill.Parent = lamp
 	rig = {}
 	local b0 = baseCF()
 	for _, d in ipairs(scene:GetChildren()) do
@@ -126,7 +145,7 @@ local function buildScene(sku)
 	Models.tool(tool, "slip", CFrame.new(), P.speed > 1.1)
 	P.toolRig = {}
 	for _, d in ipairs(tool:GetDescendants()) do if d:IsA("BasePart") then d.CanQuery = false; P.toolRig[#P.toolRig + 1] = { d, d.CFrame } end end
-	local tipPart = mk.box("Spets", Vector3.new(0.05, 0.05, 0.05), CFrame.new(), Color3.new(1, 1, 1), Enum.Material.SmoothPlastic)
+	local tipPart = mk.ball("Spets", 0.16, CFrame.new(), Color3.fromRGB(255, 170, 60), Enum.Material.Neon)
 	tipPart.Transparency = 1
 	tipPart.CanQuery = false
 	P.tip = tipPart
@@ -161,9 +180,15 @@ local function paintCells()
 	end
 	-- outlines: bright green on the port you work on, faint on the others, off when a port is done
 	for i, z in ipairs(Porting.ZONES) do
-		local done = Porting.zoneProgress(P.state, z.id) >= 0.97
+		local prog = Porting.zoneProgress(P.state, z.id)
+		local done = prog >= 0.97
 		for _, bar in ipairs(outlines[z.id] or {}) do
-			bar.Transparency = done and 1 or (i == P.zone and 0 or 0.65)
+			if bar.Name == "Glöd" then
+				-- the green fades out where the port has been ground
+				bar.Transparency = done and 1 or (0.45 + 0.5 * prog) + (i == P.zone and 0 or 0.25)
+			else
+				bar.Transparency = done and 1 or (i == P.zone and 0 or 0.65)
+			end
 		end
 	end
 end
@@ -211,7 +236,7 @@ function P.setZone(i)
 	while target - P.ang < -math.pi do target = target + 2 * math.pi end
 	P.targetAng = target
 	local front = baseCF() * CFrame.new(0, -0.15, -PORT_OUT)
-	S.camTo(CFrame.lookAt(front.Position + Vector3.new(0.7, 2.1, -4.3), front.Position + Vector3.new(0, -0.1, 0)), 48, 0.35)
+	S.camTo(CFrame.lookAt(front.Position + Vector3.new(0.5, 1.5, -3.4), front.Position + Vector3.new(0, -0.15, 0)), 50, 0.35)
 	if outlines[z.id] then paintCells() end
 	refreshUI()
 end
@@ -348,6 +373,7 @@ RunService.RenderStepped:Connect(function(dt)
 	for _, r in ipairs(P.handRig) do r[1].CFrame = handCF * r[2] end
 	P.tip.CFrame = CFrame.new(tipPos)
 	sparks.Rate = 0
+	P.tip.Transparency = P.grinding and 0.15 or 0.7
 	if P.grinding then
 		local l = f:PointToObjectSpace(tipPos)
 		local w, h = z.w * SIZE * 1.3, z.h * SIZE * 1.3

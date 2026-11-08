@@ -89,7 +89,46 @@ local function rayCyl(o, d, cf, size)
 	if not best then return nil end
 	return best, cf:VectorToWorldSpace(bn)
 end
+-- ray against a triangle mesh (MeshParts made with EditableMesh), in part space scaled by Size
+local function rayMesh(p, o, d)
+	local cf, size = p.cframe or CF.identity, p.props.Size
+	local lo, ld = cf:PointToObjectSpace(o), cf:VectorToObjectSpace(d)
+	local m = p.extra.mesh
+	local sx, sy, sz = size.X, size.Y, size.Z
+	local ox, oy, oz, dx, dy, dz = lo.X, lo.Y, lo.Z, ld.X, ld.Y, ld.Z
+	local best, bn
+	local v = m.v
+	for _, t in ipairs(m.t) do
+		local a, b, c = v[t[1]], v[t[2]], v[t[3]]
+		local ax, ay, az = a[1] * sx, a[2] * sy, a[3] * sz
+		local e1x, e1y, e1z = b[1] * sx - ax, b[2] * sy - ay, b[3] * sz - az
+		local e2x, e2y, e2z = c[1] * sx - ax, c[2] * sy - ay, c[3] * sz - az
+		local px, py, pz = dy * e2z - dz * e2y, dz * e2x - dx * e2z, dx * e2y - dy * e2x
+		local det = e1x * px + e1y * py + e1z * pz
+		if math.abs(det) > 1e-12 then
+			local inv = 1 / det
+			local tx, ty, tz = ox - ax, oy - ay, oz - az
+			local u = (tx * px + ty * py + tz * pz) * inv
+			if u >= 0 and u <= 1 then
+				local qx, qy, qz = ty * e1z - tz * e1y, tz * e1x - tx * e1z, tx * e1y - ty * e1x
+				local w = (dx * qx + dy * qy + dz * qz) * inv
+				if w >= 0 and u + w <= 1 then
+					local dist = (e2x * qx + e2y * qy + e2z * qz) * inv
+					if dist >= 0 and (not best or dist < best) then
+						best = dist
+						local nx, ny, nz = e1y * e2z - e1z * e2y, e1z * e2x - e1x * e2z, e1x * e2y - e1y * e2x
+						if nx * dx + ny * dy + nz * dz > 0 then nx, ny, nz = -nx, -ny, -nz end
+						bn = V3.new(nx, ny, nz).Unit
+					end
+				end
+			end
+		end
+	end
+	if not best then return nil end
+	return best, cf:VectorToWorldSpace(bn)
+end
 function E.rayPart(p, o, d)
+	if p.cls == "MeshPart" and p.extra and p.extra.mesh and p.props.CollisionFidelity and p.props.CollisionFidelity.Name ~= "Box" then return rayMesh(p, o, d) end
 	local cf, size = p.cframe or CF.identity, p.props.Size or V3.new(4, 1.2, 2)
 	local shape = p.cls == "Part" and p.props.Shape and p.props.Shape.Name or "Block"
 	if shape == "Ball" then return raySphere(o, d, cf.Position, math.min(size.X, size.Y, size.Z) / 2) end
@@ -843,6 +882,7 @@ function ASm.CreateMeshPartAsync(o, content, opts)
 	E.meshId = (E.meshId or 0) + 1
 	mp.extra = { mesh = { id = E.meshId, v = nv, t = em.extra.tris } }
 	mp.props.Size = size
+	if type(opts) == "table" and opts.CollisionFidelity then mp.props.CollisionFidelity = opts.CollisionFidelity end
 	return mp
 end
 

@@ -69,6 +69,15 @@ Ett mopedmekanikerspel i Roblox, byggt från grunden. Du har ett eget garage. D�
 - **Vippa Sprint använder din importerade Aerox-modell (`aerox.obj`).** När mopeden är helt ihopbyggd visas den detaljerade modellen i spelet med lacken från kåporna. När du skruvar isär den visas spelets egna delar, så att det syns vad som sitter och inte. Modellen gjordes om av `tools/embed_aerox.py` till `src/shared/AeroxMesh.lua`: lackdelarna är oförenklade och resten är förenklad, ca 64 000 trianglar. Den byggs i spelet med EditableMesh, så inget behöver laddas upp. Själva OBJ-filen ligger inte i repot. Kör om skriptet om du byter modell. Kontrollera att modellens licens tillåter att den används i ett Roblox-spel.
 - **Släta kåpor på Citi och Klassik.** Kåporna är riktiga 3D-mesher med rundade former, men de skapas i spelet med Robloxs EditableMesh (`src/shared/MeshGen.lua` och `src/client/MeshSkin.client.lua`), så inga filer behöver laddas upp. Om Roblox inte tillåter EditableMesh i ditt spel (det kan kräva att kontot är verifierat för publicerade spel) visas de kantiga blocken i stället, och Output säger det. Motor, ram och hjul är fortfarande byggda av Roblox-delar.
 
+## Om Aerox-modellen inte syns
+
+1. **Rätt moped:** modellen visas bara på Vippa Sprint (startmopeden), och bara när den är helt ihopbyggd.
+2. **Läs meddelandet:** kan spelet inte skapa modellen visas ett rött meddelande som säger varför. Samma text står i View → Output.
+3. **Reservväg:** importera modellen själv i Studio:
+   - Välj File → Import 3D och välj `aerox.obj`.
+   - Döp den importerade modellen till **Aerox** och lägg den i ReplicatedStorage. Workspace går också.
+   - Spelet använder den i stället för den inbyggda versionen och passar in den på Sprintens hjul automatiskt.
+
 ## Testat och inte testat
 
 - **Spelregler** (`tests/scenarios/logic.lua`, 62 kontroller, alla godkända):

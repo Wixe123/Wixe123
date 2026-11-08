@@ -9,8 +9,19 @@ local MopedDef = require(Shared.MopedDef)
 local EngineDef = require(Shared.EngineDef)
 local AeroxMesh = require(Shared.AeroxMesh)
 
+local S = require(script.Parent:WaitForChild("State"))
 local templates = {} -- "model/panel" -> { part = MeshPart, center, size } or false
-local disabled = false
+local disabled = false -- smooth panels failed
+local aeroxFailed = false
+
+-- MeshPart from an EditableMesh; box collision (no heavy collision geometry for big meshes)
+local function meshPart(em)
+	local ok, part = pcall(function()
+		return AssetService:CreateMeshPartAsync(Content.fromObject(em), { CollisionFidelity = Enum.CollisionFidelity.Box, RenderFidelity = Enum.RenderFidelity.Precise })
+	end)
+	if ok and part then return part end
+	return AssetService:CreateMeshPartAsync(Content.fromObject(em))
+end
 
 local function template(model, panel)
 	local key = model .. "/" .. panel
@@ -24,12 +35,12 @@ local function template(model, panel)
 		local ids = {}
 		for i, v in ipairs(data.verts) do ids[i] = em:AddVertex(v) end
 		for _, t in ipairs(data.tris) do em:AddTriangle(ids[t[1]], ids[t[2]], ids[t[3]]) end
-		local part = AssetService:CreateMeshPartAsync(Content.fromObject(em))
-		return part
+		return meshPart(em)
 	end)
 	if not ok or not res then
 		disabled = true
 		warn("Moppe: släta kåpor gick inte att skapa (EditableMesh), visar block i stället: " .. tostring(res))
+		S.toast("Släta 3D-kåpor kunde inte skapas: " .. tostring(res), "error")
 		return false
 	end
 	res.Name = "Kåpa3D"
@@ -53,10 +64,47 @@ local CLASS_LOOK = {
 	disc = { Color3.fromRGB(205, 210, 216), Enum.Material.Metal, 0.2 },
 }
 local body = nil -- list of { part, class, center } or false
+-- if you import aerox.obj yourself in Studio (a Model named "Aerox" in ReplicatedStorage or Workspace),
+-- that one is used: it has full detail. It is fitted onto the Sprint's wheels by its bounding box.
+local GROUP_CLASS = {}
+for _, n in ipairs({ "1195", "1198", "1200", "1201", "1172", "1432", "1524", "1193", "1509" }) do GROUP_CLASS[n] = "paint" end
+for _, n in ipairs({ "1189", "1191" }) do GROUP_CLASS[n] = "seat" end
+GROUP_CLASS["1254"] = "ex"
+GROUP_CLASS["1530"], GROUP_CLASS["1467"] = "tire", "tire"
+GROUP_CLASS["1529"], GROUP_CLASS["1466"] = "rim", "rim"
+GROUP_CLASS["1528"], GROUP_CLASS["1441"] = "disc", "disc"
+local SCALE = 4.5 / 6.02 -- studs per model unit (Sprint wheelbase / model wheelbase)
+local function importedBody()
+	local imp = RS:FindFirstChild("Aerox") or workspace:FindFirstChild("Aerox")
+	if not (imp and imp:IsA("Model")) then return nil end
+	local cf, sz = imp:GetBoundingBox()
+	local lengthX = sz.X > sz.Z -- imported lying sideways?
+	local len = lengthX and sz.X or sz.Z
+	local k = (8.628 * SCALE) / len
+	local center = Vector3.new(0, 3.0355 * SCALE, 0.112 * SCALE)
+	local turn = CFrame.Angles(0, lengthX and math.pi / 2 or math.pi, 0)
+	local list = {}
+	for _, d in ipairs(imp:GetDescendants()) do
+		if d:IsA("MeshPart") or (d:IsA("BasePart") and d:FindFirstChildOfClass("SpecialMesh")) then
+			local rel = cf:ToObjectSpace(d.CFrame)
+			local placed = turn * (rel.Rotation + rel.Position * k)
+			local num = d.Name:match("(%d+)")
+			local part = d:Clone()
+			for _, c in ipairs(part:GetChildren()) do if not c:IsA("SpecialMesh") then c:Destroy() end end
+			part.Anchored, part.CanCollide, part.CanQuery, part.CanTouch = true, false, false, false
+			list[#list + 1] = { part = part, class = (num and GROUP_CLASS[num]) or "dark", center = center + placed.Position, size = d.Size * k, rot = placed.Rotation }
+		end
+	end
+	if #list == 0 then return nil end
+	return list
+end
+
 local function bodyTemplates()
 	if body ~= nil then return body end
 	body = false
-	if disabled then return false end
+	local imported = importedBody()
+	if imported then body = imported; return body end
+	if aeroxFailed then return false end
 	local list = {}
 	local ok, err = pcall(function()
 		for cls, chunks in pairs(AeroxMesh.classes) do
@@ -69,7 +117,7 @@ local function bodyTemplates()
 				local ids = {}
 				for i, v in ipairs(verts) do ids[i] = em:AddVertex(v - center) end
 				for _, t in ipairs(tris) do em:AddTriangle(ids[t[1]], ids[t[2]], ids[t[3]]) end
-				local part = AssetService:CreateMeshPartAsync(Content.fromObject(em))
+				local part = meshPart(em)
 				part.Name = "Aerox_" .. cls
 				part.Anchored = true
 				part.CanCollide = false
@@ -80,8 +128,10 @@ local function bodyTemplates()
 		end
 	end)
 	if not ok then
-		disabled = true
-		warn("Moppe: Aerox-modellen gick inte att skapa (EditableMesh), visar delarna i stället: " .. tostring(err))
+		aeroxFailed = true
+		local msg = "Aerox-modellen kunde inte visas: " .. tostring(err)
+		warn("Moppe: " .. msg)
+		S.toast(msg .. " — importera aerox.obj i Studio (se README) så används den i stället.", "error")
 		return false
 	end
 	body = list
@@ -117,7 +167,7 @@ local function skinAerox(moped, root, rootCF)
 	for _, e in ipairs(list) do
 		local mp = e.part:Clone()
 		mp.Size = e.size
-		mp.CFrame = rootCF * CFrame.new(e.center)
+		mp.CFrame = rootCF * CFrame.new(e.center) * (e.rot or CFrame.new())
 		if e.class == "paint" and paint then
 			mp.Color, mp.Material, mp.Reflectance = paint.Color, paint.Material, paint.Reflectance
 		else

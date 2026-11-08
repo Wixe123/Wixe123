@@ -164,15 +164,19 @@ local function buildScene(id)
 		local ids = {}
 		for i, v in ipairs(data.verts) do ids[i] = em:AddVertex(v * 2.2) end
 		for _, t in ipairs(data.tris) do em:AddTriangle(ids[t[1]], ids[t[2]], ids[t[3]]) end
-		local mp = AssetService:CreateMeshPartAsync(Content.fromObject(em))
+		local okP, mp = pcall(function() return AssetService:CreateMeshPartAsync(Content.fromObject(em), { CollisionFidelity = Enum.CollisionFidelity.PreciseConvexDecomposition }) end)
+		if not okP then mp = AssetService:CreateMeshPartAsync(Content.fromObject(em)) end
 		mp.Name = "Kåpa"
 		mp.Anchored = true
-		mp.CanQuery = false
+		mp.CanQuery = true
 		mp.Size = data.size * 2.2
 		mp.CFrame = panelCF
 		mp.Parent = scene
 		L.visual[1] = mp
 	end)
+	L.mask = model
+	L.smooth = okMesh == true
+	L.dots = {}
 	if not okMesh then
 		for _, d in ipairs(model:GetDescendants()) do
 			if d:IsA("BasePart") then
@@ -218,12 +222,12 @@ paintCells = function()
 	local r = Paint.result(L.state)
 	local target = Color3.fromRGB(L.color[1], L.color[2], L.color[3])
 	local fin = Paint.FIN[L.finish]
-	local col = PRIMER:Lerp(target, math.clamp(cov * 1.05, 0, 1))
+	local col = PRIMER:Lerp(target, math.clamp((cov - 0.45) * 2.2, 0, 1))
 	if r.runs > 0 then col = col:Lerp(Color3.new(0, 0, 0), math.min(0.3, r.runs * 2)) end
 	for _, v in ipairs(L.visual or {}) do
 		v.Color = col
-		v.Material = cov > 0.3 and Enum.Material[fin.mat] or Enum.Material.SmoothPlastic
-		v.Reflectance = cov > 0.3 and (fin.refl[1] + (fin.refl[2] - fin.refl[1]) * L.gloss) or 0
+		v.Material = cov > 0.6 and Enum.Material[fin.mat] or Enum.Material.SmoothPlastic
+		v.Reflectance = cov > 0.6 and (fin.refl[1] + (fin.refl[2] - fin.refl[1]) * L.gloss) or 0
 	end
 	for i, f in pairs(heat) do
 		local x = L.state.cells[i]
@@ -255,6 +259,8 @@ local function buildButtons()
 		local s2 = Paint.new()
 		for i = 1, Paint.COLS * Paint.ROWS do if not L.cells[i] then s2.cells[i] = 1 end end
 		L.state = s2
+		for _, d in ipairs(L.dots or {}) do d:Destroy() end
+		L.dots = {}
 		paintCells()
 		refreshStats()
 	end)
@@ -309,6 +315,8 @@ local function close()
 	L.spraying = false
 	L.cells = nil
 	L.visual = nil
+	L.mask = nil
+	L.dots = nil
 	for _, q in ipairs(L.hidden or {}) do if q.Parent then q.LocalTransparencyModifier = 0 end end
 	L.hidden = nil
 	scene:ClearAllChildren()
@@ -367,6 +375,41 @@ RunService.RenderStepped:Connect(function(dt)
 		local l = frame:PointToObjectSpace(hit)
 		local u, v = (l.X + L.w / 2) / L.w, (L.h / 2 - l.Y) / L.h
 		if u > -0.15 and u < 1.15 and v > -0.15 and v < 1.15 then Paint.spray(L.state, u, v, dt, L.dist, L.even) else L.state.t = L.state.t + dt end
+		-- paint spots where the spray hits the panel (you see exactly where you have painted)
+		-- the block version of the panel decides where the panel is; the spot sits on the smooth surface if it is there
+		local maskParams = RaycastParams.new()
+		maskParams.FilterType = Enum.RaycastFilterType.Include
+		maskParams.FilterDescendantsInstances = { L.mask }
+		local visParams = RaycastParams.new()
+		visParams.FilterType = Enum.RaycastFilterType.Include
+		visParams.FilterDescendantsInstances = L.visual or {}
+		local fin = Paint.FIN[L.finish]
+		for _ = 1, 3 do
+			local jitter = frame.RightVector * (math.random() - 0.5) * 0.6 * L.dist + frame.UpVector * (math.random() - 0.5) * 0.6 * L.dist
+			local aim = hit + jitter
+			-- the smooth panel if it is shown (precise collision), otherwise the block version
+			local res
+			if L.smooth then res = workspace:Raycast(gunPos, (aim - gunPos) * 1.5, visParams)
+			elseif L.mask then res = workspace:Raycast(gunPos, (aim - gunPos) * 1.5, maskParams) end
+			if res then
+				local dot
+				if #L.dots >= 900 then dot = table.remove(L.dots, 1) else
+					dot = Instance.new("Part")
+					dot.Shape = Enum.PartType.Cylinder
+					dot.Anchored, dot.CanCollide, dot.CanQuery, dot.CanTouch, dot.CastShadow = true, false, false, false, false
+					dot.Name = "Lackprick"
+					dot.Parent = scene
+				end
+				local d = (0.13 + math.random() * 0.09) * L.dist
+				dot.Size = Vector3.new(0.02, d, d)
+				dot.CFrame = CFrame.lookAt(res.Position + res.Normal * 0.015, res.Position + res.Normal) * CFrame.Angles(0, math.pi / 2, 0)
+				dot.Color = Color3.fromRGB(L.color[1], L.color[2], L.color[3])
+				dot.Material = Enum.Material[fin.mat]
+				dot.Reflectance = fin.refl[1] + (fin.refl[2] - fin.refl[1]) * L.gloss
+				dot.Transparency = 0.12
+				L.dots[#L.dots + 1] = dot
+			end
+		end
 		L.t = L.t + dt
 		acc = acc + dt
 		if acc > 0.08 then acc = 0; paintCells(); refreshStats() end
