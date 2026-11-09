@@ -111,7 +111,7 @@ local function buildScene(sku)
 		for _, bar in ipairs(bars) do bar.CastShadow = false end
 		-- glowing green layer over the port: it fades away as you grind the port to size
 		local glow = mk.box("Glöd", Vector3.new(w, h, 0.02), f * CFrame.new(0, 0, -0.045), Color3.fromRGB(70, 255, 130), M.Neon)
-		glow.Transparency = 0.45
+		glow.Transparency = 0.78
 		glow.CastShadow = false
 		bars[#bars + 1] = glow
 		outlines[z.id] = bars
@@ -185,7 +185,7 @@ local function paintCells()
 		for _, bar in ipairs(outlines[z.id] or {}) do
 			if bar.Name == "Glöd" then
 				-- the green fades out where the port has been ground
-				bar.Transparency = done and 1 or (0.45 + 0.5 * prog) + (i == P.zone and 0 or 0.25)
+				bar.Transparency = done and 1 or math.min(1, (0.78 + 0.2 * prog) + (i == P.zone and 0 or 0.15))
 			else
 				bar.Transparency = done and 1 or (i == P.zone and 0 or 0.65)
 			end
@@ -319,6 +319,8 @@ local function close()
 	gui.Enabled = false
 	picker.Visible = false
 	P.grinding = false
+	-- leaving without finishing frees the cylinder in the vise again
+	task.spawn(function() S.api("workCancel") end)
 	scene:ClearAllChildren()
 	scene.Parent = nil
 	UIS.MouseIconEnabled = true
@@ -329,7 +331,7 @@ S.modeEv.Event:Connect(function(mode) if mode ~= "port" and gui.Enabled then clo
 ---------------------------------------------------------------- input and the grinding loop
 UIS.InputBegan:Connect(function(input, gp)
 	if S.mode ~= "port" or not P.state then return end
-	if input.UserInputType == Enum.UserInputType.MouseButton1 and not gp then P.grinding = true end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 and (not gp or not S.mouseOverUi()) then P.grinding = true end
 	if input.KeyCode == Enum.KeyCode.A then P.setZone(P.zone - 1) elseif input.KeyCode == Enum.KeyCode.D then P.setZone(P.zone + 1) end
 end)
 UIS.InputEnded:Connect(function(input)
@@ -338,6 +340,8 @@ end)
 local acc = 0
 RunService.RenderStepped:Connect(function(dt)
 	if S.mode ~= "port" or not P.state or not hand or not hand.Parent then return end
+	-- the button may have been released while the window had no focus
+	if P.grinding and not UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then P.grinding = false end
 	-- turn the cylinder towards the chosen port
 	if math.abs(P.targetAng - P.ang) > 1e-3 then
 		P.ang = P.ang + (P.targetAng - P.ang) * math.min(1, dt * 9)

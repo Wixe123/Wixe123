@@ -399,6 +399,12 @@ function Profile.portDone(p, state, now)
 	p.stats.ported = p.stats.ported + 1
 	return true, res
 end
+-- leaving the vise or the booth without finishing: the part there is free again
+function Profile.workCancel(p)
+	p.portStart = nil
+	p.paintStart = nil
+	return true
+end
 function Profile.paintStart(p, now)
 	local id
 	for oid, it in pairs(p.items) do if it.loc == "lack" then id = oid end end

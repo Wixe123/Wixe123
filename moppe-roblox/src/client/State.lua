@@ -53,6 +53,22 @@ function S.walkTo(localPos, cb, dist)
 		if not done then done = true; conn:Disconnect(); cb() end
 	end)
 end
+-- is the mouse over a button, text box or panel of an open GUI (so a click there is not a click in the world)?
+function S.mouseOverUi()
+	local UIS = game:GetService("UserInputService")
+	local m = UIS:GetMouseLocation()
+	local inset = game:GetService("GuiService"):GetGuiInset()
+	local pg = plr:FindFirstChild("PlayerGui")
+	if not pg then return false end
+	for _, o in ipairs(pg:GetGuiObjectsAtPosition(m.X, m.Y - inset.Y)) do
+		local sg = o:FindFirstAncestorOfClass("ScreenGui")
+		if o.Visible and (not sg or sg.Enabled) then
+			if o:IsA("GuiButton") or o:IsA("TextBox") then return true end
+			if o:IsA("Frame") and o.BackgroundTransparency < 0.9 then return true end
+		end
+	end
+	return false
+end
 function S.toast(text, kind) S.toastEv:Fire(text, kind or "info") end
 -- call the server; shows the error as a toast; returns ok, result
 function S.api(action, ...)

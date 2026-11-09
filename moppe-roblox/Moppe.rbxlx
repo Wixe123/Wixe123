@@ -2286,7 +2286,7 @@ Porting.ZONES = {
 Porting.BY_ID = {}
 for _, z in ipairs(Porting.ZONES) do Porting.BY_ID[z.id] = z end
 Porting.TARGET = 1.0 -- depth that counts as done
-Porting.OVER = 1.3 -- deeper than this is over-ported (bad)
+Porting.OVER = 1.5 -- deeper than this is over-ported (bad)
 
 function Porting.new()
 	local s = { cells = {}, inside = 0, outside = 0 }
@@ -2312,9 +2312,9 @@ function Porting.grind(s, zoneId, u, v, dt, speed)
 	for row = 1, Porting.ROWS do
 		for col = 1, Porting.COLS do
 			local d = math.sqrt((col - cx) ^ 2 + (row - cy) ^ 2)
-			if d < 1.25 then
+			if d < 1.5 then
 				local i = (row - 1) * Porting.COLS + col
-				cells[i] = cells[i] + dt * 1.3 * speed * (1 - d / 1.25)
+				cells[i] = cells[i] + dt * 1.8 * speed * (1 - d / 1.5)
 			end
 		end
 	end
@@ -2767,6 +2767,12 @@ function Profile.portDone(p, state, now)
 	p.items[id].port = { q = res.q, label = res.label }
 	p.stats.ported = p.stats.ported + 1
 	return true, res
+end
+-- leaving the vise or the booth without finishing: the part there is free again
+function Profile.workCancel(p)
+	p.portStart = nil
+	p.paintStart = nil
+	return true
 end
 function Profile.paintStart(p, now)
 	local id
@@ -3537,6 +3543,10 @@ function H.portDone(plr, p, state)
 	if not ok then return ok, r end
 	changed(plr, { "items" })
 	return true, r
+end
+function H.workCancel(plr, p)
+	Profile.workCancel(p)
+	return true
 end
 function H.paintStart(plr, p)
 	if not near(plr, plotOf[plr].origin * GarageBuilder.BOOTH.Position, 14) then return false, "Gå in i lackboxen" end
@@ -5223,6 +5233,21 @@ local templates = {} -- "model/panel" -> { part = MeshPart, center, size } or fa
 local disabled = false -- smooth panels failed
 local aeroxFailed = false
 
+-- Roblox gives nil instead of an EditableMesh when the game may not use it: the place has to be published
+-- and Game Settings -> Security -> "Allow Mesh / Image APIs" switched on. Say that once, clearly.
+local NO_API = "Robloxs mesh-API är avstängt i det här spelet. Publicera spelet (File → Publish to Roblox) och slå på Game Settings → Security → Allow Mesh / Image APIs. Eller importera aerox.obj själv (se README)."
+local warned = false
+local function newMesh()
+	local em = AssetService:CreateEditableMesh()
+	if not em then error(NO_API, 0) end
+	return em
+end
+local function tell(msg)
+	if warned then return end
+	warned = true
+	warn("Moppe: " .. msg)
+	S.toast(msg, "error")
+end
 -- MeshPart from an EditableMesh; box collision (no heavy collision geometry for big meshes)
 local function meshPart(em)
 	local ok, part = pcall(function()
@@ -5240,7 +5265,7 @@ local function template(model, panel)
 	local data = MeshGen.panel(model, panel)
 	if not data then return false end
 	local ok, res = pcall(function()
-		local em = AssetService:CreateEditableMesh()
+		local em = newMesh()
 		local ids = {}
 		for i, v in ipairs(data.verts) do ids[i] = em:AddVertex(v) end
 		for _, t in ipairs(data.tris) do em:AddTriangle(ids[t[1]], ids[t[2]], ids[t[3]]) end
@@ -5248,8 +5273,7 @@ local function template(model, panel)
 	end)
 	if not ok or not res then
 		disabled = true
-		warn("Moppe: släta kåpor gick inte att skapa (EditableMesh), visar block i stället: " .. tostring(res))
-		S.toast("Släta 3D-kåpor kunde inte skapas: " .. tostring(res), "error")
+		tell(tostring(res) == NO_API and NO_API or ("Släta 3D-kåpor kunde inte skapas: " .. tostring(res)))
 		return false
 	end
 	res.Name = "Kåpa3D"
@@ -5322,7 +5346,7 @@ local function bodyTemplates()
 				local mn, mx = verts[1], verts[1]
 				for _, v in ipairs(verts) do mn = mn:Min(v); mx = mx:Max(v) end
 				local center = (mn + mx) / 2
-				local em = AssetService:CreateEditableMesh()
+				local em = newMesh()
 				local ids = {}
 				for i, v in ipairs(verts) do ids[i] = em:AddVertex(v - center) end
 				for _, t in ipairs(tris) do em:AddTriangle(ids[t[1]], ids[t[2]], ids[t[3]]) end
@@ -5338,9 +5362,7 @@ local function bodyTemplates()
 	end)
 	if not ok then
 		aeroxFailed = true
-		local msg = "Aerox-modellen kunde inte visas: " .. tostring(err)
-		warn("Moppe: " .. msg)
-		S.toast(msg .. " — slå på Game Settings → Security → Allow Mesh / Image APIs, eller importera aerox.obj i Studio (se README).", "error")
+		tell(tostring(err) == NO_API and NO_API or ("Aerox-modellen kunde inte visas: " .. tostring(err) .. ". Importera aerox.obj i Studio (se README)."))
 		return false
 	end
 	body = list
@@ -5881,6 +5903,8 @@ local function close()
 	gui.Enabled = false
 	picker.Visible = false
 	L.spraying = false
+	-- leaving without Avsluta frees the panel on the stand again (you can pick it up)
+	task.spawn(function() S.api("workCancel") end)
 	L.state, L.cells, L.visual, L.mask, L.dots, L.decalGui, L.decalLabel, L.cupPaint = nil, nil, nil, nil, nil, nil, nil, nil
 	for _, q in ipairs(L.hidden or {}) do if q.Parent then q.LocalTransparencyModifier = 0 end end
 	L.hidden = nil
@@ -5893,7 +5917,7 @@ S.modeEv.Event:Connect(function(mode) if mode ~= "paint" and gui.Enabled then cl
 ---------------------------------------------------------------- input and spraying
 UIS.InputBegan:Connect(function(input, gp)
 	if S.mode ~= "paint" or not L.state then return end
-	if input.UserInputType == Enum.UserInputType.MouseButton1 and not gp and L.phase == "spray" then L.spraying = true end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 and (not gp or not S.mouseOverUi()) and L.phase == "spray" and not dragging then L.spraying = true end
 end)
 UIS.InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -5912,6 +5936,7 @@ end)
 local acc = 0
 RunService.RenderStepped:Connect(function(dt)
 	if S.mode ~= "paint" or not L.state or not frame or not L.handRig then return end
+	if L.spraying and not UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then L.spraying = false end
 	-- drying countdown after Avsluta
 	if L.phase == "dry" then
 		L.dryLeft = math.max(0, L.dryLeft - dt)
@@ -6098,7 +6123,7 @@ local function buildScene(sku)
 		for _, bar in ipairs(bars) do bar.CastShadow = false end
 		-- glowing green layer over the port: it fades away as you grind the port to size
 		local glow = mk.box("Glöd", Vector3.new(w, h, 0.02), f * CFrame.new(0, 0, -0.045), Color3.fromRGB(70, 255, 130), M.Neon)
-		glow.Transparency = 0.45
+		glow.Transparency = 0.78
 		glow.CastShadow = false
 		bars[#bars + 1] = glow
 		outlines[z.id] = bars
@@ -6172,7 +6197,7 @@ local function paintCells()
 		for _, bar in ipairs(outlines[z.id] or {}) do
 			if bar.Name == "Glöd" then
 				-- the green fades out where the port has been ground
-				bar.Transparency = done and 1 or (0.45 + 0.5 * prog) + (i == P.zone and 0 or 0.25)
+				bar.Transparency = done and 1 or math.min(1, (0.78 + 0.2 * prog) + (i == P.zone and 0 or 0.15))
 			else
 				bar.Transparency = done and 1 or (i == P.zone and 0 or 0.65)
 			end
@@ -6306,6 +6331,8 @@ local function close()
 	gui.Enabled = false
 	picker.Visible = false
 	P.grinding = false
+	-- leaving without finishing frees the cylinder in the vise again
+	task.spawn(function() S.api("workCancel") end)
 	scene:ClearAllChildren()
 	scene.Parent = nil
 	UIS.MouseIconEnabled = true
@@ -6316,7 +6343,7 @@ S.modeEv.Event:Connect(function(mode) if mode ~= "port" and gui.Enabled then clo
 ---------------------------------------------------------------- input and the grinding loop
 UIS.InputBegan:Connect(function(input, gp)
 	if S.mode ~= "port" or not P.state then return end
-	if input.UserInputType == Enum.UserInputType.MouseButton1 and not gp then P.grinding = true end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 and (not gp or not S.mouseOverUi()) then P.grinding = true end
 	if input.KeyCode == Enum.KeyCode.A then P.setZone(P.zone - 1) elseif input.KeyCode == Enum.KeyCode.D then P.setZone(P.zone + 1) end
 end)
 UIS.InputEnded:Connect(function(input)
@@ -6325,6 +6352,8 @@ end)
 local acc = 0
 RunService.RenderStepped:Connect(function(dt)
 	if S.mode ~= "port" or not P.state or not hand or not hand.Parent then return end
+	-- the button may have been released while the window had no focus
+	if P.grinding and not UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then P.grinding = false end
 	-- turn the cylinder towards the chosen port
 	if math.abs(P.targetAng - P.ang) > 1e-3 then
 		P.ang = P.ang + (P.targetAng - P.ang) * math.min(1, dt * 9)
@@ -6996,6 +7025,22 @@ function S.walkTo(localPos, cb, dist)
 	task.delay(8, function()
 		if not done then done = true; conn:Disconnect(); cb() end
 	end)
+end
+-- is the mouse over a button, text box or panel of an open GUI (so a click there is not a click in the world)?
+function S.mouseOverUi()
+	local UIS = game:GetService("UserInputService")
+	local m = UIS:GetMouseLocation()
+	local inset = game:GetService("GuiService"):GetGuiInset()
+	local pg = plr:FindFirstChild("PlayerGui")
+	if not pg then return false end
+	for _, o in ipairs(pg:GetGuiObjectsAtPosition(m.X, m.Y - inset.Y)) do
+		local sg = o:FindFirstAncestorOfClass("ScreenGui")
+		if o.Visible and (not sg or sg.Enabled) then
+			if o:IsA("GuiButton") or o:IsA("TextBox") then return true end
+			if o:IsA("Frame") and o.BackgroundTransparency < 0.9 then return true end
+		end
+	end
+	return false
 end
 function S.toast(text, kind) S.toastEv:Fire(text, kind or "info") end
 -- call the server; shows the error as a toast; returns ok, result

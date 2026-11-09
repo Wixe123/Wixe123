@@ -14,6 +14,21 @@ local templates = {} -- "model/panel" -> { part = MeshPart, center, size } or fa
 local disabled = false -- smooth panels failed
 local aeroxFailed = false
 
+-- Roblox gives nil instead of an EditableMesh when the game may not use it: the place has to be published
+-- and Game Settings -> Security -> "Allow Mesh / Image APIs" switched on. Say that once, clearly.
+local NO_API = "Robloxs mesh-API är avstängt i det här spelet. Publicera spelet (File → Publish to Roblox) och slå på Game Settings → Security → Allow Mesh / Image APIs. Eller importera aerox.obj själv (se README)."
+local warned = false
+local function newMesh()
+	local em = AssetService:CreateEditableMesh()
+	if not em then error(NO_API, 0) end
+	return em
+end
+local function tell(msg)
+	if warned then return end
+	warned = true
+	warn("Moppe: " .. msg)
+	S.toast(msg, "error")
+end
 -- MeshPart from an EditableMesh; box collision (no heavy collision geometry for big meshes)
 local function meshPart(em)
 	local ok, part = pcall(function()
@@ -31,7 +46,7 @@ local function template(model, panel)
 	local data = MeshGen.panel(model, panel)
 	if not data then return false end
 	local ok, res = pcall(function()
-		local em = AssetService:CreateEditableMesh()
+		local em = newMesh()
 		local ids = {}
 		for i, v in ipairs(data.verts) do ids[i] = em:AddVertex(v) end
 		for _, t in ipairs(data.tris) do em:AddTriangle(ids[t[1]], ids[t[2]], ids[t[3]]) end
@@ -39,8 +54,7 @@ local function template(model, panel)
 	end)
 	if not ok or not res then
 		disabled = true
-		warn("Moppe: släta kåpor gick inte att skapa (EditableMesh), visar block i stället: " .. tostring(res))
-		S.toast("Släta 3D-kåpor kunde inte skapas: " .. tostring(res), "error")
+		tell(tostring(res) == NO_API and NO_API or ("Släta 3D-kåpor kunde inte skapas: " .. tostring(res)))
 		return false
 	end
 	res.Name = "Kåpa3D"
@@ -113,7 +127,7 @@ local function bodyTemplates()
 				local mn, mx = verts[1], verts[1]
 				for _, v in ipairs(verts) do mn = mn:Min(v); mx = mx:Max(v) end
 				local center = (mn + mx) / 2
-				local em = AssetService:CreateEditableMesh()
+				local em = newMesh()
 				local ids = {}
 				for i, v in ipairs(verts) do ids[i] = em:AddVertex(v - center) end
 				for _, t in ipairs(tris) do em:AddTriangle(ids[t[1]], ids[t[2]], ids[t[3]]) end
@@ -129,9 +143,7 @@ local function bodyTemplates()
 	end)
 	if not ok then
 		aeroxFailed = true
-		local msg = "Aerox-modellen kunde inte visas: " .. tostring(err)
-		warn("Moppe: " .. msg)
-		S.toast(msg .. " — slå på Game Settings → Security → Allow Mesh / Image APIs, eller importera aerox.obj i Studio (se README).", "error")
+		tell(tostring(err) == NO_API and NO_API or ("Aerox-modellen kunde inte visas: " .. tostring(err) .. ". Importera aerox.obj i Studio (se README)."))
 		return false
 	end
 	body = list

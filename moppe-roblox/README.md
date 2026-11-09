@@ -71,7 +71,11 @@ Ett mopedmekanikerspel i Roblox, byggt från grunden. Du har ett eget garage. D�
 ## Om Aerox-modellen inte syns
 
 1. **Rätt moped:** modellen visas bara på Vippa Sprint (startmopeden), och bara när alla kåpor, alla chassidelar och motorn sitter på. Motorn behöver inte vara komplett.
-2. **Slå på mesh-API:t:** Game Settings → Security → **Allow Mesh / Image APIs**. Utan den inställningen får spelet inte bygga modeller med EditableMesh.
+2. **Slå på mesh-API:t:** står det "Robloxs mesh-API är avstängt" har Roblox nekat EditableMesh (`CreateEditableMesh` gav `nil`). Gör så här:
+   - File → **Publish to Roblox** (inställningen finns bara för publicerade spel).
+   - Game Settings → Security → slå på **Allow Mesh / Image APIs** och spara.
+   - Starta testet igen.
+   Utan det visas kåporna som block, och resten av spelet fungerar som vanligt.
 3. **Läs meddelandet:** kan spelet inte skapa modellen visas ett rött meddelande som säger varför. Samma text står i View → Output.
 4. **Reservväg:** importera modellen själv i Studio:
    - Välj File → Import 3D och välj `aerox.obj`.

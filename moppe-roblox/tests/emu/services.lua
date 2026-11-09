@@ -840,6 +840,7 @@ E.Content = {
 }
 local ASm = cls(M, "AssetService")
 function ASm.CreateEditableMesh(o, opts)
+	if E.noEditableMesh then return nil end -- like Roblox when the game may not use mesh APIs
 	local em = E.new("EditableMesh", nil, true)
 	em.extra = { verts = {}, tris = {} }
 	return em

@@ -12,7 +12,7 @@ Porting.ZONES = {
 Porting.BY_ID = {}
 for _, z in ipairs(Porting.ZONES) do Porting.BY_ID[z.id] = z end
 Porting.TARGET = 1.0 -- depth that counts as done
-Porting.OVER = 1.3 -- deeper than this is over-ported (bad)
+Porting.OVER = 1.5 -- deeper than this is over-ported (bad)
 
 function Porting.new()
 	local s = { cells = {}, inside = 0, outside = 0 }
@@ -38,9 +38,9 @@ function Porting.grind(s, zoneId, u, v, dt, speed)
 	for row = 1, Porting.ROWS do
 		for col = 1, Porting.COLS do
 			local d = math.sqrt((col - cx) ^ 2 + (row - cy) ^ 2)
-			if d < 1.25 then
+			if d < 1.5 then
 				local i = (row - 1) * Porting.COLS + col
-				cells[i] = cells[i] + dt * 1.3 * speed * (1 - d / 1.25)
+				cells[i] = cells[i] + dt * 1.8 * speed * (1 - d / 1.5)
 			end
 		end
 	end

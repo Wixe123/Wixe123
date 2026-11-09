@@ -433,6 +433,8 @@ local function close()
 	gui.Enabled = false
 	picker.Visible = false
 	L.spraying = false
+	-- leaving without Avsluta frees the panel on the stand again (you can pick it up)
+	task.spawn(function() S.api("workCancel") end)
 	L.state, L.cells, L.visual, L.mask, L.dots, L.decalGui, L.decalLabel, L.cupPaint = nil, nil, nil, nil, nil, nil, nil, nil
 	for _, q in ipairs(L.hidden or {}) do if q.Parent then q.LocalTransparencyModifier = 0 end end
 	L.hidden = nil
@@ -445,7 +447,7 @@ S.modeEv.Event:Connect(function(mode) if mode ~= "paint" and gui.Enabled then cl
 ---------------------------------------------------------------- input and spraying
 UIS.InputBegan:Connect(function(input, gp)
 	if S.mode ~= "paint" or not L.state then return end
-	if input.UserInputType == Enum.UserInputType.MouseButton1 and not gp and L.phase == "spray" then L.spraying = true end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 and (not gp or not S.mouseOverUi()) and L.phase == "spray" and not dragging then L.spraying = true end
 end)
 UIS.InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -464,6 +466,7 @@ end)
 local acc = 0
 RunService.RenderStepped:Connect(function(dt)
 	if S.mode ~= "paint" or not L.state or not frame or not L.handRig then return end
+	if L.spraying and not UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then L.spraying = false end
 	-- drying countdown after Avsluta
 	if L.phase == "dry" then
 		L.dryLeft = math.max(0, L.dryLeft - dt)

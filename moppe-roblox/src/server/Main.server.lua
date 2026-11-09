@@ -491,6 +491,10 @@ function H.portDone(plr, p, state)
 	changed(plr, { "items" })
 	return true, r
 end
+function H.workCancel(plr, p)
+	Profile.workCancel(p)
+	return true
+end
 function H.paintStart(plr, p)
 	if not near(plr, plotOf[plr].origin * GarageBuilder.BOOTH.Position, 14) then return false, "Gå in i lackboxen" end
 	local ok, e = Profile.paintStart(p, now())
