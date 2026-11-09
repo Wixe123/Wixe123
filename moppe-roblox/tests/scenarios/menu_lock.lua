@@ -1,0 +1,12 @@
+-- Nothing in the world can be used before Spela is pressed
+E.startServer(); E.run(1); local plr = E.addPlayer("Love", 101); E.run(3)
+local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+E.check("start menu shown", E.findGui("^Spela$", { button = true }) ~= nil)
+E.check("can't walk in the menu", hum.WalkSpeed == 0)
+E.check("E-prompts off in the menu", E.services.ProximityPromptService.Enabled == false)
+E.check("camera shows the garage from outside", E.currentCamera(plr.ctx).CameraType.Name == "Scriptable")
+E.shot("menu")
+E.clickGui("^Spela$"); E.run(1)
+E.check("can walk after Spela", hum.WalkSpeed > 0)
+E.check("E-prompts on after Spela", E.services.ProximityPromptService.Enabled == true)
+E.check("camera follows the player after Spela", E.currentCamera(plr.ctx).CameraType.Name == "Custom")

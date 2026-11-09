@@ -5060,7 +5060,33 @@ logo2.Rotation = -4
 UI.text(menu, "Bygg, trimma och kör din egen moppe", UDim2.fromOffset(420, 24), UDim2.fromOffset(74, 196), { ts = 16, color = UI.C.dim, z = 21 })
 local mlist = UI.new("Frame", { Size = UDim2.fromOffset(240, 300), Position = UDim2.fromOffset(60, 250), BackgroundTransparency = 1, Name = "Knappar", ZIndex = 21 }, menu)
 UI.list(mlist, 8)
-local function closeMenu() menu.Visible = false end
+-- while the start menu is open nothing in the world can be used: no walking, no E-prompts, no clicks,
+-- and the camera shows the garage from the street
+S.menu = true
+local function holdPlayer()
+	if not S.menu then return end
+	S.lockMove(true)
+	pcall(function() game:GetService("ProximityPromptService").Enabled = false end)
+	task.defer(function()
+		if not S.menu then return end
+		local o = S.origin()
+		S.camTo(o * CFrame.lookAt(Vector3.new(-16, 6, -34), Vector3.new(2, 3, 0)), 55, 0)
+	end)
+end
+plr.CharacterAdded:Connect(function(char)
+	char:WaitForChild("Humanoid", 10)
+	holdPlayer()
+end)
+if plr.Character then task.spawn(function() plr.Character:WaitForChild("Humanoid", 10); holdPlayer() end) end
+S.changed.Event:Connect(holdPlayer) -- the plot (and so the camera spot) is known once the profile arrives
+local function closeMenu()
+	if not S.menu then menu.Visible = false; return end
+	S.menu = false
+	menu.Visible = false
+	S.lockMove(false)
+	pcall(function() game:GetService("ProximityPromptService").Enabled = true end)
+	S.camRelease()
+end
 for i, b in ipairs({ { "Spela", "play" }, { "Garage", "garage" }, { "Butik", "shop" }, { "Statistik", "stats" }, { "Inställningar", "settings" } }) do
 	UI.button(mlist, b[1], UDim2.new(1, 0, 0, i == 1 and 52 or 42), nil, { kind = i == 1 and "primary" or "ghost", xa = Enum.TextXAlignment.Left, ts = i == 1 and 22 or 17, order = i, z = 21, transp = i == 1 and 0 or 0.15 }, function()
 		closeMenu()
@@ -5139,7 +5165,7 @@ local function near(inst, dist)
 end
 
 RunService.RenderStepped:Connect(function()
-	if S.mode or not S.profile then hl.Enabled = false; return end
+	if S.mode or S.menu or not S.profile then hl.Enabled = false; return end
 	local kind, obj = target()
 	local heldId, held = holding()
 	if kind == "item" then
@@ -5169,7 +5195,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 UIS.InputBegan:Connect(function(input, gp)
-	if gp or S.mode or not S.profile then return end
+	if gp or S.mode or S.menu or not S.profile then return end
 	if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
 	local kind, obj = target()
 	if not kind or not S.isMine(obj) then return end
@@ -5187,7 +5213,7 @@ end)
 PPS.PromptTriggered:Connect(function(pp)
 	local action = pp:GetAttribute("Action")
 	local plotI = pp:GetAttribute("Plot")
-	if not action or action == "openBox" or action == "ride" or action == "mount" then return end
+	if S.menu or not action or action == "openBox" or action == "ride" or action == "mount" then return end
 	if plotI and plotI ~= S.meta.plot then
 		S.toast("Det här är " .. ownerName(pp) .. "s garage. Du kan titta men inte jobba här.", "info")
 		return
@@ -5197,6 +5223,7 @@ end)
 
 -- side menu / buttons: walk to the station, then open
 S.open.Event:Connect(function(what, atStation)
+	if S.menu then return end
 	if what == "ride" then
 		if S.mode then return end
 		S.walkTo(Vector3.new(-2, 3, -4), function() S.api("ride") end, 12)

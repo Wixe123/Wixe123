@@ -59,7 +59,7 @@ local function near(inst, dist)
 end
 
 RunService.RenderStepped:Connect(function()
-	if S.mode or not S.profile then hl.Enabled = false; return end
+	if S.mode or S.menu or not S.profile then hl.Enabled = false; return end
 	local kind, obj = target()
 	local heldId, held = holding()
 	if kind == "item" then
@@ -89,7 +89,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 UIS.InputBegan:Connect(function(input, gp)
-	if gp or S.mode or not S.profile then return end
+	if gp or S.mode or S.menu or not S.profile then return end
 	if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
 	local kind, obj = target()
 	if not kind or not S.isMine(obj) then return end
@@ -107,7 +107,7 @@ end)
 PPS.PromptTriggered:Connect(function(pp)
 	local action = pp:GetAttribute("Action")
 	local plotI = pp:GetAttribute("Plot")
-	if not action or action == "openBox" or action == "ride" or action == "mount" then return end
+	if S.menu or not action or action == "openBox" or action == "ride" or action == "mount" then return end
 	if plotI and plotI ~= S.meta.plot then
 		S.toast("Det här är " .. ownerName(pp) .. "s garage. Du kan titta men inte jobba här.", "info")
 		return
@@ -117,6 +117,7 @@ end)
 
 -- side menu / buttons: walk to the station, then open
 S.open.Event:Connect(function(what, atStation)
+	if S.menu then return end
 	if what == "ride" then
 		if S.mode then return end
 		S.walkTo(Vector3.new(-2, 3, -4), function() S.api("ride") end, 12)
