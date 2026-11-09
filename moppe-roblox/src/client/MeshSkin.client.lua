@@ -173,6 +173,11 @@ local function skinAerox(moped, root, rootCF)
 	local paint
 	local side = moped:FindFirstChild("pan:sidaV")
 	for _, d in ipairs(side and side:GetDescendants() or {}) do if d:IsA("BasePart") then paint = d; break end end
+	-- rims painted in the studio keep their paint on the Aerox body too
+	local rimPaint
+	for _, d in ipairs(moped:GetDescendants()) do
+		if d:IsA("BasePart") and d.Name == "FramhjulFälg" and d:GetAttribute("PaintZone") then rimPaint = d; break end
+	end
 	hideBlocks(moped)
 	local holder = Instance.new("Model")
 	holder.Name = "Aerox3D"
@@ -182,6 +187,8 @@ local function skinAerox(moped, root, rootCF)
 		mp.CFrame = rootCF * CFrame.new(e.center) * (e.rot or CFrame.new())
 		if e.class == "paint" and paint then
 			mp.Color, mp.Material, mp.Reflectance = paint.Color, paint.Material, paint.Reflectance
+		elseif e.class == "rim" and rimPaint then
+			mp.Color, mp.Material, mp.Reflectance = rimPaint.Color, rimPaint.Material, rimPaint.Reflectance
 		else
 			local look = CLASS_LOOK[e.class] or CLASS_LOOK.dark
 			mp.Color, mp.Material, mp.Reflectance = look[1], look[2], look[3]
@@ -207,7 +214,8 @@ local function skin(moped)
 	moped:SetAttribute("Skinned", true)
 	local rootCF = root.CFrame * CFrame.new(0, -def.r, 0)
 	-- a complete Sprint gets the detailed imported body; anything taken apart shows its parts
-	if modelId == "sprint" and isComplete(moped, def) and skinAerox(moped, root, rootCF) then return end
+	-- (not in the paint studio: there every part group must be its own part so it can get its own colour)
+	if modelId == "sprint" and S.mode ~= "studio" and isComplete(moped, def) and skinAerox(moped, root, rootCF) then return end
 	for _, sub in ipairs(moped:GetChildren()) do
 		local panel = sub:IsA("Model") and sub.Name:match("^pan:(.+)$")
 		if panel then
@@ -248,3 +256,24 @@ local function watch(inst)
 end
 workspace.DescendantAdded:Connect(watch)
 for _, d in ipairs(workspace:GetDescendants()) do watch(d) end
+
+-- entering or leaving the paint studio: rebuild the look of my moped (parts in the studio, Aerox body outside)
+local function reskin(moped)
+	local holder = moped:FindFirstChild("Aerox3D")
+	if holder then holder:Destroy() end
+	for _, d in ipairs(moped:GetDescendants()) do
+		if d.Name == "Kåpa3D" then d:Destroy()
+		elseif d:IsA("BasePart") then d.LocalTransparencyModifier = 0 end
+	end
+	moped:SetAttribute("Skinned", nil)
+	skin(moped)
+end
+local lastStudio = false
+S.modeEv.Event:Connect(function(mode)
+	local inStudio = mode == "studio"
+	if inStudio == lastStudio then return end
+	lastStudio = inStudio
+	local plot = S.plot()
+	local moped = plot and plot:FindFirstChild("Moped", true)
+	if moped then reskin(moped) end
+end)

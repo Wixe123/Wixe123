@@ -47,7 +47,7 @@ S.modeEv.Event:Connect(function(mode) if mode then tip.Visible = false end end)
 local side = UI.new("Frame", { Size = UDim2.fromOffset(196, 290), Position = UDim2.new(0, 12, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), BackgroundTransparency = 1, Name = "Garagemeny" }, gui)
 UI.list(side, 8)
 local MENU = {
-	{ "Bygg motor", "engine" }, { "Porta cylinder", "port" }, { "Beställ delar", "shop" }, { "Lackering", "paint" }, { "Min moppe", "moped" }, { "Kör ut", "ride" },
+	{ "Bygg motor", "engine" }, { "Porta cylinder", "port" }, { "Beställ delar", "shop" }, { "Lackering", "studio" }, { "Min moppe", "moped" }, { "Kör ut", "ride" },
 }
 for i, m in ipairs(MENU) do
 	local b = UI.button(side, m[1], UDim2.new(1, 0, 0, 40), nil, { kind = i == 6 and "primary" or "ghost", xa = Enum.TextXAlignment.Left, order = i, transp = i == 6 and 0 or 0.1, name = m[1] })

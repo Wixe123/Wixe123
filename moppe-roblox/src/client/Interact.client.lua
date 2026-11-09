@@ -16,7 +16,7 @@ local mouse = plr:GetMouse()
 -- where each station is (garage-local) and which mode it opens
 local STATIONS = {
 	engine = Vector3.new(9, 3, -2.5), work = Vector3.new(-3, 3, -4), shop = Vector3.new(10.5, 3, 11),
-	port = Vector3.new(17.5, 3, 8), paint = Vector3.new(17, 3, -5.5), jobs = Vector3.new(10.5, 3, 11),
+	port = Vector3.new(17.5, 3, 8), paint = Vector3.new(17, 3, -5.5), jobs = Vector3.new(10.5, 3, 11), studio = Vector3.new(-3, 3, -4),
 }
 local PLACE = { shelf = "hylla", bench = "bank", floor = "golv", portbench = "port", booth = "lack" }
 local PLACE_TEXT = { hylla = "lägga den på hyllan", bank = "lägga den på arbetsbänken", golv = "ställa den på golvet", port = "spänna fast den i skruvstädet", lack = "hänga den i lackboxen" }

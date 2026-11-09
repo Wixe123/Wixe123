@@ -64,7 +64,7 @@ UI.corner(hex, 4)
 UI.pad(hex, 8, 4, 0, 0)
 heading("Lacktyp", 252)
 local finishes = UI.new("Frame", { Size = UDim2.fromOffset(264, 146), Position = UDim2.fromOffset(16, 274), BackgroundTransparency = 1, Name = "Lacktyper" }, panel)
-UI.list(finishes, 2)
+UI.grid(finishes, UDim2.fromOffset(130, 27), UDim2.fromOffset(4, 3))
 UI.text(panel, "Glans", UDim2.fromOffset(60, 20), UDim2.fromOffset(16, 424), { ts = 14, font = UI.BOLD })
 local glossBar = UI.new("Frame", { Size = UDim2.fromOffset(150, 8), Position = UDim2.fromOffset(78, 430), BackgroundColor3 = UI.C.panel2, BorderSizePixel = 0, Name = "Glans", Active = true }, panel)
 UI.corner(glossBar, 4)
@@ -115,7 +115,7 @@ local function refreshColor()
 	UI.clear(finishes)
 	for i, f in ipairs(Paint.FINISH) do
 		local on = L.finish == f.id
-		local r = UI.new("TextButton", { Size = UDim2.new(1, 0, 0, 27), BackgroundColor3 = on and UI.C.accent or UI.C.panel2, BackgroundTransparency = on and 0 or 0.3, Text = "", AutoButtonColor = true, LayoutOrder = i, Name = f.n }, finishes)
+		local r = UI.new("TextButton", { Size = UDim2.new(0, 130, 0, 27), BackgroundColor3 = on and UI.C.accent or UI.C.panel2, BackgroundTransparency = on and 0 or 0.3, Text = "", AutoButtonColor = true, LayoutOrder = i, Name = f.n }, finishes)
 		UI.corner(r, 6)
 		if on then UI.stroke(r, UI.C.accent2, 2, 0) end
 		local dot = UI.new("Frame", { Size = UDim2.fromOffset(14, 14), Position = UDim2.fromOffset(10, 6), BackgroundTransparency = on and 1 or 0.6, BackgroundColor3 = UI.C.dim, BorderSizePixel = 0 }, r)
@@ -330,13 +330,13 @@ paintCells = function()
 	if not L.state then return end
 	local cov = Paint.coverage(L.state)
 	local r = Paint.result(L.state)
-	local fin = Paint.FIN[L.finish]
-	local c = PRIMER:Lerp(col3(), math.clamp(cov * 1.25, 0, 1))
+	local lookC, lookM, lookR = Paint.look({ c = L.color, f = L.finish, g = L.gloss })
+	local c = PRIMER:Lerp(lookC, math.clamp(cov * 1.25, 0, 1))
 	if r.runs > 0 then c = c:Lerp(Color3.new(0, 0, 0), math.min(0.3, r.runs * 2)) end
 	for _, v in ipairs(L.visual or {}) do
 		v.Color = c
-		v.Material = cov > 0.6 and Enum.Material[fin.mat] or Enum.Material.SmoothPlastic
-		v.Reflectance = cov > 0.6 and (fin.refl[1] + (fin.refl[2] - fin.refl[1]) * L.gloss) or 0
+		v.Material = cov > 0.6 and lookM or Enum.Material.SmoothPlastic
+		v.Reflectance = cov > 0.6 and lookR or 0
 	end
 	if L.cupPaint then L.cupPaint.Color = col3() end
 	-- the spots melt into an even coat as coverage grows
@@ -507,7 +507,7 @@ RunService.RenderStepped:Connect(function(dt)
 		local params = RaycastParams.new()
 		params.FilterType = Enum.RaycastFilterType.Include
 		params.FilterDescendantsInstances = L.smooth and L.visual or { L.mask }
-		local fin = Paint.FIN[L.finish]
+		local _, finM, finR = Paint.look({ c = L.color, f = L.finish, g = L.gloss })
 		for _ = 1, 3 do
 			local aim = hit + frame.RightVector * (math.random() - 0.5) * 0.6 * L.dist + frame.UpVector * (math.random() - 0.5) * 0.6 * L.dist
 			local res = workspace:Raycast(gunPos, (aim - gunPos) * 1.5, params)
@@ -524,8 +524,8 @@ RunService.RenderStepped:Connect(function(dt)
 				dot.Size = Vector3.new(0.02, d, d)
 				dot.CFrame = CFrame.lookAt(res.Position + res.Normal * 0.015, res.Position + res.Normal) * CFrame.Angles(0, math.pi / 2, 0)
 				dot.Color = col3()
-				dot.Material = Enum.Material[fin.mat]
-				dot.Reflectance = fin.refl[1] + (fin.refl[2] - fin.refl[1]) * L.gloss
+				dot.Material = finM
+				dot.Reflectance = finR
 				dot.Transparency = math.clamp(0.15 + Paint.coverage(L.state) * 0.9, 0.15, 1)
 				L.dots[#L.dots + 1] = dot
 			end

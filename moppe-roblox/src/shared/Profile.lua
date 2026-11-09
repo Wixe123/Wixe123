@@ -219,11 +219,11 @@ function Profile.newEngine(p, extra)
 end
 function Profile.giveMoped(p, model, color)
 	local def = MopedDef.MODELS[model]
-	local m = { model = model, slots = {}, engine = nil, jet = 0, odo = 0 }
+	local m = { model = model, slots = {}, engine = nil, jet = 0, odo = 0, paint = {} }
 	m.slots.ram = Profile.addItem(p, "ram_" .. model, "mount")
 	for slot, sku in pairs(OEM) do m.slots[slot] = Profile.addItem(p, sku, "mount") end
 	for _, pan in ipairs(def.panels) do
-		m.slots["pan:" .. pan.id] = Profile.addItem(p, "kapa_" .. model .. "_" .. pan.id, "mount", { paint = { c = color or def.color, f = "blank", g = 0.6, q = 1 } })
+		m.slots["pan:" .. pan.id] = Profile.addItem(p, "kapa_" .. model .. "_" .. pan.id, "mount", { paint = { c = color or def.color, f = "glossy", g = 0.6, q = 1 } })
 	end
 	m.engine = Profile.newEngine(p)
 	p.mopeds[#p.mopeds + 1] = m
@@ -403,6 +403,7 @@ end
 function Profile.workCancel(p)
 	p.portStart = nil
 	p.paintStart = nil
+	p.studio = nil
 	return true
 end
 function Profile.paintStart(p, now)
@@ -431,19 +432,111 @@ function Profile.paintDone(p, color, finish, gloss, state, now, decal)
 	p.stats.painted = p.stats.painted + 1
 	return true, res
 end
+---------------------------------------------------------------- paint studio: one part group of the moped at a time
+-- the mounted things a zone paints (panel items, or the chassis slots whose parts it colours)
+function Profile.zoneTargets(p, zoneId)
+	local z = Paint.ZONE[zoneId]
+	local m = p.mopeds[p.cur]
+	if not z or not m then return nil end
+	local panels, slots = {}, {}
+	for _, pid in ipairs(z.panels or {}) do
+		local id = m.slots["pan:" .. pid]
+		if id and p.items[id] then panels[#panels + 1] = id end
+	end
+	for _, s in ipairs(z.slots or {}) do if m.slots[s] then slots[#slots + 1] = s end end
+	if #panels == 0 and #slots == 0 then return nil end
+	return panels, slots
+end
+Profile.STUDIO_MIN_TIME = 3
+function Profile.studioStart(p, zoneId, now)
+	if not Profile.zoneTargets(p, zoneId) then return err("Det sitter inget att lackera där") end
+	if not Profile.bestTool(p, "spruta") then return err("Du behöver en sprutpistol") end
+	p.studio = { zone = zoneId, t = now }
+	return true
+end
+local function pushColor(list, c, max)
+	for i = #list, 1, -1 do
+		local o = list[i]
+		if o[1] == c[1] and o[2] == c[2] and o[3] == c[3] then table.remove(list, i) end
+	end
+	table.insert(list, 1, { c[1], c[2], c[3] })
+	while #list > max do table.remove(list) end
+end
+-- cover = how much of the zone the client says was sprayed (0..1)
+function Profile.studioDone(p, zoneId, spec, cover, now)
+	local st = p.studio
+	if not st or st.zone ~= zoneId then return err("Ingen lackering pågår på den delen") end
+	if now - st.t < Profile.STUDIO_MIN_TIME then return err("För snabbt") end
+	if (tonumber(cover) or 0) < 0.9 then return err("Spraya hela delen först") end
+	spec = Paint.validSpec(spec)
+	if not spec then return err("Ogiltig lack") end
+	local panels, slots = Profile.zoneTargets(p, zoneId)
+	if not panels then return err("Det sitter inget att lackera där") end
+	local price = Paint.cost(zoneId, spec)
+	if p.money < price.total then return err("Lackeringen kostar " .. price.total .. " kr") end
+	p.money = p.money - price.total
+	p.studio = nil
+	local m = p.mopeds[p.cur]
+	for _, id in ipairs(panels) do
+		local old = p.items[id].paint
+		local np = { q = 1, dk = old and old.dk or nil }
+		for k, v in pairs(spec) do np[k] = v end
+		p.items[id].paint = np
+	end
+	if #slots > 0 then
+		m.paint = m.paint or {}
+		m.paint[zoneId] = spec
+	end
+	pushColor(p.recentColors, spec.c, 8)
+	p.stats.painted = p.stats.painted + 1
+	return true, price
+end
+function Profile.saveColor(p, c)
+	c = Paint.validColor(c)
+	if not c then return err("Ogiltig färg") end
+	pushColor(p.savedColors, c, 12)
+	return true
+end
+function Profile.removeColor(p, i)
+	i = tonumber(i)
+	if not i or not p.savedColors[i] then return err("Ingen sådan färg") end
+	table.remove(p.savedColors, i)
+	return true
+end
+-- the paint of every zone of the current moped (for designs and the studio)
+function Profile.mopedPaint(p)
+	local m = p.mopeds[p.cur]
+	local r = {}
+	if not m then return r end
+	for _, z in ipairs(Paint.ZONES) do
+		if z.panels then
+			for _, pid in ipairs(z.panels) do
+				local it = p.items[m.slots["pan:" .. pid] or ""]
+				if it and it.paint and not r[z.id] then r[z.id] = Paint.validSpec(it.paint) end
+			end
+		elseif m.paint and m.paint[z.id] then r[z.id] = Paint.validSpec(m.paint[z.id]) end
+	end
+	return r
+end
+
 -- designs: the colours of every panel of the current moped
 function Profile.saveDesign(p, name)
 	local m = p.mopeds[p.cur]
 	if type(name) ~= "string" then return err("Ange ett namn") end
 	name = name:sub(1, 24):gsub("[%c<>]", "")
 	if name == "" then return err("Ange ett namn") end
-	local d = { n = name, model = m.model, panels = {} }
+	local d = { n = name, model = m.model, panels = {}, zones = {} }
+	for zid, spec in pairs(m.paint or {}) do d.zones[zid] = spec end
 	for slot, id in pairs(m.slots) do
 		local pid = slot:match("^pan:(.+)$")
 		local it = p.items[id]
-		if pid and it and it.paint then d.panels[pid] = { c = it.paint.c, f = it.paint.f, g = it.paint.g, dk = it.paint.dk } end
+		if pid and it and it.paint then
+			local sp = Paint.validSpec(it.paint) or {}
+			sp.dk = it.paint.dk
+			d.panels[pid] = sp
+		end
 	end
-	if next(d.panels) == nil then return err("Inga lackerade kåpor att spara") end
+	if next(d.panels) == nil and next(d.zones) == nil then return err("Inget lackerat att spara") end
 	for i, old in ipairs(p.designs) do if old.n == name then p.designs[i] = d; return true end end
 	if #p.designs >= 12 then return err("Max 12 designer") end
 	p.designs[#p.designs + 1] = d
@@ -460,11 +553,30 @@ function Profile.applyDesign(p, idx, now)
 		local id = m.slots["pan:" .. pid]
 		if id then targets[#targets + 1] = { id = id, paint = paint } end
 	end
-	local cost = #targets * Profile.DESIGN_COST
-	if #targets == 0 then return err("Inga kåpor monterade") end
+	local zones = {}
+	for zid, spec in pairs(type(d.zones) == "table" and d.zones or {}) do
+		local okSpec = Paint.validSpec(spec)
+		if okSpec and Paint.ZONE[zid] and Paint.ZONE[zid].slots then
+			local _, slots = Profile.zoneTargets(p, zid)
+			if slots and #slots > 0 then zones[zid] = okSpec end
+		end
+	end
+	local nz = 0
+	for _ in pairs(zones) do nz = nz + 1 end
+	local cost = (#targets + nz) * Profile.DESIGN_COST
+	if #targets == 0 and nz == 0 then return err("Inget att lackera på den här mopeden") end
 	if p.money < cost then return err("Lackeringen kostar " .. cost .. " kr") end
 	p.money = p.money - cost
-	for _, t in ipairs(targets) do p.items[t.id].paint = { c = t.paint.c, f = t.paint.f, g = t.paint.g, q = 1, dk = (type(t.paint.dk) == "string" and Paint.DECAL[t.paint.dk]) and t.paint.dk or nil } end
+	for _, t in ipairs(targets) do
+		local sp = Paint.validSpec(t.paint)
+		if sp then
+			sp.q = 1
+			sp.dk = (type(t.paint.dk) == "string" and Paint.DECAL[t.paint.dk]) and t.paint.dk or nil
+			p.items[t.id].paint = sp
+		end
+	end
+	m.paint = m.paint or {}
+	for zid, spec in pairs(zones) do m.paint[zid] = spec end
 	return true, cost
 end
 
@@ -582,7 +694,7 @@ end
 function Profile.new()
 	local p = {
 		v = Profile.VERSION, money = Config.START_MONEY, items = {}, nextId = 1, stand = {}, mopeds = {}, cur = 1,
-		orders = {}, nextOrder = 1, designs = {}, jobs = {}, nextJob = 1,
+		orders = {}, nextOrder = 1, designs = {}, jobs = {}, nextJob = 1, savedColors = {}, recentColors = {},
 		stats = { km = 0, built = 0, ported = 0, painted = 0, jobs = 0, earned = 0 },
 	}
 	-- the starter moped is the Sprint (shown with the imported Aerox body when complete)
@@ -628,7 +740,12 @@ function Profile.load(d)
 	if type(d.mopeds) == "table" then
 		for _, m in ipairs(d.mopeds) do
 			if type(m) == "table" and MopedDef.MODELS[m.model] then
-				local nm = { model = m.model, slots = validMap(p, m.slots, used), engine = m.engine and validMap(p, m.engine, used) or nil, jet = tonumber(m.jet) or 0, odo = tonumber(m.odo) or 0 }
+				local nm = { model = m.model, slots = validMap(p, m.slots, used), engine = m.engine and validMap(p, m.engine, used) or nil, jet = tonumber(m.jet) or 0, odo = tonumber(m.odo) or 0, paint = {} }
+				if type(m.paint) == "table" then
+					for zid, spec in pairs(m.paint) do
+						if Paint.ZONE[zid] then nm.paint[zid] = Paint.validSpec(spec) end
+					end
+				end
 				p.mopeds[#p.mopeds + 1] = nm
 			end
 		end
@@ -655,6 +772,15 @@ function Profile.load(d)
 	p.nextOrder = math.max(1, math.floor(tonumber(d.nextOrder) or 1))
 	for _, o in ipairs(p.orders) do if o.id >= p.nextOrder then p.nextOrder = o.id + 1 end end
 	p.designs = type(d.designs) == "table" and d.designs or {}
+	for _, key in ipairs({ "savedColors", "recentColors" }) do
+		p[key] = {}
+		if type(d[key]) == "table" then
+			for _, c in ipairs(d[key]) do
+				local ok = Paint.validColor(c)
+				if ok and #p[key] < 12 then p[key][#p[key] + 1] = ok end
+			end
+		end
+	end
 	p.jobs = type(d.jobs) == "table" and d.jobs or {}
 	p.nextJob = math.max(1, math.floor(tonumber(d.nextJob) or 1))
 	if type(d.stats) == "table" then for k in pairs(p.stats) do p.stats[k] = tonumber(d.stats[k]) or 0 end end
@@ -673,7 +799,7 @@ end
 function Profile.save(p)
 	local d = {}
 	for k, v in pairs(p) do
-		if k ~= "portStart" and k ~= "paintStart" and k ~= "distAcc" then d[k] = v end
+		if k ~= "portStart" and k ~= "paintStart" and k ~= "distAcc" and k ~= "studio" then d[k] = v end
 	end
 	return d
 end

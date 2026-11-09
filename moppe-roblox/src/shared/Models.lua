@@ -432,13 +432,8 @@ function Models.paintPart(p, paint)
 		p.Reflectance = 0.02
 		return
 	end
-	local fin = Paint.FIN[paint.f] or Paint.FIN.blank
-	p.Color = C3(paint.c[1], paint.c[2], paint.c[3])
-	p.Material = M[fin.mat]
-	local g = paint.g or 0.6
-	p.Reflectance = fin.refl[1] + (fin.refl[2] - fin.refl[1]) * g
-	-- poor paint looks blotchy: slightly darker and rougher
-	if (paint.q or 1) < 0.5 then p.Material = M.Plastic; p.Color = p.Color:Lerp(C3(90, 90, 90), 0.15) end
+	-- finish, settings and (poor quality looks blotchy) all in Paint.look
+	Paint.apply(p, paint)
 end
 C.kapa = function(mk, ctx, part, item)
 	local def = MopedDef.MODELS[part.stats.fits]
@@ -618,6 +613,22 @@ function Models.engine(parent, engineCF, map, items)
 	return model
 end
 -- the whole moped: Root (invisible, PrimaryPart), Seat, chassis slots, panels, engine
+-- paint from the studio on chassis parts (rims, calipers, bars, mirrors, details): by part name in the zone's slots
+function Models.applyZonePaint(model, m)
+	for zid, spec in pairs(m.paint or {}) do
+		local z = Paint.ZONE[zid]
+		if z and z.slots and spec then
+			for _, slot in ipairs(z.slots) do
+				local sub = model:FindFirstChild(slot)
+				if sub then
+					for _, d in ipairs(sub:GetDescendants()) do
+						if d:IsA("BasePart") and z.nameSet[d.Name] then Paint.apply(d, spec); d:SetAttribute("PaintZone", zid) end
+					end
+				end
+			end
+		end
+	end
+end
 function Models.moped(parent, m, items, rootCF)
 	local def = MopedDef.MODELS[m.model]
 	local model = Instance.new("Model")
@@ -645,6 +656,7 @@ function Models.moped(parent, m, items, rootCF)
 			sub.Parent = model
 		end
 	end
+	Models.applyZonePaint(model, m)
 	if m.engine then
 		local eng = Models.engine(model, Models.engineCF(ctx), m.engine, items)
 		eng.Name = "motor"

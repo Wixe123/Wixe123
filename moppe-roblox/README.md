@@ -22,6 +22,7 @@ Ett mopedmekanikerspel i Roblox, byggt från grunden. Du har ett eget garage. D�
 | Mopedlyften (E) | Fungerar likadant för ram, gaffel, hjul, bromsar, dämpare, styre, tank, sadel, avgas och kåpor. Klicka på en del för att få Demontera, Lackera, Byt ut och Inspektera. Med **Meka på motorn här** zoomar kameran in på motorn så att du kan jobba på motorblocket direkt i mopeden. **Lyft ur motorn** flyttar motorn till stativet utan att du behöver ta av bakhjul, bakbroms eller avgas. |
 | Kameran i arbetslägena | Dra med musen på tom yta för att snurra 360° runt mopeden eller motorn (högerknappen och piltangenterna fungerar också). Rullhjulet zoomar. |
 | Portningsbänken (E) | Spänn fast en cylinder i skruvstädet. Du ser handen med den raka slipmaskinen och de fyra portarna, som lyser. Håll vänster musknapp för att slipa. Kvaliteten räknas på jämnhet, precision och överportning. Det finns också ett träningsläge. |
+| Lackeringsstudio (menyn → Lackering) | Lackera mopeden del för del på lyften: främre kåpor, sidokåpor, bakre kåpor, front, stänkskärm, fälgar, bromsok, styre, speglar och detaljer. Färg med färghjul, RGB, HEX, förinställda, sparade och senast använda färger. Lacktyper: solid, metallic, pärlemor, matt, blank, krom, kolfiber-look och candy, med glans, metallic-intensitet, reflektion, klarlack och färgdjup. Spraya med pistolen; färgen kommer på gradvis och bara på den valda delen. **Klar** betalar: grundpris för lacktypen, plus extra för klarlack, färgdjup och specialeffekter, gånger delens storlek. Designer sparar alla delars lack och kan läggas på igen. Höger musknapp eller Q/E vrider kameran. |
 | Lackboxen (E) | Häng en kåpa på stativet och välj färg i färgrutan och nyansstapeln eller med HEX-kod. Välj lacktyp (blank, matt, metallic, pärlemor eller krom), glans och eventuellt en dekal (Vippa, Fartek, Nordtrim, Snabbo), och spraya med pistolen. **Avsluta** sparar lacken. Sedan torkar den i 20 s medan en mätare räknar ner. |
 | Kör ut (F vid lyften) | W gas, S broms, A och D styr, Mellanslag kliver av och R tar dig tillbaka till garaget. Hastighetsmätaren visar också varv och temperatur, och det finns en minikarta. |
 
@@ -84,7 +85,7 @@ Ett mopedmekanikerspel i Roblox, byggt från grunden. Du har ett eget garage. D�
 
 ## Testat och inte testat
 
-- **Spelregler** (`tests/scenarios/logic.lua`, 63 kontroller, alla godkända):
+- **Spelregler** (`tests/scenarios/logic.lua`, 72 kontroller, alla godkända):
   - profil, montering och demontering av hela motorn i rätt ordning, fel kolvdiameter;
   - butik och leveranstider;
   - portnings- och lackkvalitet;
@@ -100,6 +101,8 @@ Ett mopedmekanikerspel i Roblox, byggt från grunden. Du har ett eget garage. D�
     - loggar ut och in igen och ser att allt är sparat.
   - `tests/scenarios/build_look.lua` provar byggskärmen (8 kontroller): håll en del från listan, det gröna målet lyser, klicka för att montera, köp från listan. Bild: `docs/bygg_motor.png`.
   - `tests/scenarios/paint_only.lua` provar lackboxen: HEX-färg, metallic, dekal, spraya, Avsluta och torkning. Bilder: `docs/lackering.png` och `docs/lackering_torkar.png`.
+  - `tests/scenarios/studio.lua` provar lackeringsstudion (16 kontroller): fälgar i röd krom, sidokåpor i candy, betalning, sparade och senaste färger, spara och ladda design. Bilder: `docs/studio_*.png`.
+  - `cancel_free.lua`, `no_mesh_api.lua` och `menu_lock.lua` provar att delar frigörs vid Avbryt, att spelet klarar avstängt mesh-API och att startmenyn låser spelet.
   - `tests/emu/render.js` gör bilder av vad emulatorn ser, med three.js.
 - **Ingenting har körts i riktiga Roblox Studio.** Emulatorn är en efterbildning:
   - Den har ingen riktig fysik, så hur mopeden känns att köra och om gubben fastnar någonstans är inte provat.

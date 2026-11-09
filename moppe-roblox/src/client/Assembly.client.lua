@@ -458,7 +458,7 @@ local function buildTabs()
 	for i, t in ipairs({ { "engine", "Bygg Motor" }, { "work", "Montera Moped" }, { "paint", "Styling" } }) do
 		UI.button(tabs, t[2], UDim2.fromOffset(160, 42), nil, { kind = A.mode == t[1] and "primary" or "ghost", order = i, ts = 17, transp = A.mode == t[1] and 0 or 0.1, name = t[2] }, function()
 			if t[1] == A.mode then return end
-			if t[1] == "paint" then S.endMode(); S.open:Fire("paint"); return end
+			if t[1] == "paint" then S.endMode(); S.open:Fire("studio"); return end
 			local to = t[1]
 			S.endMode()
 			S.open:Fire(to)

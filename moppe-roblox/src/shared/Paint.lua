@@ -8,16 +8,133 @@ Paint.LIBRARY = {
 	{ n = "Sky Blue", c = { 70, 150, 230 } }, { n = "Sunset Orange", c = { 245, 120, 30 } }, { n = "Mint", c = { 140, 215, 190 } },
 	{ n = "Bubblegum", c = { 240, 120, 180 } }, { n = "Olive", c = { 100, 110, 50 } }, { n = "Sand", c = { 214, 196, 150 } }, { n = "Yellow", c = { 245, 205, 30 } },
 }
--- finishes: Roblox material + reflectance range (gloss slider picks within it)
+-- finishes. Each one changes the real look of the part: Roblox material, reflectance and colour treatment
+-- (Paint.look). Only built-in materials are used, so no extra material or texture instances are created.
+-- price = base price per paint job (kr) before the size of the part and extra effects.
 Paint.FINISH = {
-	{ id = "blank", n = "Blank", mat = "SmoothPlastic", refl = { 0.02, 0.18 } },
-	{ id = "matt", n = "Matt", mat = "Plastic", refl = { 0, 0.02 } },
-	{ id = "metallic", n = "Metallic", mat = "Metal", refl = { 0.05, 0.3 } },
-	{ id = "parlemor", n = "Pärlemor", mat = "SmoothPlastic", refl = { 0.15, 0.35 } },
-	{ id = "krom", n = "Krom", mat = "Foil", refl = { 0.35, 0.6 } },
+	{ id = "solid", n = "Solid", price = 150 },
+	{ id = "metallic", n = "Metallic", price = 350 },
+	{ id = "pearl", n = "Pärlemor", price = 500 },
+	{ id = "matt", n = "Matt", price = 250 },
+	{ id = "glossy", n = "Blank", price = 200 },
+	{ id = "chrome", n = "Krom", price = 900 },
+	{ id = "carbon", n = "Kolfiber-look", price = 750 },
+	{ id = "candy", n = "Candy", price = 650 },
 }
 Paint.FIN = {}
 for _, f in ipairs(Paint.FINISH) do Paint.FIN[f.id] = f end
+-- names used by older saves
+Paint.FIN.blank, Paint.FIN.parlemor, Paint.FIN.krom = Paint.FIN.glossy, Paint.FIN.pearl, Paint.FIN.chrome
+
+-- settings 0..1 and their defaults: gloss, metallic intensity, reflection, clear coat, colour depth
+Paint.SETTINGS = {
+	{ id = "g", n = "Glans", def = 0.7 }, { id = "mi", n = "Metallic-intensitet", def = 0.6 }, { id = "rf", n = "Reflektion", def = 0.4 },
+	{ id = "cc", n = "Klarlack", def = 0.5 }, { id = "dp", n = "Färgdjup", def = 0.3 },
+}
+
+-- parts of a moped that can be painted on their own. panels = panel ids (painted items); names = part names in
+-- the chassis models built by Models (slot = the slot those parts belong to). size = how big the job is.
+Paint.ZONES = {
+	{ id = "frontkapor", n = "Främre kåpor", panels = { "flankV", "flankH", "ben", "styrkapa" }, size = 1.4 },
+	{ id = "sidokapor", n = "Sidokåpor", panels = { "sidaV", "sidaH" }, size = 1.6 },
+	{ id = "bakkapor", n = "Bakre kåpor", panels = { "bak", "tunnel", "fot" }, size = 1.3 },
+	{ id = "front", n = "Front", panels = { "front" }, size = 1.2 },
+	{ id = "skarm", n = "Stänkskärm", panels = { "skarm" }, size = 0.8 },
+	{ id = "falgar", n = "Fälgar", slots = { "framhjul", "bakhjul" }, names = { "FramhjulFälg", "FramhjulEker", "BakhjulFälg", "BakhjulEker" }, size = 1.0 },
+	{ id = "bromsok", n = "Bromsok", slots = { "frambroms", "bakbroms" }, names = { "Bromsok" }, size = 0.5 },
+	{ id = "styre", n = "Styre", slots = { "styre" }, names = { "Styre", "Styrstam" }, size = 0.6 },
+	{ id = "speglar", n = "Speglar", slots = { "styre" }, names = { "Spegel", "Spegelarm" }, size = 0.4 },
+	{ id = "detaljer", n = "Detaljer", slots = { "gaffel" }, names = { "Krona", "Gaffelben" }, size = 0.7 },
+}
+Paint.ZONE = {}
+for _, z in ipairs(Paint.ZONES) do
+	Paint.ZONE[z.id] = z
+	z.nameSet = {}
+	for _, n in ipairs(z.names or {}) do z.nameSet[n] = true end
+end
+-- which zone a panel id belongs to
+Paint.PANEL_ZONE = {}
+for _, z in ipairs(Paint.ZONES) do for _, pid in ipairs(z.panels or {}) do Paint.PANEL_ZONE[pid] = z.id end end
+
+local function num01(x, def)
+	x = tonumber(x)
+	if not x or x ~= x then return def end
+	return math.max(0, math.min(1, x))
+end
+-- a clean paint spec from anything (client data is never trusted)
+function Paint.validSpec(t)
+	if type(t) ~= "table" then return nil end
+	local c = Paint.validColor(t.c)
+	local f = type(t.f) == "string" and Paint.FIN[t.f]
+	if not c or not f then return nil end
+	local s = { c = c, f = f.id }
+	for _, st in ipairs(Paint.SETTINGS) do s[st.id] = num01(t[st.id], st.def) end
+	return s
+end
+-- price of painting a zone with a spec: { total, base, effects, size }
+function Paint.cost(zoneId, spec)
+	local z = Paint.ZONE[zoneId]
+	local f = spec and Paint.FIN[spec.f]
+	if not z or not f then return nil end
+	local effects = 0
+	if (spec.cc or 0) > 0.6 then effects = effects + 120 end -- extra clear coat
+	if (spec.dp or 0) > 0.6 then effects = effects + 80 end -- deep colour (more layers)
+	if f.id == "candy" or f.id == "pearl" then effects = effects + 100 end -- special effect coat
+	local sub = f.price + effects
+	local total = math.floor(sub * z.size / 10 + 0.5) * 10
+	return { total = total, base = f.price, effects = effects, size = z.size, extra = total - sub }
+end
+
+-- the look of a paint spec: Color3, Material, Reflectance (needs Roblox types; the server only stores specs)
+function Paint.look(spec)
+	local f = Paint.FIN[spec.f] or Paint.FIN.glossy
+	local c = spec.c or { 200, 200, 200 }
+	local g, mi, rf = num01(spec.g, 0.7), num01(spec.mi, 0.6), num01(spec.rf, 0.4)
+	local cc, dp = num01(spec.cc, 0.5), num01(spec.dp, 0.3)
+	local base = Color3.fromRGB(c[1], c[2], c[3])
+	local deep = Color3.new(base.R * 0.55, base.G * 0.55, base.B * 0.55)
+	local col = base:Lerp(deep, dp * 0.5)
+	local M = Enum.Material
+	local mat, refl
+	local shine = 0.4 + 0.6 * g -- gloss scales all reflections
+	if f.id == "solid" then
+		mat = g < 0.3 and M.Plastic or M.SmoothPlastic
+		refl = (0.02 + 0.08 * rf + 0.05 * cc) * shine
+	elseif f.id == "matt" then
+		mat = M.Plastic
+		refl = 0
+		col = col:Lerp(Color3.new(col.R * 0.9, col.G * 0.9, col.B * 0.9), 0.5)
+	elseif f.id == "glossy" then
+		mat = M.SmoothPlastic
+		refl = (0.08 + 0.2 * rf + 0.1 * cc) * shine
+	elseif f.id == "metallic" then
+		mat = mi >= 0.35 and M.Metal or M.SmoothPlastic
+		refl = (0.05 + 0.2 * rf * (0.5 + mi) + 0.08 * cc) * shine
+		col = col:Lerp(Color3.new(1, 1, 1), 0.12 * mi)
+	elseif f.id == "pearl" then
+		mat = M.SmoothPlastic
+		refl = (0.16 + 0.18 * rf + 0.08 * cc) * shine
+		col = col:Lerp(Color3.fromRGB(245, 240, 255), 0.18)
+	elseif f.id == "chrome" then
+		mat = M.Foil
+		refl = 0.45 + 0.4 * rf * shine
+		col = col:Lerp(Color3.fromRGB(205, 210, 216), 0.55 * (1 - dp))
+	elseif f.id == "carbon" then
+		mat = M.Fabric -- woven surface: the closest built-in material to carbon fibre
+		refl = (0.03 + 0.15 * cc) * shine
+		col = col:Lerp(Color3.fromRGB(22, 22, 24), 0.82)
+	else -- candy: deep, saturated colour under a thick shiny coat (opaque: Glass would show what is behind)
+		mat = M.SmoothPlastic
+		refl = (0.22 + 0.25 * cc + 0.1 * rf) * shine
+		col = col:Lerp(deep, 0.25 + dp * 0.4)
+	end
+	if (spec.q or 1) < 0.5 then mat = M.Plastic; col = col:Lerp(Color3.fromRGB(90, 90, 90), 0.15); refl = refl * 0.4 end
+	return col, mat, math.max(0, math.min(1, refl))
+end
+function Paint.apply(part, spec)
+	local col, mat, refl = Paint.look(spec)
+	part.Color, part.Material, part.Reflectance = col, mat, refl
+end
 
 -- decals (fictional brands only)
 Paint.DECALS = {

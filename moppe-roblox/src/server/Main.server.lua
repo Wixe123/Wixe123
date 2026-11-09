@@ -508,6 +508,32 @@ function H.paintDone(plr, p, color, finish, gloss, state, decal)
 	changed(plr, { "items" })
 	return true, r
 end
+-- paint studio: one part group of the moped on the lift at a time
+function H.studioStart(plr, p, zoneId)
+	if not near(plr, plotOf[plr].origin * GarageBuilder.LIFT.Position, 16) then return false, "Gå fram till mopeden" end
+	local ok, e = Profile.studioStart(p, zoneId, now())
+	if not ok then return ok, e end
+	local tool = Profile.bestTool(p, "spruta")
+	return true, { even = tool.stats.even }
+end
+function H.studioDone(plr, p, zoneId, spec, cover)
+	local ok, r = Profile.studioDone(p, zoneId, spec, cover, now())
+	if not ok then return ok, r end
+	changed(plr, { "moped", "items" })
+	return true, r
+end
+function H.saveColor(plr, p, c)
+	local ok, e = Profile.saveColor(p, c)
+	if not ok then return ok, e end
+	changed(plr, {})
+	return true
+end
+function H.removeColor(plr, p, i)
+	local ok, e = Profile.removeColor(p, i)
+	if not ok then return ok, e end
+	changed(plr, {})
+	return true
+end
 function H.saveDesign(plr, p, name)
 	local ok, e = Profile.saveDesign(p, name)
 	if not ok then return ok, e end
