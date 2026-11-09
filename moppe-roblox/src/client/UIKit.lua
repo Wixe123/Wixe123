@@ -130,7 +130,7 @@ function UI.viewport(parent, model, size, pos, opts)
 	opts = opts or {}
 	local vf = UI.new("ViewportFrame", {
 		Size = size, Position = pos or UDim2.new(), BackgroundColor3 = opts.bg or Color3.fromRGB(235, 237, 240), BackgroundTransparency = opts.bgT or 0,
-		Ambient = Color3.fromRGB(170, 170, 175), LightColor = Color3.fromRGB(255, 250, 240), LightDirection = Vector3.new(-1, -1.4, -0.8),
+		Ambient = Color3.fromRGB(205, 205, 210), LightColor = Color3.fromRGB(255, 252, 245), LightDirection = Vector3.new(-1, -1.4, -0.8),
 		BorderSizePixel = 0, Name = "Bild", ZIndex = opts.z or 1, LayoutOrder = opts.order or 0,
 	}, parent)
 	UI.corner(vf, opts.radius or 8)

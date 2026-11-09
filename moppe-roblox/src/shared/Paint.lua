@@ -19,6 +19,14 @@ Paint.FINISH = {
 Paint.FIN = {}
 for _, f in ipairs(Paint.FINISH) do Paint.FIN[f.id] = f end
 
+-- decals (fictional brands only)
+Paint.DECALS = {
+	{ id = "vippa", text = "VIPPA", c = { 240, 240, 240 } }, { id = "fartek", text = "FARTEK", c = { 205, 38, 38 } },
+	{ id = "nordtrim", text = "NORDTRIM", c = { 240, 196, 25 } }, { id = "snabbo", text = "SNABBO", c = { 245, 120, 20 } },
+}
+Paint.DECAL = {}
+for _, d in ipairs(Paint.DECALS) do Paint.DECAL[d.id] = d end
+
 Paint.COLS, Paint.ROWS = 10, 6
 
 function Paint.validHex(s)
@@ -44,16 +52,20 @@ function Paint.new()
 	for i = 1, Paint.COLS * Paint.ROWS do s.cells[i] = 0 end
 	return s
 end
--- spray at (u,v) 0..1 over the panel for dt seconds; dist = gun distance factor (1 = ideal); even from the gun
-function Paint.spray(s, u, v, dt, dist, even)
+-- spray at (u,v) 0..1 over the panel for dt seconds; dist = gun distance factor (1 = ideal); even from the gun.
+-- cw, ch: cell size in studs (the spray is round on the panel whatever its shape); without them, in cells.
+function Paint.spray(s, u, v, dt, dist, even, cw, ch)
 	even = even or 0
 	dist = dist or 1
-	local radius = 1.6 * dist
-	local rate = 2.0 / (dist * dist) * dt
+	local studs = cw and ch and cw > 0 and ch > 0
+	local radius = studs and 0.6 * dist or 1.6 * dist
+	local rate = 3.2 / (dist * dist) * dt
 	local cx, cy = u * Paint.COLS + 0.5, v * Paint.ROWS + 0.5
 	for row = 1, Paint.ROWS do
 		for col = 1, Paint.COLS do
-			local d = math.sqrt((col - cx) ^ 2 + (row - cy) ^ 2)
+			local dx, dy = col - cx, row - cy
+			if studs then dx, dy = dx * cw, dy * ch end
+			local d = math.sqrt(dx * dx + dy * dy)
 			if d < radius then
 				local i = (row - 1) * Paint.COLS + col
 				local f = 1 - d / radius
@@ -79,7 +91,7 @@ function Paint.result(s)
 		vals[i] = x
 		sum = sum + math.min(x, 1.6)
 		if x >= 0.8 then cover = cover + 1 end
-		if x > 1.8 then runs = runs + 1 end
+		if x > 2.4 then runs = runs + 1 end
 	end
 	local mean = sum / n
 	local var = 0

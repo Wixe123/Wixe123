@@ -37,9 +37,11 @@ end)
 local tip = UI.panel(gui, UDim2.fromOffset(560, 34), UDim2.new(0.5, 0, 1, -14), { anchor = Vector2.new(0.5, 1), name = "Tips", transp = 0.25, visible = false })
 local tipText = UI.text(tip, "", UDim2.fromScale(1, 1), nil, { ts = 14, xa = Enum.TextXAlignment.Center, color = UI.C.text })
 S.tipEv.Event:Connect(function(text)
-	tip.Visible = text ~= nil and text ~= "" and S.settings.tips
+	tip.Visible = text ~= nil and text ~= "" and S.settings.tips and not S.mode
 	tipText.Text = text or ""
 end)
+-- work modes have their own hints at the bottom
+S.modeEv.Event:Connect(function(mode) if mode then tip.Visible = false end end)
 
 ---------------------------------------------------------------- garage side menu and Moped Info
 local side = UI.new("Frame", { Size = UDim2.fromOffset(196, 290), Position = UDim2.new(0, 12, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), BackgroundTransparency = 1, Name = "Garagemeny" }, gui)

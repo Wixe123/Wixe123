@@ -170,13 +170,13 @@ local pbtn = E.findGui("Sidokåpa vänster", { button = true })
 check("paint picker lists the panel", pbtn ~= nil)
 if pbtn then E.clickGui(pbtn) end
 E.run(1)
-E.clickGui("Midnight Blue")
+E.typeText("HEX", "#162254")
 E.clickGui("^Metallic$")
 local function sprayPanel(passes)
 	local scene = E.services.Workspace.LackLokal
 	local mn, mx
 	for _, d in ipairs(scene:GetChildren()) do
-		if d:IsA("BasePart") and (d.Name == "Kåpa" or d.Transparency == 0) and d.Name ~= "Munstycke" then
+		if d:IsA("BasePart") and d.Name == "Kåpa" then
 			local cf, sz = d.CFrame, d.Size
 			for _, sx in ipairs({ -0.5, 0.5 }) do for _, sy in ipairs({ -0.5, 0.5 }) do for _, sz2 in ipairs({ -0.5, 0.5 }) do
 				local x, y = E.screenOf(cf * E.T.Vector3.new(sx * sz.X, sy * sz.Y, sz2 * sz.Z))
@@ -185,13 +185,15 @@ local function sprayPanel(passes)
 			end end end
 		end
 	end
+	-- stay off the colour panel (left) and the checklist (right)
+	mn = E.T.Vector2.new(math.max(mn.X, 330), math.max(mn.Y, 60)); mx = E.T.Vector2.new(math.min(mx.X, 1030), math.min(mx.Y, 600))
 	E.mouseMove(mn.X + 5, mn.Y + 5)
 	E.mouseButton(1, true)
 	for pass = 1, passes do
 		for row = 0, 7 do
 			local y = mn.Y + (mx.Y - mn.Y) * (row + 0.5) / 8
-			for k = 0, 12 do
-				local x = (row % 2 == 0) and (mn.X + (mx.X - mn.X) * k / 12) or (mx.X - (mx.X - mn.X) * k / 12)
+			for k = 0, 30 do -- about one second per sweep, like a player
+				local x = (row % 2 == 0) and (mn.X + (mx.X - mn.X) * k / 30) or (mx.X - (mx.X - mn.X) * k / 30)
 				E.mouseMove(x, y); E.step(1 / 30)
 			end
 		end
@@ -199,10 +201,10 @@ local function sprayPanel(passes)
 	E.mouseButton(1, false)
 	E.run(0.3)
 end
-sprayPanel(3)
+sprayPanel(1)
 
 E.shot("g7_lackering")
-E.clickGui("^Klar$")
+E.clickGui("^Avsluta$")
 E.run(1)
 local panelId
 for iid, it in pairs(S.profile.items) do if it.loc == "lack" then panelId = iid end end

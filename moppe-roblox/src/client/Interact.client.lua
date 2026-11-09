@@ -130,5 +130,9 @@ end)
 
 -- escape always leaves a work mode
 UIS.InputBegan:Connect(function(input)
-	if input.KeyCode == Enum.KeyCode.Escape and S.mode then S.endMode() end
+	if input.KeyCode == Enum.KeyCode.Escape and S.mode then
+		-- a work mode may use Esc first (e.g. to put down the part in your hand)
+		if S.escCapture and S.escCapture() then return end
+		S.endMode()
+	end
 end)

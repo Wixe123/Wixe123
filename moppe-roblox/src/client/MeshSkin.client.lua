@@ -131,13 +131,13 @@ local function bodyTemplates()
 		aeroxFailed = true
 		local msg = "Aerox-modellen kunde inte visas: " .. tostring(err)
 		warn("Moppe: " .. msg)
-		S.toast(msg .. " — importera aerox.obj i Studio (se README) så används den i stället.", "error")
+		S.toast(msg .. " — slå på Game Settings → Security → Allow Mesh / Image APIs, eller importera aerox.obj i Studio (se README).", "error")
 		return false
 	end
 	body = list
 	return body
 end
--- complete = every chassis slot, every panel and all 29 engine parts are on (seen from the model itself)
+-- complete = every chassis slot, every panel and the engine are on (seen from the model itself)
 local function isComplete(moped, def)
 	local have = {}
 	for _, c in ipairs(moped:GetChildren()) do
@@ -146,8 +146,8 @@ local function isComplete(moped, def)
 	end
 	for _, s in ipairs(MopedDef.SLOTS) do if not have[s.id] then return false end end
 	for _, p in ipairs(def.panels) do if not have["pan:" .. p.id] then return false end end
-	local eng = have.motor
-	return eng ~= nil and #eng:GetChildren() >= #EngineDef.SOCKETS
+	-- the engine only has to be in the frame: the body covers it, so a half-built engine still shows the Aerox
+	return have.motor ~= nil
 end
 local function hideBlocks(moped)
 	for _, d in ipairs(moped:GetDescendants()) do

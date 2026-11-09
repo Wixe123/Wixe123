@@ -22,7 +22,7 @@ Ett mopedmekanikerspel i Roblox, byggt från grunden. Du har ett eget garage. D�
 | Mopedlyften (E) | Fungerar likadant för ram, gaffel, hjul, bromsar, dämpare, styre, tank, sadel, avgas och kåpor. Klicka på en del för att få Demontera, Lackera, Byt ut och Inspektera. Med **Meka på motorn här** zoomar kameran in på motorn så att du kan jobba på motorblocket direkt i mopeden. **Lyft ur motorn** flyttar motorn till stativet utan att du behöver ta av bakhjul, bakbroms eller avgas. |
 | Kameran i arbetslägena | Dra med musen på tom yta för att snurra 360° runt mopeden eller motorn (högerknappen och piltangenterna fungerar också). Rullhjulet zoomar. |
 | Portningsbänken (E) | Spänn fast en cylinder i skruvstädet. Du ser handen med den raka slipmaskinen och de fyra portarna, som lyser. Håll vänster musknapp för att slipa. Kvaliteten räknas på jämnhet, precision och överportning. Det finns också ett träningsläge. |
-| Lackboxen (E) | Häng en kåpa på stativet och välj färg: från biblioteket, med RGB-reglage eller med HEX-kod. Välj lacktyp (blank, matt, metallic, pärlemor eller krom) och glans, och spraya. Lacken torkar på 20 s. |
+| Lackboxen (E) | Häng en kåpa på stativet och välj färg i färgrutan och nyansstapeln eller med HEX-kod. Välj lacktyp (blank, matt, metallic, pärlemor eller krom), glans och eventuellt en dekal (Vippa, Fartek, Nordtrim, Snabbo), och spraya med pistolen. **Avsluta** sparar lacken. Sedan torkar den i 20 s medan en mätare räknar ner. |
 | Kör ut (F vid lyften) | W gas, S broms, A och D styr, Mellanslag kliver av och R tar dig tillbaka till garaget. Hastighetsmätaren visar också varv och temperatur, och det finns en minikarta. |
 
 ## Vad som finns
@@ -63,24 +63,24 @@ Ett mopedmekanikerspel i Roblox, byggt från grunden. Du har ett eget garage. D�
 
 - **Inga riktiga märken eller logotyper.** Yamaha, Malossi, Polini, Stage6, Yasuni, Doppler, Dellorto, Naraku och andra riktiga varumärken kan få spelet borttaget från Roblox, och det står i projektets egna regler att Yamaha-logga inte ska användas. I stället finns påhittade märken: Vippa, Origo, Fartek, Nordtrim, Snabbo, Kylstad, Gasström och Bruksmek. Butiken heter Moppelagret.se.
 - **Motorljud saknas.** Ljud kräver ljudfiler som är uppladdade till Roblox.
-- **Dekaler saknas.**
 - **Garageuppgraderingar saknas.**
 - **Hjälp i andras garage saknas.** Andra spelare kan bara titta.
-- **Vippa Sprint använder din importerade Aerox-modell (`aerox.obj`).** När mopeden är helt ihopbyggd visas den detaljerade modellen i spelet med lacken från kåporna. När du skruvar isär den visas spelets egna delar, så att det syns vad som sitter och inte. Modellen gjordes om av `tools/embed_aerox.py` till `src/shared/AeroxMesh.lua`: lackdelarna är oförenklade och resten är förenklad, ca 64 000 trianglar. Den byggs i spelet med EditableMesh, så inget behöver laddas upp. Själva OBJ-filen ligger inte i repot. Kör om skriptet om du byter modell. Kontrollera att modellens licens tillåter att den används i ett Roblox-spel.
+- **Vippa Sprint använder din importerade Aerox-modell (`aerox.obj`).** När alla kåpor, chassidelar och motorn sitter på visas den detaljerade modellen i spelet med lacken från kåporna. När du skruvar isär den visas spelets egna delar, så att det syns vad som sitter och inte. Modellen gjordes om av `tools/embed_aerox.py` till `src/shared/AeroxMesh.lua`: lackdelarna är oförenklade och resten är förenklad, ca 64 000 trianglar. Den byggs i spelet med EditableMesh, så inget behöver laddas upp. Själva OBJ-filen ligger inte i repot. Kör om skriptet om du byter modell. Kontrollera att modellens licens tillåter att den används i ett Roblox-spel.
 - **Släta kåpor på Citi och Klassik.** Kåporna är riktiga 3D-mesher med rundade former, men de skapas i spelet med Robloxs EditableMesh (`src/shared/MeshGen.lua` och `src/client/MeshSkin.client.lua`), så inga filer behöver laddas upp. Om Roblox inte tillåter EditableMesh i ditt spel (det kan kräva att kontot är verifierat för publicerade spel) visas de kantiga blocken i stället, och Output säger det. Motor, ram och hjul är fortfarande byggda av Roblox-delar.
 
 ## Om Aerox-modellen inte syns
 
-1. **Rätt moped:** modellen visas bara på Vippa Sprint (startmopeden), och bara när den är helt ihopbyggd.
-2. **Läs meddelandet:** kan spelet inte skapa modellen visas ett rött meddelande som säger varför. Samma text står i View → Output.
-3. **Reservväg:** importera modellen själv i Studio:
+1. **Rätt moped:** modellen visas bara på Vippa Sprint (startmopeden), och bara när alla kåpor, alla chassidelar och motorn sitter på. Motorn behöver inte vara komplett.
+2. **Slå på mesh-API:t:** Game Settings → Security → **Allow Mesh / Image APIs**. Utan den inställningen får spelet inte bygga modeller med EditableMesh.
+3. **Läs meddelandet:** kan spelet inte skapa modellen visas ett rött meddelande som säger varför. Samma text står i View → Output.
+4. **Reservväg:** importera modellen själv i Studio:
    - Välj File → Import 3D och välj `aerox.obj`.
    - Döp den importerade modellen till **Aerox** och lägg den i ReplicatedStorage. Workspace går också.
    - Spelet använder den i stället för den inbyggda versionen och passar in den på Sprintens hjul automatiskt.
 
 ## Testat och inte testat
 
-- **Spelregler** (`tests/scenarios/logic.lua`, 62 kontroller, alla godkända):
+- **Spelregler** (`tests/scenarios/logic.lua`, 63 kontroller, alla godkända):
   - profil, montering och demontering av hela motorn i rätt ordning, fel kolvdiameter;
   - butik och leveranstider;
   - portnings- och lackkvalitet;
@@ -88,12 +88,14 @@ Ett mopedmekanikerspel i Roblox, byggt från grunden. Du har ett eget garage. D�
   - uppdrag och sparning.
 - **Hela spelet i en Roblox-emulator** (`tests/emu/`):
   - Alla skript körs mot Robloxs API-lista, så felstavade egenskaper, fel värdetyper, skrivskyddade egenskaper och anrop som inte finns ger fel precis som i Roblox.
-  - `tests/scenarios/game.lua` spelar igenom spelet med klick, tangenter, E-knappar och dra-och-släpp (54 kontroller, alla godkända, inga skriptfel):
+  - `tests/scenarios/game.lua` spelar igenom spelet med klick, tangenter, E-knappar och dra-och-släpp (53 kontroller, alla godkända, inga skriptfel):
     - beställer, väntar på leveransen och öppnar lådan;
     - byter kolv, ringar och cylinder genom att dra delarna;
     - portar och lackerar;
     - kör ut och levererar ett paket;
     - loggar ut och in igen och ser att allt är sparat.
+  - `tests/scenarios/build_look.lua` provar byggskärmen (8 kontroller): håll en del från listan, det gröna målet lyser, klicka för att montera, köp från listan. Bild: `docs/bygg_motor.png`.
+  - `tests/scenarios/paint_only.lua` provar lackboxen: HEX-färg, metallic, dekal, spraya, Avsluta och torkning. Bilder: `docs/lackering.png` och `docs/lackering_torkar.png`.
   - `tests/emu/render.js` gör bilder av vad emulatorn ser, med three.js.
 - **Ingenting har körts i riktiga Roblox Studio.** Emulatorn är en efterbildning:
   - Den har ingen riktig fysik, så hur mopeden känns att köra och om gubben fastnar någonstans är inte provat.

@@ -248,6 +248,8 @@ function GarageBuilder.build(parent, origin, plotIndex)
 	local curtain = box("Draperi", V3(bx1 - bx0 - 4, 9.5, 0.08), at(bcx2 + 2, FLOOR + 6.2, bz1), C3(160, 200, 230), M.SmoothPlastic, false)
 	curtain.Transparency = 0.65
 	box("Lackbox", V3(4, 11, 0.3), at(bx0 + 2, FLOOR + 5.5, bz1), white, M.SmoothPlastic)
+	-- back wall inside the booth (closes the window behind the panel stand)
+	box("Lackvägg", V3(bx1 - bx0, 11, 0.3), at(bcx2, FLOOR + 5.5, bz0 + 0.2), white, M.SmoothPlastic)
 	box("Galler", V3(bx1 - bx0 - 0.6, 0.06, bz1 - bz0 - 0.6), at(bcx2, FLOOR + 0.04, bcz), C3(50, 52, 56), M.DiamondPlate, false)
 	for _, x in ipairs({ bx0 + 2.5, bx1 - 2.5 }) do
 		local lp = box("Lackljus", V3(1.2, 0.15, 8), at(x, FLOOR + 10.8, bcz), C3(255, 255, 250), M.Neon, false)

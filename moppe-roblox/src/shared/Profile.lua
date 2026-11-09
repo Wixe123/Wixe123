@@ -407,7 +407,7 @@ function Profile.paintStart(p, now)
 	p.paintStart = now
 	return true, id
 end
-function Profile.paintDone(p, color, finish, gloss, state, now)
+function Profile.paintDone(p, color, finish, gloss, state, now, decal)
 	if not p.paintStart then return err("Ingen lackering pågår") end
 	local elapsed = now - p.paintStart
 	p.paintStart = nil
@@ -420,7 +420,7 @@ function Profile.paintDone(p, color, finish, gloss, state, now)
 	local res = Paint.result(state)
 	if not res then return err("Ogiltigt resultat") end
 	gloss = math.max(0, math.min(1, tonumber(gloss) or 0.6))
-	p.items[id].paint = { c = c, f = finish, g = gloss, q = res.q }
+	p.items[id].paint = { c = c, f = finish, g = gloss, q = res.q, dk = (type(decal) == "string" and Paint.DECAL[decal]) and decal or nil }
 	p.items[id].dry = now + Config.PAINT_DRY
 	p.stats.painted = p.stats.painted + 1
 	return true, res
@@ -435,7 +435,7 @@ function Profile.saveDesign(p, name)
 	for slot, id in pairs(m.slots) do
 		local pid = slot:match("^pan:(.+)$")
 		local it = p.items[id]
-		if pid and it and it.paint then d.panels[pid] = { c = it.paint.c, f = it.paint.f, g = it.paint.g } end
+		if pid and it and it.paint then d.panels[pid] = { c = it.paint.c, f = it.paint.f, g = it.paint.g, dk = it.paint.dk } end
 	end
 	if next(d.panels) == nil then return err("Inga lackerade kåpor att spara") end
 	for i, old in ipairs(p.designs) do if old.n == name then p.designs[i] = d; return true end end
@@ -458,7 +458,7 @@ function Profile.applyDesign(p, idx, now)
 	if #targets == 0 then return err("Inga kåpor monterade") end
 	if p.money < cost then return err("Lackeringen kostar " .. cost .. " kr") end
 	p.money = p.money - cost
-	for _, t in ipairs(targets) do p.items[t.id].paint = { c = t.paint.c, f = t.paint.f, g = t.paint.g, q = 1 } end
+	for _, t in ipairs(targets) do p.items[t.id].paint = { c = t.paint.c, f = t.paint.f, g = t.paint.g, q = 1, dk = (type(t.paint.dk) == "string" and Paint.DECAL[t.paint.dk]) and t.paint.dk or nil } end
 	return true, cost
 end
 

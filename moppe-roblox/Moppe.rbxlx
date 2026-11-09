@@ -498,6 +498,8 @@ function GarageBuilder.build(parent, origin, plotIndex)
 	local curtain = box("Draperi", V3(bx1 - bx0 - 4, 9.5, 0.08), at(bcx2 + 2, FLOOR + 6.2, bz1), C3(160, 200, 230), M.SmoothPlastic, false)
 	curtain.Transparency = 0.65
 	box("Lackbox", V3(4, 11, 0.3), at(bx0 + 2, FLOOR + 5.5, bz1), white, M.SmoothPlastic)
+	-- back wall inside the booth (closes the window behind the panel stand)
+	box("Lackvägg", V3(bx1 - bx0, 11, 0.3), at(bcx2, FLOOR + 5.5, bz0 + 0.2), white, M.SmoothPlastic)
 	box("Galler", V3(bx1 - bx0 - 0.6, 0.06, bz1 - bz0 - 0.6), at(bcx2, FLOOR + 0.04, bcz), C3(50, 52, 56), M.DiamondPlate, false)
 	for _, x in ipairs({ bx0 + 2.5, bx1 - 2.5 }) do
 		local lp = box("Lackljus", V3(1.2, 0.15, 8), at(x, FLOOR + 10.8, bcz), C3(255, 255, 250), M.Neon, false)
@@ -1270,6 +1272,7 @@ C.kapa = function(mk, ctx, part, item)
 	local def = MopedDef.MODELS[part.stats.fits]
 	local pdef = def and def.panelById[part.stats.panel]
 	if not pdef then return end
+	local big
 	for _, pr in ipairs(pdef.prims) do
 		local shape, size, pos, rot = pr[1], pr[2], pr[3], pr[4] or { 0, 0, 0 }
 		local cf = ctx.cf * CF(pos[1], pos[2], pos[3]) * CFrame.fromOrientation(rad(rot[1]), rad(rot[2]), rad(rot[3]))
@@ -1285,6 +1288,31 @@ C.kapa = function(mk, ctx, part, item)
 		else p = mk.box(pdef.n, V3(size[1], size[2], size[3]), cf) end
 		Models.paintPart(p, item and item.paint)
 		p:SetAttribute("Panel", pdef.id)
+		if shape ~= "ball" and shape ~= "cyl" and (not big or size[1] * size[2] * size[3] > big[2]) then big = { p, size[1] * size[2] * size[3], pos } end
+	end
+	-- decal: brand text on the outward side of the biggest piece
+	local dk = item and item.paint and item.paint.dk and Paint.DECAL[item.paint.dk]
+	if dk and big then
+		local p, pos = big[1], big[3]
+		local face = Enum.NormalId.Top
+		if math.abs(pos[1]) > 0.25 then face = pos[1] < 0 and Enum.NormalId.Left or Enum.NormalId.Right end
+		local sg = Instance.new("SurfaceGui")
+		sg.Name = "Dekal"
+		sg.Face = face
+		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		sg.PixelsPerStud = 40
+		sg.LightInfluence = 1
+		sg.Parent = p
+		local t = Instance.new("TextLabel")
+		t.Size = UDim2.fromScale(0.9, 0.5)
+		t.Position = UDim2.fromScale(0.05, 0.25)
+		t.BackgroundTransparency = 1
+		t.Text = dk.text
+		t.TextScaled = true
+		t.Font = Enum.Font.GothamBlack
+		t.TextColor3 = C3(dk.c[1], dk.c[2], dk.c[3])
+		t.TextStrokeTransparency = 0.4
+		t.Parent = sg
 	end
 end
 
@@ -1748,6 +1776,14 @@ Paint.FINISH = {
 Paint.FIN = {}
 for _, f in ipairs(Paint.FINISH) do Paint.FIN[f.id] = f end
 
+-- decals (fictional brands only)
+Paint.DECALS = {
+	{ id = "vippa", text = "VIPPA", c = { 240, 240, 240 } }, { id = "fartek", text = "FARTEK", c = { 205, 38, 38 } },
+	{ id = "nordtrim", text = "NORDTRIM", c = { 240, 196, 25 } }, { id = "snabbo", text = "SNABBO", c = { 245, 120, 20 } },
+}
+Paint.DECAL = {}
+for _, d in ipairs(Paint.DECALS) do Paint.DECAL[d.id] = d end
+
 Paint.COLS, Paint.ROWS = 10, 6
 
 function Paint.validHex(s)
@@ -1773,16 +1809,20 @@ function Paint.new()
 	for i = 1, Paint.COLS * Paint.ROWS do s.cells[i] = 0 end
 	return s
 end
--- spray at (u,v) 0..1 over the panel for dt seconds; dist = gun distance factor (1 = ideal); even from the gun
-function Paint.spray(s, u, v, dt, dist, even)
+-- spray at (u,v) 0..1 over the panel for dt seconds; dist = gun distance factor (1 = ideal); even from the gun.
+-- cw, ch: cell size in studs (the spray is round on the panel whatever its shape); without them, in cells.
+function Paint.spray(s, u, v, dt, dist, even, cw, ch)
 	even = even or 0
 	dist = dist or 1
-	local radius = 1.6 * dist
-	local rate = 2.0 / (dist * dist) * dt
+	local studs = cw and ch and cw > 0 and ch > 0
+	local radius = studs and 0.6 * dist or 1.6 * dist
+	local rate = 3.2 / (dist * dist) * dt
 	local cx, cy = u * Paint.COLS + 0.5, v * Paint.ROWS + 0.5
 	for row = 1, Paint.ROWS do
 		for col = 1, Paint.COLS do
-			local d = math.sqrt((col - cx) ^ 2 + (row - cy) ^ 2)
+			local dx, dy = col - cx, row - cy
+			if studs then dx, dy = dx * cw, dy * ch end
+			local d = math.sqrt(dx * dx + dy * dy)
 			if d < radius then
 				local i = (row - 1) * Paint.COLS + col
 				local f = 1 - d / radius
@@ -1808,7 +1848,7 @@ function Paint.result(s)
 		vals[i] = x
 		sum = sum + math.min(x, 1.6)
 		if x >= 0.8 then cover = cover + 1 end
-		if x > 1.8 then runs = runs + 1 end
+		if x > 2.4 then runs = runs + 1 end
 	end
 	local mean = sum / n
 	local var = 0
@@ -2736,7 +2776,7 @@ function Profile.paintStart(p, now)
 	p.paintStart = now
 	return true, id
 end
-function Profile.paintDone(p, color, finish, gloss, state, now)
+function Profile.paintDone(p, color, finish, gloss, state, now, decal)
 	if not p.paintStart then return err("Ingen lackering pågår") end
 	local elapsed = now - p.paintStart
 	p.paintStart = nil
@@ -2749,7 +2789,7 @@ function Profile.paintDone(p, color, finish, gloss, state, now)
 	local res = Paint.result(state)
 	if not res then return err("Ogiltigt resultat") end
 	gloss = math.max(0, math.min(1, tonumber(gloss) or 0.6))
-	p.items[id].paint = { c = c, f = finish, g = gloss, q = res.q }
+	p.items[id].paint = { c = c, f = finish, g = gloss, q = res.q, dk = (type(decal) == "string" and Paint.DECAL[decal]) and decal or nil }
 	p.items[id].dry = now + Config.PAINT_DRY
 	p.stats.painted = p.stats.painted + 1
 	return true, res
@@ -2764,7 +2804,7 @@ function Profile.saveDesign(p, name)
 	for slot, id in pairs(m.slots) do
 		local pid = slot:match("^pan:(.+)$")
 		local it = p.items[id]
-		if pid and it and it.paint then d.panels[pid] = { c = it.paint.c, f = it.paint.f, g = it.paint.g } end
+		if pid and it and it.paint then d.panels[pid] = { c = it.paint.c, f = it.paint.f, g = it.paint.g, dk = it.paint.dk } end
 	end
 	if next(d.panels) == nil then return err("Inga lackerade kåpor att spara") end
 	for i, old in ipairs(p.designs) do if old.n == name then p.designs[i] = d; return true end end
@@ -2787,7 +2827,7 @@ function Profile.applyDesign(p, idx, now)
 	if #targets == 0 then return err("Inga kåpor monterade") end
 	if p.money < cost then return err("Lackeringen kostar " .. cost .. " kr") end
 	p.money = p.money - cost
-	for _, t in ipairs(targets) do p.items[t.id].paint = { c = t.paint.c, f = t.paint.f, g = t.paint.g, q = 1 } end
+	for _, t in ipairs(targets) do p.items[t.id].paint = { c = t.paint.c, f = t.paint.f, g = t.paint.g, q = 1, dk = (type(t.paint.dk) == "string" and Paint.DECAL[t.paint.dk]) and t.paint.dk or nil } end
 	return true, cost
 end
 
@@ -3505,8 +3545,8 @@ function H.paintStart(plr, p)
 	local tool = Profile.bestTool(p, "spruta")
 	return true, { item = e, even = tool.stats.even }
 end
-function H.paintDone(plr, p, color, finish, gloss, state)
-	local ok, r = Profile.paintDone(p, color, finish, gloss, state, now())
+function H.paintDone(plr, p, color, finish, gloss, state, decal)
+	local ok, r = Profile.paintDone(p, color, finish, gloss, state, now(), decal)
 	if not ok then return ok, r end
 	changed(plr, { "items" })
 	return true, r
@@ -4082,10 +4122,11 @@ spawn.Parent = world
 world:SetAttribute("Built", true)
 ]]></ProtectedString></Properties></Item>
 </Item>
-<Item class="StarterPlayer" referent="RBX32"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX31"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX21"><Properties><string name="Name">Assembly</string><ProtectedString name="Source"><![CDATA[-- Building by hand: the engine on the stand ("engine") and the moped on the lift ("work").
--- Drag a part from the tray onto the engine/moped. Where it belongs shows up green (fits now) or red (with what
--- has to go on first). Let go on the marker and the part slides into place while a hand tightens it.
--- Right-click a mounted part to take it off; left-click it for Demontera / Lackera / Byt ut / Inspektera.
+<Item class="StarterPlayer" referent="RBX32"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX31"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX21"><Properties><string name="Name">Assembly</string><ProtectedString name="Source"><![CDATA[-- Building by hand: "Bygg Motor" (engine on the stand) and "Montera Moped" (moped on the lift).
+-- Pick a part in the list: your hand holds it at the bottom right. Where it belongs glows green (or red with
+-- the reason). Move the mouse onto the glow and click to place it (dragging from the list works too): it slides
+-- in and a hand tightens it. Right-click a mounted part to take it off; left-click it for more choices.
+-- Parts you do not own are listed with their price and can be put in the cart and ordered from here.
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local UIS = game:GetService("UserInputService")
@@ -4105,7 +4146,7 @@ local UI = require(script.Parent:WaitForChild("UIKit"))
 local gui = UI.screen("Montering", 10, plr)
 gui.Enabled = false
 
-local A = { mode = nil, cat = "Alla", yaw = 0, pitch = 0.32, dist = 7, focus = Vector3.new(), filterKind = nil }
+local A = { mode = nil, yaw = 0, pitch = 0.32, dist = 7, focus = Vector3.new(), filterKind = nil, selected = nil, cart = {} }
 
 ---------------------------------------------------------------- what we are working on
 local function engineMap()
@@ -4122,14 +4163,13 @@ local function engineCF()
 	if A.mode == "engine" then return S.origin() * GarageBuilder.STAND end
 	return Models.engineCF(mopedCtx())
 end
--- where a part kind goes: returns { kind = "engine"|"chassis", id = socket/slot, name }
+-- where a part kind goes: { kind = "engine"|"chassis", id = socket/slot, name }
 local function placeFor(sku)
 	local part = Parts.get(sku)
 	if not part then return nil end
 	local sock = EngineDef.socketForKind(part.kind)
 	if sock then
-		local map = engineMap()
-		if not map then return nil end
+		if not engineMap() then return nil end
 		return { kind = "engine", id = sock, name = EngineDef.BY_ID[sock].name }
 	end
 	if A.mode ~= "work" then return nil end
@@ -4138,39 +4178,39 @@ local function placeFor(sku)
 		if part.stats.fits ~= m.model then return nil end
 		return { kind = "chassis", id = "pan:" .. part.stats.panel, name = MopedDef.MODELS[m.model].panelById[part.stats.panel].n }
 	end
+	if part.kind == "ram" and part.stats.fits ~= m.model then return nil end
 	for _, s in ipairs(MopedDef.SLOTS) do
 		if s.kind == part.kind then return { kind = "chassis", id = s.id, name = s.n } end
 	end
 end
 local function canMount(place, sku)
 	local p = S.profile
-	if place.kind == "engine" then
-		local map = engineMap()
-		return EngineDef.canMount(map, place.id, sku, p.items)
-	end
+	if place.kind == "engine" then return EngineDef.canMount(engineMap(), place.id, sku, p.items) end
 	return MopedDef.canMount(S.moped(), place.id, sku)
 end
--- parts that are free to use: shelf, bench, floor, in hand, opened boxes
-local function freeItems()
-	local p = S.profile
+local function orderOf(kind)
+	local s = EngineDef.socketForKind(kind)
+	if s then return EngineDef.ORDER[s] end
+	for i, sl in ipairs(MopedDef.SLOTS) do if sl.kind == kind then return 100 + i end end
+	return 200
+end
+-- the next sockets/slots that can be fitted now
+local function nextKinds()
 	local r = {}
-	for id, it in pairs(p.items) do
-		if Profile.isFree(p, it) and placeFor(it.sku) then
-			local part = Parts.get(it.sku)
-			if A.cat == "Alla" or Parts.KINDS[part.kind].grp == A.cat then
-				if not A.filterKind or A.filterKind == part.kind then r[#r + 1] = id end
+	if A.mode == "engine" or A.engineZoom then
+		for _, s in ipairs(EngineDef.nextUp(engineMap() or {})) do r[EngineDef.BY_ID[s].kind] = true end
+	end
+	if A.mode == "work" then
+		local m = S.moped()
+		for _, sid in ipairs(MopedDef.slotIds(m.model)) do
+			if not MopedDef.filled(m, sid) and sid ~= "motor" then
+				local info = MopedDef.slotInfo(m.model, sid)
+				local ok = true
+				for _, q in ipairs(info.req) do if not MopedDef.filled(m, q) then ok = false end end
+				if ok then r[info.kind] = true end
 			end
 		end
 	end
-	table.sort(r, function(a, b)
-		local pa, pb = Parts.get(p.items[a].sku), Parts.get(p.items[b].sku)
-		if pa.kind ~= pb.kind then
-			local oa, ob = EngineDef.ORDER[EngineDef.socketForKind(pa.kind) or ""] or 99, EngineDef.ORDER[EngineDef.socketForKind(pb.kind) or ""] or 99
-			if oa ~= ob then return oa < ob end
-			return pa.kind < pb.kind
-		end
-		return a < b
-	end)
 	return r
 end
 
@@ -4180,136 +4220,170 @@ local function updateCam()
 	S.camTo(cf, 50)
 end
 
----------------------------------------------------------------- UI layout
-local top = UI.panel(gui, UDim2.fromOffset(420, 36), UDim2.new(0.5, 0, 0, 8), { anchor = Vector2.new(0.5, 0), name = "Info", transp = 0.15 })
-local topText = UI.text(top, "", UDim2.new(1, -20, 1, 0), UDim2.fromOffset(10, 0), { ts = 15, xa = Enum.TextXAlignment.Center, font = UI.BOLD, name = "Infotext" })
+---------------------------------------------------------------- UI layout (like the reference: tabs, part list, details, steps, controls)
+local tabs = UI.new("Frame", { Size = UDim2.fromOffset(520, 44), Position = UDim2.fromOffset(250, 8), BackgroundTransparency = 1, Name = "Flikar" }, gui)
+UI.list(tabs, 8, true)
+local left = UI.panel(gui, UDim2.fromOffset(330, 400), UDim2.fromOffset(12, 60), { name = "Delar" })
+local leftTitle = UI.text(left, "Motordelar", UDim2.new(1, -60, 0, 44), UDim2.fromOffset(52, 2), { font = UI.BOLD, ts = 20, name = "Titel" })
+local icon = UI.new("Frame", { Size = UDim2.fromOffset(28, 28), Position = UDim2.fromOffset(14, 10), BackgroundTransparency = 1, Name = "Ikon" }, left)
+-- a wrench: handle and an open ring at the end
+local handle = UI.new("Frame", { Size = UDim2.fromOffset(22, 6), Position = UDim2.fromOffset(2, 13), BackgroundColor3 = UI.C.text, BorderSizePixel = 0, Rotation = -45, Name = "Skaft" }, icon)
+UI.corner(handle, 3)
+local ring = UI.new("Frame", { Size = UDim2.fromOffset(12, 12), Position = UDim2.fromOffset(16, 0), BackgroundTransparency = 1, Name = "Ring" }, icon)
+UI.corner(ring, 6)
+UI.stroke(ring, UI.C.text, 3, 0)
+local list = UI.scroll(left, UDim2.new(1, -12, 1, -56), UDim2.fromOffset(6, 50), { name = "Lista" })
+UI.list(list, 4)
+local cartBar = UI.panel(gui, UDim2.fromOffset(330, 52), UDim2.fromOffset(12, 468), { name = "Kundvagn" })
+local cartText = UI.text(cartBar, "", UDim2.new(1, -80, 1, 0), UDim2.fromOffset(16, 0), { font = UI.BOLD, ts = 17, name = "Summa" })
+local cartBtn = UI.button(cartBar, "Beställ", UDim2.fromOffset(70, 38), UDim2.new(1, -78, 0, 7), { kind = "green", ts = 15, name = "Beställ" })
+local steps = UI.panel(gui, UDim2.fromOffset(290, 92), UDim2.new(0, 12, 1, -12), { anchor = Vector2.new(0, 1), name = "Steg" })
+UI.pad(steps, 12, 10, 8, 8)
+UI.list(steps, 2)
+local detail = UI.panel(gui, UDim2.fromOffset(270, 470), UDim2.new(1, -12, 0, 60), { anchor = Vector2.new(1, 0), name = "Detaljer" })
+local controls = UI.new("Frame", { Size = UDim2.fromOffset(560, 46), Position = UDim2.new(0.5, 0, 1, -12), AnchorPoint = Vector2.new(0.5, 1), BackgroundTransparency = 1, Name = "Kontroller" }, gui)
+UI.list(controls, 10, true, Enum.HorizontalAlignment.Center)
+local hintBox = UI.panel(gui, UDim2.fromOffset(460, 34), UDim2.new(0.5, 0, 1, -66), { anchor = Vector2.new(0.5, 1), name = "Tips", transp = 0.2, visible = false })
+local hintText = UI.text(hintBox, "", UDim2.fromScale(1, 1), nil, { ts = 14, font = UI.BOLD, xa = Enum.TextXAlignment.Center, name = "Text" })
 
-local tray = UI.panel(gui, UDim2.fromOffset(400, 470), UDim2.fromOffset(12, 58), { name = "Delar" })
-local trayTitle = UI.text(tray, "Motorbygge", UDim2.new(1, -20, 0, 36), UDim2.fromOffset(14, 4), { font = UI.BOLD, ts = 18, name = "Titel" })
-local cats = UI.new("Frame", { Size = UDim2.fromOffset(118, 410), Position = UDim2.fromOffset(8, 46), BackgroundTransparency = 1, Name = "Kategorier" }, tray)
-UI.list(cats, 4)
-local grid = UI.scroll(tray, UDim2.fromOffset(262, 410), UDim2.fromOffset(132, 46), { name = "Lista" })
-UI.grid(grid, UDim2.fromOffset(124, 126), UDim2.fromOffset(6, 6))
+-- a little mouse drawing for the control chips
+local function mouseIcon(parent, side)
+	local m = UI.new("Frame", { Size = UDim2.fromOffset(18, 26), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Name = "Mus" }, parent)
+	UI.corner(m, 9)
+	local btn = UI.new("Frame", { Size = UDim2.fromOffset(8, 10), Position = UDim2.fromOffset(side == "right" and 9 or 1, 1), BackgroundColor3 = UI.C.text, BorderSizePixel = 0, Name = "Knapp" }, m)
+	btn.BackgroundColor3 = Color3.fromRGB(40, 44, 54)
+	UI.corner(btn, 4)
+	return m
+end
+local function chip(order, key, label, side)
+	local c = UI.panel(controls, UDim2.fromOffset(160, 44), nil, { name = label })
+	c.LayoutOrder = order
+	if key == "mouse" then
+		local m = mouseIcon(c, side)
+		m.Position = UDim2.fromOffset(18, 9)
+	else
+		local k = UI.new("Frame", { Size = UDim2.fromOffset(38, 26), Position = UDim2.fromOffset(12, 9), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Name = "Tangent" }, c)
+		UI.corner(k, 5)
+		UI.text(k, key, UDim2.fromScale(1, 1), nil, { ts = 13, font = UI.BOLD, color = Color3.fromRGB(30, 30, 34), xa = Enum.TextXAlignment.Center })
+	end
+	UI.text(c, label, UDim2.new(1, -60, 1, 0), UDim2.fromOffset(58, 0), { ts = 17, font = UI.BOLD })
+end
+chip(1, "mouse", "Rotera", "right")
+chip(2, "mouse", "Placera", "left")
+chip(3, "ESC", "Avbryt")
 
-local checklist = UI.panel(gui, UDim2.fromOffset(240, 470), UDim2.new(1, -12, 0, 58), { anchor = Vector2.new(1, 0), name = "Checklista" })
-local checkTitle = UI.text(checklist, "Monteringsordning", UDim2.new(1, -20, 0, 32), UDim2.fromOffset(12, 4), { font = UI.BOLD, ts = 16 })
-local checkList = UI.scroll(checklist, UDim2.new(1, -16, 1, -44), UDim2.fromOffset(8, 40), { name = "Rader" })
-UI.list(checkList, 3)
-
-local bottom = UI.new("Frame", { Size = UDim2.fromOffset(820, 44), Position = UDim2.new(0.5, 0, 1, -12), AnchorPoint = Vector2.new(0.5, 1), BackgroundTransparency = 1, Name = "Knappar" }, gui)
-UI.list(bottom, 8, true, Enum.HorizontalAlignment.Center)
-local hint = UI.text(gui, "Snurra 360°: dra på tom yta (eller pilarna)   ·   Zoom: rullhjul   ·   Ta bort: högerklicka på en del", UDim2.fromOffset(600, 20), UDim2.new(0.5, 0, 1, -84), { anchor = Vector2.new(0.5, 0), ts = 13, color = UI.C.dim, xa = Enum.TextXAlignment.Center })
-
-local menu -- context menu
+local menu
 local function closeMenu() if menu then menu:Destroy(); menu = nil end end
 
----------------------------------------------------------------- markers, ghost and the hand
+---------------------------------------------------------------- 3D helpers: target glow, held part, hand
 local fx = Instance.new("Folder")
 fx.Name = "MonteringLokal"
-local function tint(model, color, transp)
-	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("BasePart") then
-			d.Color = color
-			d.Material = Enum.Material.SmoothPlastic
-			d.Transparency = math.max(d.Transparency, transp)
-			d.CanQuery = false
-			d.CastShadow = false
-		end
-	end
-end
 local function buildAt(sku, item, place)
 	local model = Instance.new("Model")
 	model.Name = "Markering"
 	if place.kind == "engine" then Models.buildInto(model, sku, item, engineCF())
 	else Models.buildInto(model, sku, item, nil, mopedCtx()) end
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then d.CanQuery = false; d.CastShadow = false; d.Transparency = 0.7 end
+	end
 	return model
 end
--- a hand with a wrench tightening at a point, then disappears
+local function glow(model, ok)
+	local h = Instance.new("Highlight")
+	h.Name = "Glöd"
+	h.FillColor = ok and Color3.fromRGB(60, 255, 110) or Color3.fromRGB(255, 70, 60)
+	h.OutlineColor = ok and Color3.fromRGB(120, 255, 150) or Color3.fromRGB(255, 120, 110)
+	h.FillTransparency = 0.75
+	h.OutlineTransparency = 0
+	h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	h.Adornee = model
+	h.Parent = model
+	return h
+end
+-- anchored rig moved every frame from stored offsets
+local function rigOf(model)
+	local r = {}
+	local base = model:GetPivot()
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then d.CanQuery = false; d.CastShadow = false; r[#r + 1] = { d, base:ToObjectSpace(d.CFrame) } end
+	end
+	return r
+end
+local function placeRig(rig, cf) for _, x in ipairs(rig) do x[1].CFrame = cf * x[2] end end
+
+-- a hand with a wrench tightening at a point, then gone
 local function handAnim(pos, unscrew)
 	local cam = workspace.CurrentCamera
 	local toCam = (cam.CFrame.Position - pos).Unit
+	local hand = Models.hand(fx, CFrame.new(), true)
+	local wrench = Instance.new("Model")
+	wrench.Parent = hand
+	Models.tool(wrench, "nyckel", CFrame.new(0, 0.05, -0.55), false)
+	local rig = rigOf(hand)
 	local start = CFrame.lookAt(pos + toCam * 2.2 + Vector3.new(0, 0.6, 0), pos)
-	local hand = Models.hand(fx, start * CFrame.Angles(math.rad(-20), 0, 0), true)
-	local wrench = Models.tool(hand, "nyckel", start * CFrame.new(0, 0.05, -0.55), false)
-	for _, p in ipairs(wrench.parts) do
-		local w = Instance.new("WeldConstraint")
-		w.Part0 = hand.PrimaryPart
-		w.Part1 = p
-		w.Parent = p
-		p.Anchored = false
-	end
-	local main = hand.PrimaryPart
-	for _, d in ipairs(hand:GetDescendants()) do
-		if d:IsA("BasePart") and d ~= main then
-			if not d:FindFirstChildOfClass("WeldConstraint") then
-				local w = Instance.new("WeldConstraint")
-				w.Part0 = main
-				w.Part1 = d
-				w.Parent = d
-			end
-			d.Anchored = false
-		end
-	end
+	local near = CFrame.lookAt(pos + toCam * 0.9 + Vector3.new(0, 0.25, 0), pos)
 	task.spawn(function()
-		local near = CFrame.lookAt(pos + toCam * 0.9 + Vector3.new(0, 0.25, 0), pos)
-		local tw = TweenService:Create(main, TweenInfo.new(0.25), { CFrame = near })
-		tw:Play()
-		tw.Completed:Wait()
-		for i = 1, 4 do
-			local a = (unscrew and -1 or 1) * math.rad(55)
-			local t1 = TweenService:Create(main, TweenInfo.new(0.14), { CFrame = near * CFrame.Angles(0, 0, a) })
-			t1:Play(); t1.Completed:Wait()
-			local t2 = TweenService:Create(main, TweenInfo.new(0.1), { CFrame = near })
-			t2:Play(); t2.Completed:Wait()
+		local t = 0
+		while t < 1.2 and hand.Parent do
+			local dt = RunService.RenderStepped:Wait()
+			t = t + dt
+			local cf
+			if t < 0.25 then cf = start:Lerp(near, t / 0.25)
+			elseif t < 0.95 then cf = near * CFrame.Angles(0, 0, (unscrew and -1 or 1) * math.rad(55) * math.abs(math.sin((t - 0.25) * 18)))
+			else cf = near:Lerp(start, (t - 0.95) / 0.25) end
+			placeRig(rig, cf)
 		end
-		local t3 = TweenService:Create(main, TweenInfo.new(0.2), { CFrame = start })
-		t3:Play(); t3.Completed:Wait()
 		hand:Destroy()
 	end)
 end
 
-local drag -- { id, sku, place, ok, why, marker, ghost, snapped }
-local function endDrag()
-	if drag then
-		if drag.marker then drag.marker:Destroy() end
-		if drag.ghost then drag.ghost:Destroy() end
+-- the part you hold: { id, sku, place, ok, why, marker, ghost, ghostRig, hand, handRig, snapped, dragging }
+local held
+local function releaseHeld()
+	if held then
+		if held.marker then held.marker:Destroy() end
+		if held.ghost then held.ghost:Destroy() end
+		if held.hand then held.hand:Destroy() end
 	end
-	drag = nil
+	held = nil
+	hintBox.Visible = false
+	S.escCapture = nil
 end
-local function startDrag(id)
-	if drag or not A.mode then return end
+local function hold(id, dragging)
+	releaseHeld()
 	local it = S.item(id)
-	if not it then return end
+	if not it or not A.mode then return end
 	local place = placeFor(it.sku)
 	if not place then S.toast(Parts.get(it.sku).name .. " sitter inte här", "error"); return end
 	local ok, why = canMount(place, it.sku)
 	local marker = buildAt(it.sku, it, place)
-	tint(marker, ok and Color3.fromRGB(70, 220, 110) or Color3.fromRGB(230, 70, 60), 0.5)
 	marker.Parent = fx
+	glow(marker, ok)
 	local ghost = Models.item(it.sku, it)
-	for _, d in ipairs(ghost:GetDescendants()) do if d:IsA("BasePart") then d.CanQuery = false end end
 	ghost.Parent = fx
-	drag = { id = id, sku = it.sku, place = place, ok = ok, why = why, marker = marker, ghost = ghost }
-	topText.Text = ok and ("Dra " .. Parts.get(it.sku).name:lower() .. " till den gröna markeringen") or ("Går inte än: " .. tostring(why))
-	top.BackgroundColor3 = ok and UI.C.panel or Color3.fromRGB(110, 30, 30)
+	local hand = Models.hand(fx, CFrame.new(), false)
+	held = { id = id, sku = it.sku, place = place, ok = ok, why = why, marker = marker, ghost = ghost, ghostRig = rigOf(ghost), hand = hand, handRig = rigOf(hand), dragging = dragging }
+	A.selected = { sku = it.sku, id = id }
+	hintText.Text = ok and ("Klicka på den gröna markeringen för att montera " .. Parts.get(it.sku).name:lower()) or ("Går inte än: " .. tostring(why))
+	hintBox.BackgroundColor3 = ok and UI.C.panel or Color3.fromRGB(110, 30, 30)
+	hintBox.Visible = true
+	S.escCapture = function() releaseHeld(); A.refresh(); return true end
+	A.refresh()
 end
-local function dropDrag()
-	local d = drag
+local function place()
+	local d = held
 	if not d then return end
-	if not d.snapped then endDrag(); A.refresh(); return end
-	if not d.ok then S.toast(d.why or "Går inte", "error"); endDrag(); A.refresh(); return end
-	-- slide the ghost onto the marker, then mount on the server
-	local cf = d.marker:GetBoundingBox()
-	d.ghost:PivotTo(CFrame.new(cf.Position))
-	local map, target = engineMap()
-	local okA, err
-	if d.place.kind == "engine" then okA, err = S.api("mountEngine", target, d.place.id, d.id)
-	else okA, err = S.api("mountChassis", d.place.id, d.id) end
+	if not d.ok then S.toast(d.why or "Går inte", "error"); return end
+	local target = d.marker:GetBoundingBox()
+	local _, mapTarget = engineMap()
+	local okA
+	if d.place.kind == "engine" then okA = S.api("mountEngine", mapTarget, d.place.id, d.id)
+	else okA = S.api("mountChassis", d.place.id, d.id) end
 	if okA then
-		handAnim(cf.Position, false)
+		handAnim(target.Position, false)
 		S.toast(Parts.get(d.sku).name .. " monterad", "ok")
 	end
-	endDrag()
+	releaseHeld()
 	A.refresh()
 end
 
@@ -4320,8 +4394,7 @@ local function mountedAt(inst)
 	local x = inst
 	while x and x ~= plot do
 		if x:IsA("Model") then
-			local sock = x:GetAttribute("Sock")
-			local slot = x:GetAttribute("Slot")
+			local sock, slot = x:GetAttribute("Sock"), x:GetAttribute("Slot")
 			if A.mode == "engine" and sock and x.Parent and x.Parent.Name == "Motor" and x.Parent.Parent and x.Parent.Parent.Name == "Dynamic" then
 				return { kind = "engine", id = sock, item = x:GetAttribute("Item"), model = x }
 			end
@@ -4334,7 +4407,7 @@ local function mountedAt(inst)
 	end
 end
 local function unmount(mp)
-	local map, target = engineMap()
+	local _, target = engineMap()
 	local ok, _, extra
 	if mp.kind == "engine" then ok, _, extra = S.api("unmountEngine", target, mp.id)
 	else ok, _, extra = S.api("unmountChassis", mp.id) end
@@ -4345,17 +4418,6 @@ local function unmount(mp)
 	end
 	return ok
 end
-local function inspect(id)
-	local it = S.item(id)
-	if not it then return end
-	local part = Parts.get(it.sku)
-	local lines = { part.name, part.brand .. " · " .. Parts.KINDS[part.kind].cat, part.desc }
-	if it.wear and it.wear > 0 then lines[#lines + 1] = string.format("Slitage: %d %%", math.floor(it.wear * 100)) end
-	if it.port then lines[#lines + 1] = "Portad: " .. it.port.label .. string.format(" (%d %%)", math.floor(it.port.q * 100)) end
-	if it.paint then lines[#lines + 1] = "Lack: " .. (it.paint.f or "") .. string.format(", kvalitet %d %%", math.floor((it.paint.q or 1) * 100)) end
-	if it.cust then lines[#lines + 1] = "Kundens del" end
-	S.toast(table.concat(lines, "\n"), "info")
-end
 local function contextMenu(mp, x, y)
 	closeMenu()
 	menu = UI.panel(gui, UDim2.fromOffset(190, 10), UDim2.fromOffset(x + 8, y - 50), { name = "Meny", z = 20 })
@@ -4364,160 +4426,230 @@ local function contextMenu(mp, x, y)
 	UI.list(menu, 4)
 	local it = S.item(mp.item)
 	UI.text(menu, it and Parts.get(it.sku).name or "Del", UDim2.new(1, 0, 0, 24), nil, { font = UI.BOLD, ts = 14, z = 21, truncate = true })
-	local function add(text, kind, f)
-		UI.button(menu, text, UDim2.new(1, 0, 0, 32), nil, { kind = kind or "secondary", ts = 14, z = 21 }, function() closeMenu(); f() end)
-	end
-	add("Demontera", "secondary", function() unmount(mp) end)
+	local function add(text, f) UI.button(menu, text, UDim2.new(1, 0, 0, 32), nil, { kind = "secondary", ts = 14, z = 21 }, function() closeMenu(); f() end) end
+	add("Demontera", function() unmount(mp) end)
 	if mp.kind == "chassis" and mp.id:sub(1, 4) == "pan:" then
-		add("Lackera", "secondary", function()
+		add("Lackera", function()
 			local ok, id = S.api("unmountChassis", mp.id)
-			if ok and id then
-				if S.api("moveTo", id, "lack") then
-					S.endMode()
-					S.open:Fire("paint")
-				end
-			end
+			if ok and id and S.api("moveTo", id, "lack") then S.endMode(); S.open:Fire("paint") end
 		end)
 	end
-	add("Byt ut", "secondary", function()
+	add("Byt ut", function()
 		local part = it and Parts.get(it.sku)
 		if unmount(mp) and part then A.filterKind = part.kind; A.refresh() end
 	end)
-	add("Inspektera", "secondary", function() inspect(mp.item) end)
+	add("Inspektera", function() if it then A.selected = { sku = it.sku, id = mp.item }; A.refresh() end end)
 end
 
----------------------------------------------------------------- tray, checklist and buttons
-local function card(id, order)
-	local it = S.item(id)
-	local part = Parts.get(it.sku)
-	local c = UI.new("TextButton", { Size = UDim2.fromOffset(124, 126), BackgroundColor3 = UI.C.panel2, Text = "", AutoButtonColor = true, LayoutOrder = order, Name = "Del_" .. id }, grid)
-	UI.corner(c, 8)
-	local place = placeFor(it.sku)
-	local ok = place and canMount(place, it.sku)
-	UI.stroke(c, ok and UI.C.green or UI.C.line, ok and 2 or 1, ok and 0.2 or 0.5)
-	local model = Models.item(it.sku, it)
-	UI.viewport(c, model, UDim2.fromOffset(112, 74), UDim2.fromOffset(6, 6), { z = 1 })
-	UI.text(c, part.name, UDim2.new(1, -10, 0, 30), UDim2.fromOffset(6, 82), { ts = 12, wrap = true, font = UI.BOLD, ya = Enum.TextYAlignment.Top })
-	UI.text(c, part.brand .. (it.loc:sub(1, 4) == "box:" and " · i paket" or ""), UDim2.new(1, -10, 0, 14), UDim2.fromOffset(6, 108), { ts = 11, color = UI.C.dim })
-	c.MouseButton1Down:Connect(function() startDrag(id) end)
-	c.MouseButton2Click:Connect(function()
+---------------------------------------------------------------- list rows, details, steps, cart
+local function spec(part)
+	local s = part.stats
+	if s.cc then return string.format("%.0fcc", s.cc) end
+	if s.bore then return tostring(s.bore) .. " mm" end
+	if s.mm then return tostring(s.mm) .. " mm" end
+	if s.stroke then return tostring(s.stroke) .. " mm" end
+	if s.gram then return tostring(s.gram) .. " g" end
+	return part.brand
+end
+local function row(order, sku, id, label)
+	local part = Parts.get(sku)
+	local sel = A.selected and A.selected.sku == sku and A.selected.id == id
+	local r = UI.new("TextButton", { Size = UDim2.new(1, -6, 0, 64), BackgroundColor3 = sel and UI.C.accent or UI.C.panel2, BackgroundTransparency = sel and 0 or 0.1, Text = "", AutoButtonColor = true, LayoutOrder = order, Name = (id and "Del_" .. id) or ("Köp_" .. sku) }, list)
+	UI.corner(r, 8)
+	if sel then UI.stroke(r, UI.C.accent2, 2, 0) end
+	local img = UI.viewport(r, Models.item(sku), UDim2.fromOffset(54, 54), UDim2.fromOffset(5, 5), { bg = Color3.fromRGB(46, 50, 60), radius = 6 })
+	img.Active = false
+	UI.text(r, Parts.kindName(part.kind), UDim2.new(1, -150, 0, 20), UDim2.fromOffset(66, 10), { ts = 15, font = UI.BOLD, truncate = true })
+	UI.text(r, "(" .. spec(part) .. ")", UDim2.new(1, -150, 0, 18), UDim2.fromOffset(66, 32), { ts = 13, color = sel and UI.C.text or UI.C.dim, truncate = true })
+	UI.text(r, label, UDim2.fromOffset(84, 64), UDim2.new(1, -92, 0, 0), { ts = 15, font = UI.BOLD, xa = Enum.TextXAlignment.Right, color = id and UI.C.green or UI.C.text, name = "Pris" })
+	if id then
+		r.MouseButton1Down:Connect(function() hold(id, true) end)
+	else
+		r.Activated:Connect(function() A.selected = { sku = sku }; A.refresh() end)
+	end
+	r.MouseButton2Click:Connect(function()
+		if not id then return end
 		closeMenu()
 		local mpos = UIS:GetMouseLocation()
 		menu = UI.panel(gui, UDim2.fromOffset(190, 10), UDim2.fromOffset(mpos.X + 8, mpos.Y - 60), { name = "Meny", z = 20 })
 		menu.AutomaticSize = Enum.AutomaticSize.Y
 		UI.pad(menu, 6)
 		UI.list(menu, 4)
-		UI.text(menu, part.name, UDim2.new(1, 0, 0, 24), nil, { font = UI.BOLD, ts = 14, z = 21 })
 		UI.button(menu, "Lägg på hyllan", UDim2.new(1, 0, 0, 32), nil, { kind = "secondary", ts = 14, z = 21 }, function() closeMenu(); S.api("moveTo", id, "hylla") end)
-		UI.button(menu, "Inspektera", UDim2.new(1, 0, 0, 32), nil, { kind = "secondary", ts = 14, z = 21 }, function() closeMenu(); inspect(id) end)
-		if not it.cust then
+		local it = S.item(id)
+		if it and not it.cust then
 			UI.button(menu, "Sälj (" .. UI.kr(math.floor(part.price * 0.5 * (1 - 0.6 * (it.wear or 0)))) .. ")", UDim2.new(1, 0, 0, 32), nil, { kind = "danger", ts = 14, z = 21 }, function() closeMenu(); S.api("sell", id) end)
 		end
 	end)
-	return c
+end
+local function cartTotal()
+	local n, sum = 0, 0
+	for sku, q in pairs(A.cart) do n = n + q; sum = sum + Parts.get(sku).price * q end
+	return n, sum
+end
+local function buildDetail()
+	UI.clear(detail)
+	UI.pad(detail, 14)
+	local sel = A.selected
+	local part = sel and Parts.get(sel.sku)
+	local y = 0
+	if part then
+		UI.text(detail, Parts.kindName(part.kind) .. " (" .. spec(part) .. ")", UDim2.new(1, 0, 0, 28), nil, { font = UI.BOLD, ts = 19, truncate = true })
+		UI.viewport(detail, Models.item(part.sku), UDim2.new(1, 0, 0, 150), UDim2.fromOffset(0, 34), { bg = Color3.fromRGB(46, 50, 60) })
+		UI.text(detail, part.brand .. " · " .. part.name, UDim2.new(1, 0, 0, 20), UDim2.fromOffset(0, 192), { ts = 13, color = UI.C.dim, truncate = true })
+		UI.text(detail, "Pris:", UDim2.new(0.5, 0, 0, 26), UDim2.fromOffset(0, 214), { ts = 16 })
+		UI.text(detail, part.price > 0 and UI.kr(part.price) or "Ingår", UDim2.new(0.5, 0, 0, 26), UDim2.new(0.5, 0, 0, 214), { ts = 16, font = UI.BOLD, xa = Enum.TextXAlignment.Right })
+		UI.text(detail, "Beskrivning:", UDim2.new(1, 0, 0, 22), UDim2.fromOffset(0, 244), { ts = 14, font = UI.BOLD })
+		UI.text(detail, part.desc, UDim2.new(1, 0, 0, 54), UDim2.fromOffset(0, 266), { ts = 13, wrap = true, ya = Enum.TextYAlignment.Top, color = UI.C.dim })
+		local place2 = placeFor(part.sku)
+		if place2 then
+			local ok, why = canMount(place2, part.sku)
+			UI.text(detail, ok and ("Passar nu: " .. place2.name) or tostring(why), UDim2.new(1, 0, 0, 36), UDim2.fromOffset(0, 320), { ts = 13, wrap = true, font = UI.BOLD, color = ok and UI.C.green or UI.C.orange })
+		end
+		if not sel.id and part.price > 0 then
+			UI.button(detail, "Lägg i kundvagn", UDim2.new(1, 0, 0, 36), UDim2.fromOffset(0, 360), { kind = "primary", ts = 15 }, function()
+				A.cart[part.sku] = math.min(10, (A.cart[part.sku] or 0) + 1)
+				S.toast(part.name .. " ligger i kundvagnen", "ok")
+				A.refresh()
+			end)
+		end
+		y = 402
+	else
+		UI.text(detail, "Välj en del i listan", UDim2.new(1, 0, 0, 28), nil, { font = UI.BOLD, ts = 17 })
+		UI.text(detail, "Klicka på en del så håller du den i handen. Klicka sedan på den gröna markeringen för att montera den.", UDim2.new(1, 0, 0, 80), UDim2.fromOffset(0, 32), { ts = 14, wrap = true, color = UI.C.dim, ya = Enum.TextYAlignment.Top })
+		y = 120
+	end
+	-- station actions
+	local actions = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 120), Position = UDim2.new(0, 0, 1, -120), BackgroundTransparency = 1, Name = "Åtgärder" }, detail)
+	UI.list(actions, 6)
+	local p, m = S.profile, S.moped()
+	local map = engineMap()
+	local function act(text, kind, f) UI.button(actions, text, UDim2.new(1, 0, 0, 34), nil, { kind = kind, ts = 14 }, f) end
+	if A.mode == "engine" then
+		if map and EngineDef.complete(map) and m and not m.engine then act("Sätt motorn i mopeden", "green", function() if S.api("engineToMoped") then S.toast("Motorn sitter i mopeden", "ok") end end) end
+		if m and m.engine and EngineDef.isEmpty(p.stand) then act("Lyft ur motorn ur mopeden", "secondary", function() if S.api("engineToStand") then S.toast("Motorn står på stativet", "ok") end end) end
+		for _, j in ipairs(p.jobs) do if j.type == "reparation" or j.type == "bygg" then act("Lämna motorn till kunden", "yellow", function() S.api("completeJob", j.id) end) end end
+	else
+		if m.engine then
+			act(A.engineZoom and "Visa hela mopeden" or "Meka på motorn här", "secondary", function()
+				A.engineZoom = not A.engineZoom
+				if A.engineZoom then A.focus = (engineCF() * CFrame.new(0, 0.2, 0.2)).Position; A.dist = 5
+				else A.focus = (S.origin() * GarageBuilder.LIFT * CFrame.new(0, 2.2, 0)).Position; A.dist = 11 end
+				updateCam()
+				A.refresh()
+			end)
+			act("Lyft ur motorn", "secondary", function() if S.api("engineToStand") then S.toast("Motorn står på motorstativet", "ok") end end)
+		elseif EngineDef.complete(p.stand) then act("Montera motorn från stativet", "green", function() S.api("engineToMoped") end) end
+		if #Profile.mopedProblems(p, m) == 0 then act("Kör ut", "green", function() S.endMode(); S.open:Fire("ride") end) end
+	end
+end
+local function buildSteps()
+	UI.clear(steps)
+	-- the last two things fitted and the next one to do
+	local done, todo = {}, nil
+	if A.mode == "engine" or A.engineZoom then
+		local map = engineMap() or {}
+		for _, s in ipairs(EngineDef.SOCKETS) do
+			if map[s.id] then done[#done + 1] = s.name .. " monterad"
+			elseif not todo then
+				local ok = true
+				for _, q in ipairs(s.req) do if not map[q] then ok = false end end
+				if ok then todo = "Montera " .. s.name:lower() end
+			end
+		end
+	else
+		local m = S.moped()
+		for _, sid in ipairs(MopedDef.slotIds(m.model)) do
+			local info = MopedDef.slotInfo(m.model, sid)
+			if MopedDef.filled(m, sid) then done[#done + 1] = info.n .. " monterad"
+			elseif not todo then todo = "Montera " .. info.n:lower() end
+		end
+	end
+	local rows = {}
+	for i = math.max(1, #done - (todo and 1 or 2)), #done do rows[#rows + 1] = { done[i], true } end
+	if todo then rows[#rows + 1] = { todo, false } else rows[#rows + 1] = { A.mode == "engine" and "Motorn är komplett!" or "Mopeden är komplett!", true } end
+	for i, r in ipairs(rows) do
+		local f = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1, LayoutOrder = i, Name = "Steg" .. i }, steps)
+		local mark = UI.new("Frame", { Size = UDim2.fromOffset(16, 16), Position = UDim2.fromOffset(0, 4), BackgroundColor3 = r[2] and UI.C.green or UI.C.panel, BorderSizePixel = 0 }, f)
+		UI.corner(mark, 8)
+		if r[2] then UI.text(mark, "✓", UDim2.fromScale(1, 1), nil, { ts = 12, font = UI.BOLD, xa = Enum.TextXAlignment.Center })
+		else UI.stroke(mark, UI.C.accent2, 2, 0) end
+		UI.text(f, r[1], UDim2.new(1, -26, 1, 0), UDim2.fromOffset(26, 0), { ts = 14, truncate = true })
+	end
+end
+local function buildTabs()
+	UI.clear(tabs)
+	for i, t in ipairs({ { "engine", "Bygg Motor" }, { "work", "Montera Moped" }, { "paint", "Styling" } }) do
+		UI.button(tabs, t[2], UDim2.fromOffset(160, 42), nil, { kind = A.mode == t[1] and "primary" or "ghost", order = i, ts = 17, transp = A.mode == t[1] and 0 or 0.1, name = t[2] }, function()
+			if t[1] == A.mode then return end
+			if t[1] == "paint" then S.endMode(); S.open:Fire("paint"); return end
+			local to = t[1]
+			S.endMode()
+			S.open:Fire(to)
+		end)
+	end
 end
 
 function A.refresh()
 	if not A.mode or not S.profile then return end
 	local p = S.profile
-	-- categories
-	UI.clear(cats)
-	local catList = A.mode == "engine" and { "Alla", "Motorblock", "Transmission", "Insug", "Tändning" } or { "Alla", "Chassi", "Kåpor", "Motorblock", "Transmission", "Insug", "Tändning" }
-	for i, c in ipairs(catList) do
-		UI.button(cats, c == "Alla" and "Alla delar" or c, UDim2.new(1, 0, 0, 30), nil, { kind = (A.cat == c and not A.filterKind) and "primary" or "ghost", xa = Enum.TextXAlignment.Left, ts = 13, order = i, name = c }, function()
-			A.cat = c
-			A.filterKind = nil
-			A.refresh()
-		end)
+	buildTabs()
+	leftTitle.Text = (A.mode == "engine" or A.engineZoom) and "Motordelar" or "Mopeddelar"
+	UI.clear(list)
+	-- your free parts that fit here (next steps first), then parts to buy for the next steps
+	local mine = {}
+	for id, it in pairs(p.items) do
+		if Profile.isFree(p, it) and placeFor(it.sku) then
+			local part = Parts.get(it.sku)
+			local engineOnly = A.engineZoom and not EngineDef.socketForKind(part.kind)
+			if not engineOnly and (not A.filterKind or A.filterKind == part.kind) then mine[#mine + 1] = id end
+		end
+	end
+	local nxt = nextKinds()
+	table.sort(mine, function(a, b)
+		local ka, kb = Parts.get(p.items[a].sku).kind, Parts.get(p.items[b].sku).kind
+		local na, nb = nxt[ka] and 0 or 1, nxt[kb] and 0 or 1
+		if na ~= nb then return na < nb end
+		if ka ~= kb then return orderOf(ka) < orderOf(kb) end
+		return a < b
+	end)
+	local order = 0
+	for _, id in ipairs(mine) do
+		order = order + 1
+		row(order, p.items[id].sku, id, "Din")
+	end
+	order = order + 1
+	UI.text(list, #mine == 0 and "Du har inga lösa delar som passar. Köp här:" or "Köp till:", UDim2.new(1, -6, 0, 26), nil, { ts = 13, font = UI.BOLD, color = UI.C.dim, order = order })
+	local shown = 0
+	for _, part in ipairs(Parts.LIST) do
+		if part.price > 0 and (A.filterKind and part.kind == A.filterKind or (not A.filterKind and nxt[part.kind])) and placeFor(part.sku) then
+			order = order + 1
+			shown = shown + 1
+			row(order, part.sku, nil, UI.kr(part.price))
+		end
 	end
 	if A.filterKind then
-		UI.button(cats, "Visa alla", UDim2.new(1, 0, 0, 30), nil, { kind = "yellow", ts = 13, order = 99 }, function() A.filterKind = nil; A.refresh() end)
+		order = order + 1
+		UI.button(list, "Visa alla delar", UDim2.new(1, -6, 0, 32), nil, { kind = "yellow", ts = 13, order = order }, function() A.filterKind = nil; A.refresh() end)
 	end
-	-- parts
-	UI.clear(grid)
-	local items = freeItems()
-	for i, id in ipairs(items) do card(id, i) end
-	if #items == 0 then
-		local l = UI.text(grid, A.filterKind and ("Du har ingen ledig " .. Parts.kindName(A.filterKind):lower() .. ". Beställ en på datorn.") or "Inga lediga delar här. Beställ delar på datorn eller hämta dem ur paketen.", UDim2.fromOffset(250, 80), nil, { ts = 13, wrap = true, color = UI.C.dim })
-		l.LayoutOrder = 1
-	end
-	-- checklist
-	UI.clear(checkList)
-	local order = 0
-	local map = engineMap()
-	if A.mode == "engine" then
-		trayTitle.Text = "Motorbygge"
-		checkTitle.Text = "Motorn  " .. (map and (29 - #EngineDef.missing(map)) or 0) .. "/29"
-		local nextUp = {}
-		for _, s in ipairs(EngineDef.nextUp(map or {})) do nextUp[s] = true end
-		for _, grp in ipairs(EngineDef.GROUPS) do
-			order = order + 1
-			UI.text(checkList, grp, UDim2.new(1, 0, 0, 22), nil, { ts = 13, font = UI.BOLD, color = UI.C.accent2, order = order })
-			for _, s in ipairs(EngineDef.SOCKETS) do
-				if s.grp == grp then
-					order = order + 1
-					local row = UI.check(checkList, s.name, map and map[s.id] ~= nil, order, nextUp[s.id])
-					local btn = UI.new("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", Name = "Klick" }, row)
-					btn.Activated:Connect(function() A.filterKind = s.kind; A.refresh() end)
-				end
-			end
-		end
-		topText.Text = map and EngineDef.complete(map) and "Motorn är komplett! Sätt den i mopeden." or "Dra delarna till rätt plats!"
-	else
-		local m = S.moped()
-		trayTitle.Text = "Mopedbygge"
-		checkTitle.Text = MopedDef.MODELS[m.model].n
-		for _, sid in ipairs(MopedDef.slotIds(m.model)) do
-			order = order + 1
-			local info = MopedDef.slotInfo(m.model, sid)
-			local done = MopedDef.filled(m, sid)
-			local label = info.n
-			if sid == "motor" and m.engine and not EngineDef.complete(m.engine) then label = "Motor (ofullständig)" end
-			local row = UI.check(checkList, label, done, order, false)
-			local btn = UI.new("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", Name = "Klick" }, row)
-			btn.Activated:Connect(function()
-				if sid == "motor" then return end
-				A.filterKind = info.kind
-				A.cat = "Alla"
-				A.refresh()
-			end)
-		end
-		local probs = Profile.mopedProblems(p, m)
-		topText.Text = #probs == 0 and "Mopeden är klar att köra!" or "Dra delarna till mopeden. Saknas: " .. #probs
-	end
-	top.BackgroundColor3 = UI.C.panel
-	-- buttons
-	UI.clear(bottom)
-	local function btn(text, kind, f, order2) UI.button(bottom, text, UDim2.fromOffset(math.max(120, #text * 9 + 30), 40), nil, { kind = kind, order = order2, ts = 15 }, f) end
-	local m = S.moped()
-	if A.mode == "engine" then
-		if map and EngineDef.complete(map) and m and not m.engine then btn("Sätt motorn i mopeden", "green", function() if S.api("engineToMoped") then S.toast("Motorn sitter i mopeden", "ok") end end, 1) end
-		if m and m.engine and EngineDef.isEmpty(p.stand) then btn("Lyft ur motorn ur mopeden", "secondary", function() if S.api("engineToStand") then S.toast("Motorn står på stativet", "ok") end end, 2) end
-		for _, j in ipairs(p.jobs) do
-			if j.type == "reparation" or j.type == "bygg" then btn("Lämna motorn till kunden", "yellow", function() S.api("completeJob", j.id) end, 3) end
-		end
-	else
-		if m.engine then
-			btn(A.engineZoom and "Visa hela mopeden" or "Meka på motorn här", "secondary", function()
-				A.engineZoom = not A.engineZoom
-				if A.engineZoom then
-					A.focus = (engineCF() * CFrame.new(0, 0.2, 0.2)).Position
-					A.dist = 5
-					A.cat = "Motorblock"
-				else
-					A.focus = (S.origin() * GarageBuilder.LIFT * CFrame.new(0, 2.2, 0)).Position
-					A.dist = 11
-					A.cat = "Alla"
-				end
-				updateCam()
-				A.refresh()
-			end, 0)
-			btn("Lyft ur motorn", "secondary", function() if S.api("engineToStand") then S.toast("Motorn står på motorstativet", "ok") end end, 1)
-		elseif EngineDef.complete(p.stand) then btn("Montera motorn från stativet", "green", function() S.api("engineToMoped") end, 1) end
-		if #Profile.mopedProblems(p, m) == 0 then btn("Kör ut", "green", function() S.endMode(); S.open:Fire("ride") end, 2) end
-	end
-	btn("Klar", "primary", function() S.endMode() end, 10)
+	-- cart
+	local n, sum = cartTotal()
+	cartText.Text = string.format("Kundvagn (%d)   %s", n, UI.kr(sum))
+	UI.setKind(cartBtn, n > 0 and "green" or "secondary")
+	buildDetail()
+	buildSteps()
 end
+cartBtn.Activated:Connect(function()
+	local cart = {}
+	for sku, q in pairs(A.cart) do cart[#cart + 1] = { sku = sku, qty = q } end
+	if #cart == 0 then S.toast("Kundvagnen är tom – välj en del under Köp till", "info"); return end
+	local ok, o = S.api("order", cart)
+	if ok then
+		A.cart = {}
+		S.toast("Beställt! Paketet kommer om " .. UI.time(o.ready - S.now()) .. " till garageporten.", "ok")
+		A.refresh()
+	end
+end)
 
 ---------------------------------------------------------------- open / close
 local function open(mode)
@@ -4525,9 +4657,9 @@ local function open(mode)
 	if mode == "work" and not S.moped() then return end
 	if not S.setMode(mode) then return end
 	A.mode = mode
-	A.cat = "Alla"
 	A.filterKind = nil
 	A.engineZoom = false
+	A.selected = nil
 	fx.Parent = workspace
 	if mode == "engine" then
 		A.focus = (S.origin() * GarageBuilder.STAND * CFrame.new(0, 0.1, 0.5)).Position
@@ -4536,7 +4668,6 @@ local function open(mode)
 		A.focus = (S.origin() * GarageBuilder.LIFT * CFrame.new(0, 2.2, 0)).Position
 		A.dist, A.yaw, A.pitch = 11, math.rad(240), 0.3
 	end
-	-- face the camera along the station's rotation
 	local _, ry = (mode == "engine" and S.origin() * GarageBuilder.STAND or S.origin() * GarageBuilder.LIFT):ToOrientation()
 	A.yaw = A.yaw + ry
 	updateCam()
@@ -4544,7 +4675,7 @@ local function open(mode)
 	A.refresh()
 end
 local function close()
-	endDrag()
+	releaseHeld()
 	closeMenu()
 	gui.Enabled = false
 	A.mode = nil
@@ -4555,7 +4686,7 @@ S.open.Event:Connect(function(what, atStation)
 	if (what == "engine" or what == "work") and atStation then open(what) end
 end)
 S.modeEv.Event:Connect(function(mode) if mode ~= "engine" and mode ~= "work" and A.mode then close() end end)
-S.changed.Event:Connect(function() if A.mode and not drag then A.refresh() end end)
+S.changed.Event:Connect(function() if A.mode and not held then A.refresh() end end)
 
 ---------------------------------------------------------------- input
 local rotating = false
@@ -4568,7 +4699,7 @@ UIS.InputBegan:Connect(function(input, gp)
 	if not gp and input.KeyCode == Enum.KeyCode.Down then A.pitch = math.clamp(A.pitch - 0.15, -0.45, 1.45); updateCam() end
 	if input.UserInputType == Enum.UserInputType.MouseButton2 and not gp then
 		local mp = mountedAt(plr:GetMouse().Target)
-		if mp then
+		if mp and not held then
 			local okR, why
 			if mp.kind == "engine" then okR, why = EngineDef.canRemove((engineMap()), mp.id) else okR, why = MopedDef.canRemove(S.moped(), mp.id) end
 			if okR then unmount(mp) else S.toast(why, "error") end
@@ -4576,23 +4707,27 @@ UIS.InputBegan:Connect(function(input, gp)
 			rotating = true
 		end
 	end
-	if input.UserInputType == Enum.UserInputType.MouseButton1 and not gp and not drag then
+	if input.UserInputType == Enum.UserInputType.MouseButton1 and not gp then
 		closeMenu()
-		local mp = mountedAt(plr:GetMouse().Target)
+		if held and held.snapped then place(); return end
+		local mp = not held and mountedAt(plr:GetMouse().Target)
 		if mp then
 			local pos = UIS:GetMouseLocation()
 			contextMenu(mp, pos.X, pos.Y - 58)
 		else
-			-- drag on empty space: orbit 360 degrees around the moped/engine
-			rotating = true
+			rotating = true -- drag on empty space: orbit 360 degrees
 		end
 	end
 end)
 UIS.InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.MouseButton1 then rotating = false end
-	if input.UserInputType == Enum.UserInputType.MouseButton1 and drag then dropDrag() end
+	-- dragged from the list and let go on the glow: place it
+	if input.UserInputType == Enum.UserInputType.MouseButton1 and held and held.dragging then
+		held.dragging = false
+		if held.snapped then place() end
+	end
 end)
-UIS.InputChanged:Connect(function(input, gp)
+UIS.InputChanged:Connect(function(input)
 	if not A.mode then return end
 	if input.UserInputType == Enum.UserInputType.MouseWheel then
 		A.dist = math.clamp(A.dist - input.Position.Z * 0.8, (A.mode == "engine" or A.engineZoom) and 2.5 or 5, A.mode == "engine" and 12 or 22)
@@ -4604,27 +4739,29 @@ UIS.InputChanged:Connect(function(input, gp)
 	end
 end)
 
--- dragging: the ghost follows the mouse in a plane through the target; near the marker it snaps
+-- the held part: in your hand at the bottom right; near the glow it jumps onto it (click to place)
 RunService.RenderStepped:Connect(function()
-	if not (A.mode and drag) then return end
+	if not (A.mode and held) then return end
 	local cam = workspace.CurrentCamera
 	local mpos = UIS:GetMouseLocation()
-	local ray = cam:ViewportPointToRay(mpos.X, mpos.Y)
-	local center = drag.marker:GetBoundingBox().Position
-	local n = cam.CFrame.LookVector
-	local denom = ray.Direction:Dot(n)
-	local point = center
-	if math.abs(denom) > 1e-4 then point = ray.Origin + ray.Direction * ((center - ray.Origin):Dot(n) / denom) end
+	local center = held.marker:GetBoundingBox().Position
 	local sp, onScreen = cam:WorldToViewportPoint(center)
-	local d = (Vector2.new(sp.X, sp.Y) - mpos).Magnitude
-	drag.snapped = onScreen and d < 80
-	if drag.snapped then
-		drag.ghost:PivotTo(CFrame.new(center))
-		for _, p in ipairs(drag.marker:GetDescendants()) do if p:IsA("BasePart") then p.Transparency = 0.25 end end
+	held.snapped = onScreen and (Vector2.new(sp.X, sp.Y) - mpos).Magnitude < 90
+	local h = held.marker:FindFirstChild("Glöd")
+	if h then h.FillTransparency = held.snapped and 0.45 or 0.75 end
+	local inHand = cam.CFrame * CFrame.new(0.8, -0.72, -3.8)
+	if held.snapped and held.ok then
+		placeRig(held.ghostRig, CFrame.new(center))
 	else
-		drag.ghost:PivotTo(CFrame.new(point))
-		for _, p in ipairs(drag.marker:GetDescendants()) do if p:IsA("BasePart") then p.Transparency = 0.55 end end
+		-- follow the mouse a little while staying in the hand
+		local ray = cam:ViewportPointToRay(mpos.X, mpos.Y)
+		local drift = held.dragging and (ray.Origin + ray.Direction * 3) or inHand.Position
+		placeRig(held.ghostRig, CFrame.new(drift) * cam.CFrame.Rotation * CFrame.Angles(0.3, 0.6, 0))
 	end
+	-- the hand holds the part from below, wrist towards the bottom right of the screen
+	local gp = held.ghost:GetPivot().Position
+	local handCF = CFrame.lookAt(gp + cam.CFrame.RightVector * 0.35 - cam.CFrame.UpVector * 0.42 + cam.CFrame.LookVector * -0.1, gp + cam.CFrame.UpVector * 0.1) * CFrame.Angles(0, 0, math.rad(-30))
+	placeRig(held.handRig, handCF)
 end)
 ]]></ProtectedString></Properties></Item>
 <Item class="LocalScript" referent="RBX22"><Properties><string name="Name">Hud</string><ProtectedString name="Source"><![CDATA[-- HUD: start menu, money, toasts and tips, the garage side menu with Moped Info, and the windows
@@ -4666,9 +4803,11 @@ end)
 local tip = UI.panel(gui, UDim2.fromOffset(560, 34), UDim2.new(0.5, 0, 1, -14), { anchor = Vector2.new(0.5, 1), name = "Tips", transp = 0.25, visible = false })
 local tipText = UI.text(tip, "", UDim2.fromScale(1, 1), nil, { ts = 14, xa = Enum.TextXAlignment.Center, color = UI.C.text })
 S.tipEv.Event:Connect(function(text)
-	tip.Visible = text ~= nil and text ~= "" and S.settings.tips
+	tip.Visible = text ~= nil and text ~= "" and S.settings.tips and not S.mode
 	tipText.Text = text or ""
 end)
+-- work modes have their own hints at the bottom
+S.modeEv.Event:Connect(function(mode) if mode then tip.Visible = false end end)
 
 ---------------------------------------------------------------- garage side menu and Moped Info
 local side = UI.new("Frame", { Size = UDim2.fromOffset(196, 290), Position = UDim2.new(0, 12, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), BackgroundTransparency = 1, Name = "Garagemeny" }, gui)
@@ -5061,7 +5200,11 @@ end)
 
 -- escape always leaves a work mode
 UIS.InputBegan:Connect(function(input)
-	if input.KeyCode == Enum.KeyCode.Escape and S.mode then S.endMode() end
+	if input.KeyCode == Enum.KeyCode.Escape and S.mode then
+		-- a work mode may use Esc first (e.g. to put down the part in your hand)
+		if S.escCapture and S.escCapture() then return end
+		S.endMode()
+	end
 end)
 ]]></ProtectedString></Properties></Item>
 <Item class="LocalScript" referent="RBX24"><Properties><string name="Name">MeshSkin</string><ProtectedString name="Source"><![CDATA[-- Gives every moped in the world smooth 3D panels. The server builds panels from blocks (they are the
@@ -5197,13 +5340,13 @@ local function bodyTemplates()
 		aeroxFailed = true
 		local msg = "Aerox-modellen kunde inte visas: " .. tostring(err)
 		warn("Moppe: " .. msg)
-		S.toast(msg .. " — importera aerox.obj i Studio (se README) så används den i stället.", "error")
+		S.toast(msg .. " — slå på Game Settings → Security → Allow Mesh / Image APIs, eller importera aerox.obj i Studio (se README).", "error")
 		return false
 	end
 	body = list
 	return body
 end
--- complete = every chassis slot, every panel and all 29 engine parts are on (seen from the model itself)
+-- complete = every chassis slot, every panel and the engine are on (seen from the model itself)
 local function isComplete(moped, def)
 	local have = {}
 	for _, c in ipairs(moped:GetChildren()) do
@@ -5212,8 +5355,8 @@ local function isComplete(moped, def)
 	end
 	for _, s in ipairs(MopedDef.SLOTS) do if not have[s.id] then return false end end
 	for _, p in ipairs(def.panels) do if not have["pan:" .. p.id] then return false end end
-	local eng = have.motor
-	return eng ~= nil and #eng:GetChildren() >= #EngineDef.SOCKETS
+	-- the engine only has to be in the frame: the body covers it, so a half-built engine still shows the Aerox
+	return have.motor ~= nil
 end
 local function hideBlocks(moped)
 	for _, d in ipairs(moped:GetDescendants()) do
@@ -5303,124 +5446,191 @@ end
 workspace.DescendantAdded:Connect(watch)
 for _, d in ipairs(workspace:GetDescendants()) do watch(d) end
 ]]></ProtectedString></Properties></Item>
-<Item class="LocalScript" referent="RBX25"><Properties><string name="Name">Paint</string><ProtectedString name="Source"><![CDATA[-- Paint booth: the panel hangs on the stand (shown enlarged). Pick a colour (library, RGB sliders or HEX),
--- a finish and the gloss, then hold the left button and spray with the gun in your hand. Coverage builds up
--- where you spray; too much in one place makes runs. Mouse wheel moves the gun closer or further away.
+<Item class="LocalScript" referent="RBX25"><Properties><string name="Name">Paint</string><ProtectedString name="Source"><![CDATA[-- Paint booth, laid out like the reference: colour picker (saturation/brightness square + hue bar + HEX),
+-- finish list, decals, "Avsluta", a checklist (Placera kåpan, Välj färg, Spraya jämnt, Låt torka) and a
+-- "Lackar..." bar. Hold the left button to spray with the gun in your hand: paint lands where the spray hits,
+-- too much in one place makes runs. Mouse wheel moves the gun closer or further away.
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local GuiService = game:GetService("GuiService")
+local AssetService = game:GetService("AssetService")
 local Shared = RS:WaitForChild("Shared")
 local Parts = require(Shared.Parts)
 local Paint = require(Shared.Paint)
 local Models = require(Shared.Models)
+local MeshGen = require(Shared.MeshGen)
 local GarageBuilder = require(Shared.GarageBuilder)
+local Config = require(Shared.Config)
 local plr = Players.LocalPlayer
 local S = require(script.Parent:WaitForChild("State"))
 local UI = require(script.Parent:WaitForChild("UIKit"))
 
 local gui = UI.screen("Lackering", 10, plr)
 gui.Enabled = false
-local heat
-local AssetService = game:GetService("AssetService")
-local MeshGen = require(Shared.MeshGen)
-local L = { color = { 200, 22, 30 }, finish = "blank", gloss = 0.7, dist = 1.0, spraying = false, state = nil, t = 0, even = 0 }
+local L = { h = 0.75, s = 0.8, v = 0.85, color = { 138, 43, 226 }, finish = "metallic", gloss = 0.8, dist = 1.0, decal = nil,
+	spraying = false, state = nil, t = 0, even = 0, chosen = false, phase = "spray" }
+local PRIMER = Color3.fromRGB(150, 152, 156)
+local function col3() return Color3.fromRGB(L.color[1], L.color[2], L.color[3]) end
 
----------------------------------------------------------------- UI
-local info = UI.panel(gui, UDim2.fromOffset(480, 40), UDim2.fromOffset(12, 8), { name = "Info", transp = 0.15 })
-UI.text(info, "Håll vänster musknapp och spraya jämnt över kåpan", UDim2.new(1, -20, 1, 0), UDim2.fromOffset(12, 0), { ts = 15, font = UI.BOLD })
-local side = UI.panel(gui, UDim2.fromOffset(290, 600), UDim2.new(1, -12, 0, 8), { anchor = Vector2.new(1, 0), name = "Färgpanel" })
-UI.pad(side, 12)
-UI.text(side, "Färg:", UDim2.new(1, 0, 0, 20), nil, { font = UI.BOLD, ts = 15 })
-local swatches = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 70), Position = UDim2.fromOffset(0, 24), BackgroundTransparency = 1, Name = "Bibliotek" }, side)
-UI.grid(swatches, UDim2.fromOffset(28, 28), UDim2.fromOffset(5, 5))
-local preview = UI.new("Frame", { Size = UDim2.fromOffset(60, 60), Position = UDim2.fromOffset(0, 104), BackgroundColor3 = Color3.new(1, 0, 0), BorderSizePixel = 0, Name = "Förhandsvisning" }, side)
-UI.corner(preview, 8)
-local colorName = UI.text(side, "", UDim2.fromOffset(190, 22), UDim2.fromOffset(70, 104), { ts = 14, font = UI.BOLD, name = "Färgnamn" })
-local hex = UI.new("TextBox", { Size = UDim2.fromOffset(110, 30), Position = UDim2.fromOffset(70, 130), BackgroundColor3 = UI.C.panel2, TextColor3 = UI.C.text, Font = UI.FONT, TextSize = 15, ClearTextOnFocus = false, Text = "", Name = "HEX" }, side)
-UI.corner(hex, 6)
-UI.text(side, "HEX", UDim2.fromOffset(40, 30), UDim2.fromOffset(186, 130), { ts = 13, color = UI.C.dim })
-local sliders = {}
-local function slider(y, label, color, get, set)
-	UI.text(side, label, UDim2.fromOffset(20, 22), UDim2.fromOffset(0, y), { ts = 14, font = UI.BOLD })
-	local bar = UI.new("Frame", { Size = UDim2.fromOffset(190, 10), Position = UDim2.fromOffset(26, y + 6), BackgroundColor3 = color, BorderSizePixel = 0, Name = label .. "Reglage" }, side)
-	UI.corner(bar, 5)
-	local knob = UI.new("Frame", { Size = UDim2.fromOffset(16, 16), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0, 0.5), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Name = "Knopp" }, bar)
-	UI.corner(knob, 8)
-	local val = UI.text(side, "", UDim2.fromOffset(46, 22), UDim2.fromOffset(222, y), { ts = 13, xa = Enum.TextXAlignment.Right })
-	local s = { bar = bar, knob = knob, val = val, get = get, set = set }
-	bar.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then s.drag = true end end)
-	sliders[#sliders + 1] = s
-	return s
+---------------------------------------------------------------- left panel: colour, finish, decals
+local panel = UI.panel(gui, UDim2.fromOffset(300, 596), UDim2.fromOffset(12, 8), { name = "Lackering" })
+local function heading(text, y) return UI.text(panel, text, UDim2.fromOffset(270, 20), UDim2.fromOffset(16, y), { ts = 16, font = UI.BOLD }) end
+-- title with a spray-gun icon
+local ic = UI.new("Frame", { Size = UDim2.fromOffset(30, 30), Position = UDim2.fromOffset(14, 8), BackgroundTransparency = 1, Name = "Ikon" }, panel)
+UI.corner(UI.new("Frame", { Size = UDim2.fromOffset(16, 10), Position = UDim2.fromOffset(4, 6), BackgroundColor3 = UI.C.text, BorderSizePixel = 0 }, ic), 3)
+UI.corner(UI.new("Frame", { Size = UDim2.fromOffset(6, 14), Position = UDim2.fromOffset(8, 14), BackgroundColor3 = UI.C.text, BorderSizePixel = 0 }, ic), 2)
+UI.corner(UI.new("Frame", { Size = UDim2.fromOffset(6, 4), Position = UDim2.fromOffset(20, 9), BackgroundColor3 = UI.C.text, BorderSizePixel = 0 }, ic), 2)
+UI.text(panel, "Lackering", UDim2.fromOffset(220, 40), UDim2.fromOffset(52, 4), { ts = 22, font = UI.BOLD })
+heading("Färg", 46)
+local sv = UI.new("Frame", { Size = UDim2.fromOffset(232, 140), Position = UDim2.fromOffset(16, 68), BackgroundColor3 = Color3.fromHSV(L.h, 1, 1), BorderSizePixel = 0, Name = "Färgruta", Active = true }, panel)
+UI.corner(sv, 4)
+local white = UI.new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Name = "Vitt" }, sv)
+UI.new("UIGradient", { Transparency = NumberSequence.new(0, 1) }, white)
+UI.corner(white, 4)
+local black = UI.new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, Name = "Svart" }, sv)
+UI.new("UIGradient", { Transparency = NumberSequence.new(1, 0), Rotation = 90 }, black)
+UI.corner(black, 4)
+local svMark = UI.new("Frame", { Size = UDim2.fromOffset(14, 14), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundTransparency = 1, Name = "Markör", ZIndex = 3 }, sv)
+UI.corner(svMark, 7)
+UI.stroke(svMark, Color3.new(1, 1, 1), 2, 0)
+local hue = UI.new("Frame", { Size = UDim2.fromOffset(22, 140), Position = UDim2.fromOffset(258, 68), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Name = "Nyans", Active = true }, panel)
+UI.corner(hue, 4)
+do
+	local kp = {}
+	for i = 0, 6 do kp[#kp + 1] = ColorSequenceKeypoint.new(i / 6, Color3.fromHSV(i / 6 % 1, 1, 1)) end
+	UI.new("UIGradient", { Color = ColorSequence.new(kp), Rotation = 90 }, hue)
 end
-local function hexOf(c) return Paint.hex(c) end
-slider(172, "R", Color3.fromRGB(200, 50, 50), function() return L.color[1] / 255 end, function(v) L.color[1] = math.floor(v * 255 + 0.5) end)
-slider(198, "G", Color3.fromRGB(50, 170, 70), function() return L.color[2] / 255 end, function(v) L.color[2] = math.floor(v * 255 + 0.5) end)
-slider(224, "B", Color3.fromRGB(50, 90, 210), function() return L.color[3] / 255 end, function(v) L.color[3] = math.floor(v * 255 + 0.5) end)
-UI.text(side, "Lacktyp:", UDim2.new(1, 0, 0, 20), UDim2.fromOffset(0, 256), { font = UI.BOLD, ts = 15 })
-local finishes = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 70), Position = UDim2.fromOffset(0, 280), BackgroundTransparency = 1, Name = "Lacktyper" }, side)
-UI.grid(finishes, UDim2.fromOffset(84, 30), UDim2.fromOffset(4, 4))
-UI.text(side, "Glans:", UDim2.fromOffset(60, 22), UDim2.fromOffset(0, 352), { font = UI.BOLD, ts = 15 })
-local glossSlider = slider(376, "", Color3.fromRGB(120, 130, 150), function() return L.gloss end, function(v) L.gloss = v end)
-local statText = UI.text(side, "", UDim2.new(1, 0, 0, 90), UDim2.fromOffset(0, 404), { ts = 14, wrap = true, rich = true, ya = Enum.TextYAlignment.Top, name = "Resultat" })
-local distText = UI.text(side, "", UDim2.new(1, 0, 0, 20), UDim2.fromOffset(0, 494), { ts = 13, color = UI.C.dim, name = "Avstånd" })
-local buttons = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromOffset(0, 530), BackgroundTransparency = 1, Name = "Knappar" }, side)
-UI.list(buttons, 6, true)
+local hueMark = UI.new("Frame", { Size = UDim2.new(1, 6, 0, 4), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Name = "Markör", ZIndex = 3 }, hue)
+UI.stroke(hueMark, Color3.new(0, 0, 0), 1, 0.3)
+local hexRow = UI.new("Frame", { Size = UDim2.fromOffset(264, 30), Position = UDim2.fromOffset(16, 214), BackgroundColor3 = UI.C.panel2, BorderSizePixel = 0, Name = "HEXrad" }, panel)
+UI.corner(hexRow, 6)
+UI.text(hexRow, "HEX:", UDim2.fromOffset(46, 30), UDim2.fromOffset(8, 0), { ts = 15, font = UI.BOLD })
+local hex = UI.new("TextBox", { Size = UDim2.new(1, -60, 1, -6), Position = UDim2.fromOffset(54, 3), BackgroundColor3 = UI.C.panel, TextColor3 = UI.C.text, Font = UI.FONT, TextSize = 15, ClearTextOnFocus = false, Text = "", TextXAlignment = Enum.TextXAlignment.Left, Name = "HEX" }, hexRow)
+UI.corner(hex, 4)
+UI.pad(hex, 8, 4, 0, 0)
+heading("Lacktyp", 252)
+local finishes = UI.new("Frame", { Size = UDim2.fromOffset(264, 146), Position = UDim2.fromOffset(16, 274), BackgroundTransparency = 1, Name = "Lacktyper" }, panel)
+UI.list(finishes, 2)
+UI.text(panel, "Glans", UDim2.fromOffset(60, 20), UDim2.fromOffset(16, 424), { ts = 14, font = UI.BOLD })
+local glossBar = UI.new("Frame", { Size = UDim2.fromOffset(150, 8), Position = UDim2.fromOffset(78, 430), BackgroundColor3 = UI.C.panel2, BorderSizePixel = 0, Name = "Glans", Active = true }, panel)
+UI.corner(glossBar, 4)
+local glossFill = UI.new("Frame", { Size = UDim2.fromScale(L.gloss, 1), BackgroundColor3 = UI.C.accent, BorderSizePixel = 0 }, glossBar)
+UI.corner(glossFill, 4)
+local glossKnob = UI.new("Frame", { Size = UDim2.fromOffset(16, 16), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(L.gloss, 0.5), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Name = "Knopp" }, glossBar)
+UI.corner(glossKnob, 8)
+local glossText = UI.text(panel, "", UDim2.fromOffset(46, 20), UDim2.fromOffset(234, 424), { ts = 13, xa = Enum.TextXAlignment.Right })
+heading("Dekaler", 446)
+local decalBtn = UI.button(panel, "+  Lägg till dekal", UDim2.fromOffset(264, 32), UDim2.fromOffset(16, 470), { kind = "secondary", ts = 15, name = "Dekal" })
+UI.stroke(decalBtn, UI.C.line, 1, 0.3)
+local decals = UI.new("Frame", { Size = UDim2.fromOffset(264, 60), Position = UDim2.fromOffset(16, 510), BackgroundTransparency = 1, Name = "Dekaler" }, panel)
+UI.list(decals, 6, true)
+local quit = UI.button(gui, "Avsluta", UDim2.fromOffset(240, 46), UDim2.fromOffset(12, 612), { kind = "danger", ts = 20, name = "Avsluta" })
+
+-- right: checklist, bottom: progress, small tip
+local checks = UI.panel(gui, UDim2.fromOffset(220, 150), UDim2.new(1, -12, 0, 60), { anchor = Vector2.new(1, 0), name = "Moment" })
+UI.pad(checks, 12, 10, 10, 10)
+UI.list(checks, 4)
+local prog = UI.panel(gui, UDim2.fromOffset(470, 64), UDim2.new(0.5, 70, 1, -12), { anchor = Vector2.new(0.5, 1), name = "Framsteg" })
+local progLabel = UI.text(prog, "Lackar...", UDim2.fromOffset(300, 24), UDim2.fromOffset(16, 6), { ts = 17, font = UI.BOLD, name = "Etikett" })
+local progPct = UI.text(prog, "0%", UDim2.fromOffset(80, 24), UDim2.new(1, -96, 0, 34), { ts = 19, font = UI.BOLD, xa = Enum.TextXAlignment.Right, name = "Procent" })
+local progBg, progFill = UI.bar(prog, UDim2.new(1, -116, 0, 14), UDim2.fromOffset(16, 40), 0, col3())
+local tipBox = UI.text(gui, "Håll vänster musknapp och spraya jämnt  ·  Rullhjul: avstånd", UDim2.fromOffset(420, 20), UDim2.new(0.5, 70, 1, -84), { anchor = Vector2.new(0.5, 1), ts = 13, xa = Enum.TextXAlignment.Center, name = "Tips" })
 local picker = UI.panel(gui, UDim2.fromOffset(420, 320), UDim2.fromScale(0.5, 0.5), { anchor = Vector2.new(0.5, 0.5), name = "Välj", visible = false })
--- coverage map: where the panel still needs paint (grey), is done (colour) or has runs (red)
-local heatPanel = UI.panel(gui, UDim2.fromOffset(236, 170), UDim2.new(0, 12, 1, -12), { anchor = Vector2.new(0, 1), name = "Täckningskarta" })
-UI.text(heatPanel, "Var lacken sitter", UDim2.new(1, -20, 0, 24), UDim2.fromOffset(10, 4), { font = UI.BOLD, ts = 14 })
-local heatGrid = UI.new("Frame", { Size = UDim2.fromOffset(216, 126), Position = UDim2.fromOffset(10, 32), BackgroundTransparency = 1, Name = "Karta" }, heatPanel)
-UI.grid(heatGrid, UDim2.fromOffset(20, 19), UDim2.fromOffset(2, 2))
-heatPanel.Visible = false
-heat = {}
-for i = 1, Paint.COLS * Paint.ROWS do
-	local f = UI.new("Frame", { Size = UDim2.fromOffset(20, 19), BackgroundColor3 = Color3.fromRGB(150, 152, 156), BorderSizePixel = 0, LayoutOrder = i, Name = "R" .. i }, heatGrid)
-	UI.corner(f, 3)
-	heat[i] = f
-end
 
-local paintCells -- defined further down
+---------------------------------------------------------------- UI state
+local paintCells, buildChecks
+local function setFromRGB(c)
+	L.color = { c[1], c[2], c[3] }
+	local h, s2, v = Color3.fromRGB(c[1], c[2], c[3]):ToHSV()
+	if s2 > 0.01 then L.h = h end
+	L.s, L.v = s2, v
+end
+local function setFromHSV()
+	local c = Color3.fromHSV(L.h, L.s, L.v)
+	L.color = { math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5) }
+end
 local function refreshColor()
-	local c = Color3.fromRGB(L.color[1], L.color[2], L.color[3])
-	preview.BackgroundColor3 = c
-	local name = "Egen färg"
-	for _, e in ipairs(Paint.LIBRARY) do if e.c[1] == L.color[1] and e.c[2] == L.color[2] and e.c[3] == L.color[3] then name = e.n end end
-	colorName.Text = name
-	if not hex:IsFocused() then hex.Text = hexOf(L.color) end
-	for _, s in ipairs(sliders) do
-		local v = s.get()
-		s.knob.Position = UDim2.fromScale(v, 0.5)
-		s.val.Text = s == glossSlider and string.format("%d %%", math.floor(v * 100)) or tostring(math.floor(v * 255 + 0.5))
-	end
+	sv.BackgroundColor3 = Color3.fromHSV(L.h, 1, 1)
+	svMark.Position = UDim2.fromScale(L.s, 1 - L.v)
+	hueMark.Position = UDim2.fromScale(0.5, L.h)
+	if not hex:IsFocused() then hex.Text = Paint.hex(L.color) end
+	glossFill.Size = UDim2.fromScale(L.gloss, 1)
+	glossKnob.Position = UDim2.fromScale(L.gloss, 0.5)
+	glossText.Text = string.format("%d%%", math.floor(L.gloss * 100))
+	progFill.BackgroundColor3 = col3()
 	UI.clear(finishes)
 	for i, f in ipairs(Paint.FINISH) do
-		UI.button(finishes, f.n, UDim2.fromOffset(84, 30), nil, { kind = L.finish == f.id and "primary" or "secondary", ts = 13, order = i, name = f.id }, function() L.finish = f.id; refreshColor() end)
+		local on = L.finish == f.id
+		local r = UI.new("TextButton", { Size = UDim2.new(1, 0, 0, 27), BackgroundColor3 = on and UI.C.accent or UI.C.panel2, BackgroundTransparency = on and 0 or 0.3, Text = "", AutoButtonColor = true, LayoutOrder = i, Name = f.n }, finishes)
+		UI.corner(r, 6)
+		if on then UI.stroke(r, UI.C.accent2, 2, 0) end
+		local dot = UI.new("Frame", { Size = UDim2.fromOffset(14, 14), Position = UDim2.fromOffset(10, 6), BackgroundTransparency = on and 1 or 0.6, BackgroundColor3 = UI.C.dim, BorderSizePixel = 0 }, r)
+		UI.corner(dot, 7)
+		UI.stroke(dot, UI.C.text, 2, on and 0 or 0.5)
+		UI.text(r, f.n, UDim2.new(1, -40, 1, 0), UDim2.fromOffset(36, 0), { ts = 15, font = on and UI.BOLD or UI.FONT })
+		r.Activated:Connect(function() L.finish = f.id; L.chosen = true; refreshColor(); if paintCells then paintCells() end; if buildChecks then buildChecks() end end)
 	end
-	if L.state and L.visual then paintCells() end
+	UI.clear(decals)
+	for i, d in ipairs(Paint.DECALS) do
+		local on = L.decal == d.id
+		local b = UI.new("TextButton", { Size = UDim2.fromOffset(60, 56), BackgroundColor3 = UI.C.panel2, Text = "", AutoButtonColor = true, LayoutOrder = i, Name = d.id }, decals)
+		UI.corner(b, 6)
+		UI.stroke(b, on and UI.C.accent2 or UI.C.line, on and 2 or 1, on and 0 or 0.4)
+		UI.text(b, d.text, UDim2.new(1, -6, 1, -6), UDim2.fromOffset(3, 3), { ts = 13, font = UI.BLACK, color = Color3.fromRGB(d.c[1], d.c[2], d.c[3]), xa = Enum.TextXAlignment.Center, scaled = true })
+		b.Activated:Connect(function() L.decal = d.id; refreshColor(); if paintCells then paintCells() end end)
+	end
+	decalBtn.Text = L.decal and "Ta bort dekal" or "+  Lägg till dekal"
+	if paintCells then paintCells() end
 end
-for i, e in ipairs(Paint.LIBRARY) do
-	local b = UI.new("TextButton", { Size = UDim2.fromOffset(28, 28), BackgroundColor3 = Color3.fromRGB(e.c[1], e.c[2], e.c[3]), Text = "", LayoutOrder = i, Name = e.n, AutoButtonColor = true }, swatches)
-	UI.corner(b, 6)
-	UI.stroke(b, UI.C.line, 1, 0.3)
-	b.Activated:Connect(function() L.color = { e.c[1], e.c[2], e.c[3] }; refreshColor() end)
-end
-hex.FocusLost:Connect(function()
-	local c = Paint.validHex(hex.Text)
-	if c then L.color = c else S.toast("Skriv HEX som #RRGGBB", "error") end
+decalBtn.Activated:Connect(function()
+	if L.decal then L.decal = nil else L.decal = Paint.DECALS[1].id end
 	refreshColor()
 end)
+hex.FocusLost:Connect(function()
+	local c = Paint.validHex(hex.Text)
+	if c then setFromRGB(c); L.chosen = true else S.toast("Skriv HEX som #RRGGBB", "error") end
+	refreshColor()
+	if buildChecks then buildChecks() end
+end)
+local dragging -- "sv" | "hue" | "gloss"
+for name, f in pairs({ sv = sv, hue = hue, gloss = glossBar }) do
+	f.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = name end end)
+end
+local function dragTo()
+	local m = UIS:GetMouseLocation()
+	local inset = GuiService:GetGuiInset()
+	local function rel(f)
+		local ap, as = f.AbsolutePosition, f.AbsoluteSize
+		return math.clamp((m.X - ap.X) / as.X, 0, 1), math.clamp((m.Y - inset.Y - ap.Y) / as.Y, 0, 1)
+	end
+	if dragging == "sv" then local x, y = rel(sv); L.s, L.v = x, 1 - y; setFromHSV(); L.chosen = true
+	elseif dragging == "hue" then local _, y = rel(hue); L.h = math.min(y, 0.999); setFromHSV(); L.chosen = true
+	elseif dragging == "gloss" then local x = rel(glossBar); L.gloss = x end
+	refreshColor()
+	if buildChecks then buildChecks() end
+end
 
----------------------------------------------------------------- scene: enlarged panel, coverage cells, gun and hand
+---------------------------------------------------------------- scene: the panel on the stand, gun and hand
 local scene = Instance.new("Model")
 scene.Name = "LackLokal"
-local function boothCF() return S.origin() * GarageBuilder.BOOTH * CFrame.new(0, 1.6, 0) end
+local SCALE = 1.5
+local function boothCF() return S.origin() * GarageBuilder.BOOTH * CFrame.new(0, 1.2, 0) end
 local frame -- face frame: LookVector points from the panel towards the camera
+local function faceTowards(part, dir)
+	local best, bestDot = Enum.NormalId.Front, -2
+	for _, n in ipairs(Enum.NormalId:GetEnumItems()) do
+		local d = part.CFrame:VectorToWorldSpace(Vector3.FromNormalId(n)):Dot(dir)
+		if d > bestDot then best, bestDot = n, d end
+	end
+	return best
+end
 local function buildScene(id)
 	scene:ClearAllChildren()
 	scene.Parent = workspace -- must be in the world before raycasting against the panel
 	local it = S.item(id)
-	-- hide the real part on the stand while the enlarged one is shown
+	-- hide the real part on the stand while the work copy is shown
 	local plot = S.plot()
 	L.hidden = {}
 	if plot then
@@ -5430,58 +5640,39 @@ local function buildScene(id)
 			end
 		end
 	end
-	-- invisible block version of the panel: decides which parts of the spray grid lie on the panel
-	local model = Models.item(it.sku, nil)
-	model:ScaleTo(2.2)
-	local _, size0 = model:GetBoundingBox()
-	local turn = size0.X < size0.Z and CFrame.Angles(0, math.rad(-90), 0) or CFrame.new()
-	local panelCF = boothCF() * turn
-	model:PivotTo(panelCF)
-	if model.PrimaryPart then model.PrimaryPart:Destroy() end
-	for _, d in ipairs(model:GetDescendants()) do if d:IsA("BasePart") then d.Transparency = 1; d.CanQuery = true end end
-	model.Parent = scene
-	local cf, size = model:GetBoundingBox()
-	local w, h, depth = size.X, size.Y, size.Z
-	local worldNormal = Vector3.new(0, 0, 1)
-	frame = CFrame.lookAt(cf.Position + worldNormal * (depth / 2 + 0.06), cf.Position + worldNormal * 5)
-	L.w, L.h = math.max(w, 1), math.max(h, 1)
-	L.cells = {}
-	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Include
-	params.FilterDescendantsInstances = { model }
-	for row = 1, Paint.ROWS do
-		for col = 1, Paint.COLS do
-			local x = -L.w / 2 + (col - 0.5) * L.w / Paint.COLS
-			local y = L.h / 2 - (row - 0.5) * L.h / Paint.ROWS
-			local p0 = frame * Vector3.new(x, y, 0)
-			if workspace:Raycast(p0 + frame.LookVector * 1, -frame.LookVector * (depth + 2), params) then L.cells[(row - 1) * Paint.COLS + col] = true end
-		end
+	-- what you see: the smooth 3D panel, standing upright with its long side across; grey primer to begin with
+	local function extents(cf, size) -- world-axis size of a box
+		local r = cf.Rotation
+		local x, y, z = r:VectorToWorldSpace(Vector3.new(size.X, 0, 0)), r:VectorToWorldSpace(Vector3.new(0, size.Y, 0)), r:VectorToWorldSpace(Vector3.new(0, 0, size.Z))
+		return Vector3.new(math.abs(x.X) + math.abs(y.X) + math.abs(z.X), math.abs(x.Y) + math.abs(y.Y) + math.abs(z.Y), math.abs(x.Z) + math.abs(y.Z) + math.abs(z.Z))
 	end
-	-- cells with no panel behind them count as painted so they do not lower the coverage
-	L.state = Paint.new()
-	for i = 1, Paint.COLS * Paint.ROWS do if not L.cells[i] then L.state.cells[i] = 1 end end
-	-- what you see: the smooth 3D panel (or the blocks if meshes are not available), in grey primer
 	L.visual = {}
 	local part = Parts.get(it.sku)
 	local data = part and MeshGen.panel(part.stats.fits, part.stats.panel)
 	local okMesh = data and pcall(function()
 		local em = AssetService:CreateEditableMesh()
 		local ids = {}
-		for i, v in ipairs(data.verts) do ids[i] = em:AddVertex(v * 2.2) end
+		for i, v in ipairs(data.verts) do ids[i] = em:AddVertex(v * SCALE) end
 		for _, t in ipairs(data.tris) do em:AddTriangle(ids[t[1]], ids[t[2]], ids[t[3]]) end
 		local okP, mp = pcall(function() return AssetService:CreateMeshPartAsync(Content.fromObject(em), { CollisionFidelity = Enum.CollisionFidelity.PreciseConvexDecomposition }) end)
 		if not okP then mp = AssetService:CreateMeshPartAsync(Content.fromObject(em)) end
 		mp.Name = "Kåpa"
 		mp.Anchored = true
 		mp.CanQuery = true
-		mp.Size = data.size * 2.2
-		mp.CFrame = panelCF
+		mp.Size = data.size * SCALE
+		-- moped space: a side panel is long along Z; turn it so the long side runs across the booth
+		mp.CFrame = boothCF() * (data.size.X < data.size.Z and CFrame.Angles(0, math.rad(-90), 0) or CFrame.new())
 		mp.Parent = scene
 		L.visual[1] = mp
 	end)
-	L.mask = model
-	L.smooth = okMesh == true
-	L.dots = {}
+	-- the block version: shown only when the smooth one can't be made
+	local model = Models.item(it.sku, nil)
+	model:ScaleTo(SCALE)
+	local _, size0 = model:GetBoundingBox()
+	model:PivotTo(boothCF() * (size0.X < size0.Z and CFrame.Angles(0, math.rad(-90), 0) or CFrame.new()))
+	if model.PrimaryPart then model.PrimaryPart:Destroy() end
+	for _, d in ipairs(model:GetDescendants()) do if d:IsA("BasePart") then d.Transparency = 1; d.CanQuery = true end end
+	model.Parent = scene
 	if not okMesh then
 		for _, d in ipairs(model:GetDescendants()) do
 			if d:IsA("BasePart") then
@@ -5493,97 +5684,155 @@ local function buildScene(id)
 			end
 		end
 	end
+	-- the paint grid lies on the face of what you see, towards the room
+	local cf, size
+	if okMesh then cf, size = L.visual[1].CFrame, extents(L.visual[1].CFrame, L.visual[1].Size)
+	else local c, s0 = model:GetBoundingBox(); cf, size = c, extents(c, s0) end
+	local w, h, depth = size.X, size.Y, size.Z
+	local towardsRoom = Vector3.new(0, 0, 1)
+	frame = CFrame.lookAt(cf.Position + towardsRoom * (depth / 2 + 0.06), cf.Position + towardsRoom * 5)
+	L.pw, L.ph = math.max(w, 0.5), math.max(h, 0.5)
+	L.cells = {}
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = okMesh and { L.visual[1] } or { model }
+	for row = 1, Paint.ROWS do
+		for col = 1, Paint.COLS do
+			local x = -L.pw / 2 + (col - 0.5) * L.pw / Paint.COLS
+			local y = L.ph / 2 - (row - 0.5) * L.ph / Paint.ROWS
+			local p0 = frame * Vector3.new(x, y, 0)
+			if workspace:Raycast(p0 + frame.LookVector * 1, -frame.LookVector * (depth + 2), params) then L.cells[(row - 1) * Paint.COLS + col] = true end
+		end
+	end
+	L.state = Paint.new()
+	for i = 1, Paint.COLS * Paint.ROWS do if not L.cells[i] then L.state.cells[i] = 1 end end
+	L.mask = model
+	L.smooth = okMesh == true
+	L.dots = {}
+	-- decal preview on the panel
+	local big = L.visual[1]
+	for _, v in ipairs(L.visual) do if v.Size.Magnitude > big.Size.Magnitude then big = v end end
+	L.decalGui = Instance.new("SurfaceGui")
+	L.decalGui.Name = "Dekal"
+	L.decalGui.Face = faceTowards(big, towardsRoom)
+	L.decalGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	L.decalGui.PixelsPerStud = 60
+	L.decalGui.LightInfluence = 1
+	L.decalLabel = Instance.new("TextLabel")
+	L.decalLabel.Size = UDim2.fromScale(0.6, 0.3)
+	L.decalLabel.Position = UDim2.fromScale(0.2, 0.35)
+	L.decalLabel.BackgroundTransparency = 1
+	L.decalLabel.TextScaled = true
+	L.decalLabel.Font = Enum.Font.GothamBlack
+	L.decalLabel.Text = ""
+	L.decalLabel.Parent = L.decalGui
+	L.decalGui.Parent = big
+	-- gun with a see-through cup showing the paint, and the hand holding it
 	local mk = Models.maker(scene)
-	-- gun and hand rig
 	local hand = Models.hand(scene, CFrame.new(), true)
 	L.handRig = {}
 	for _, d in ipairs(hand:GetDescendants()) do if d:IsA("BasePart") then d.CanQuery = false; L.handRig[#L.handRig + 1] = { d, d.CFrame } end end
 	local gun = Instance.new("Model")
 	gun.Name = "Sprutpistol"
 	gun.Parent = scene
-	Models.tool(gun, "spruta", CFrame.new(), L.even > 0.5)
+	local gmk = Models.tool(gun, "spruta", CFrame.new(), L.even > 0.5)
+	for _, p in ipairs(gmk.parts) do if p.Name == "Kopp" then p.Transparency = 0.6 end end
+	L.cupPaint = gmk.cyl("Färg", 0.18, 0.1, CFrame.new(0, 0.2, 0) * CFrame.Angles(0, 0, math.rad(90)), col3(), Enum.Material.SmoothPlastic)
 	L.gunRig = {}
 	for _, d in ipairs(gun:GetDescendants()) do if d:IsA("BasePart") then d.CanQuery = false; L.gunRig[#L.gunRig + 1] = { d, d.CFrame } end end
 	local nozzle = mk.box("Munstycke", Vector3.new(0.05, 0.05, 0.05), CFrame.new(), Color3.new(1, 1, 1), Enum.Material.SmoothPlastic)
 	nozzle.Transparency = 1
+	nozzle.CanQuery = false
 	local att = Instance.new("Attachment")
 	att.Parent = nozzle
 	L.mist = Instance.new("ParticleEmitter")
 	L.mist.Rate = 0
-	L.mist.Lifetime = NumberRange.new(0.3, 0.6)
-	L.mist.Speed = NumberRange.new(8, 10)
-	L.mist.SpreadAngle = Vector2.new(12, 12)
-	L.mist.Size = NumberSequence.new(0.15, 0.9)
-	L.mist.Transparency = NumberSequence.new(0.4, 1)
+	L.mist.Lifetime = NumberRange.new(0.35, 0.7)
+	L.mist.Speed = NumberRange.new(9, 12)
+	L.mist.SpreadAngle = Vector2.new(14, 14)
+	L.mist.Size = NumberSequence.new(0.2, 1.5)
+	L.mist.Transparency = NumberSequence.new(0.35, 1)
+	L.mist.LightEmission = 0.25
+	L.mist.EmissionDirection = Enum.NormalId.Front
 	L.mist.Parent = att
 	L.nozzle = nozzle
-	scene.Parent = workspace
-	S.camTo(CFrame.lookAt(frame.Position + frame.LookVector * 4.6 + Vector3.new(0, 0.4, 0), frame.Position), 62, 0.4)
+	-- the booth's front wall, curtain and sign stand between the camera and the panel: hide them locally
+	if plot then
+		for _, d in ipairs(plot:GetDescendants()) do
+			if d:IsA("BasePart") and (d.Name == "Lackbox" or d.Name == "Draperi" or d.Name == "Skylt") then
+				local off = d.Position - frame.Position
+				if off:Dot(frame.LookVector) > depth / 2 + 1 and math.abs(off:Dot(frame.RightVector)) < 9 and d.Size.Y > 0.5 then
+					d.LocalTransparencyModifier = 1
+					L.hidden[#L.hidden + 1] = d
+				end
+			end
+		end
+	end
+	-- camera inside the booth, straight in front of the panel; the panel sits right of the colour panel
+	-- (frame.RightVector is the camera's left: the frame looks back at the camera)
+	local back = math.max(5.5, L.pw * 1.45, L.ph * 1.9)
+	local side = frame.RightVector * (back * 0.1)
+	S.camTo(CFrame.lookAt(frame.Position + frame.LookVector * back + frame.UpVector * 0.8 + side, frame.Position + side + frame.UpVector * -0.15), 50, 0.4)
 end
-local PRIMER = Color3.fromRGB(150, 152, 156)
--- the panel turns from grey primer to the colour as coverage grows; the map in the panel shows where
 paintCells = function()
+	if not L.state then return end
 	local cov = Paint.coverage(L.state)
 	local r = Paint.result(L.state)
-	local target = Color3.fromRGB(L.color[1], L.color[2], L.color[3])
 	local fin = Paint.FIN[L.finish]
-	local col = PRIMER:Lerp(target, math.clamp((cov - 0.45) * 2.2, 0, 1))
-	if r.runs > 0 then col = col:Lerp(Color3.new(0, 0, 0), math.min(0.3, r.runs * 2)) end
+	local c = PRIMER:Lerp(col3(), math.clamp(cov * 1.25, 0, 1))
+	if r.runs > 0 then c = c:Lerp(Color3.new(0, 0, 0), math.min(0.3, r.runs * 2)) end
 	for _, v in ipairs(L.visual or {}) do
-		v.Color = col
+		v.Color = c
 		v.Material = cov > 0.6 and Enum.Material[fin.mat] or Enum.Material.SmoothPlastic
 		v.Reflectance = cov > 0.6 and (fin.refl[1] + (fin.refl[2] - fin.refl[1]) * L.gloss) or 0
 	end
-	for i, f in pairs(heat) do
-		local x = L.state.cells[i]
-		if not L.cells[i] then f.BackgroundTransparency = 1
-		else
-			f.BackgroundTransparency = 0
-			if x > 1.8 then f.BackgroundColor3 = UI.C.red
-			else f.BackgroundColor3 = PRIMER:Lerp(target, math.clamp(x, 0, 1)) end
-		end
+	if L.cupPaint then L.cupPaint.Color = col3() end
+	-- the spots melt into an even coat as coverage grows
+	for _, d in ipairs(L.dots or {}) do d.Transparency = math.clamp(0.15 + cov * 0.9, 0.15, 1) end
+	if L.decalLabel then
+		local d = Paint.DECAL[L.decal or ""]
+		L.decalLabel.Text = d and d.text or ""
+		if d then L.decalLabel.TextColor3 = Color3.fromRGB(d.c[1], d.c[2], d.c[3]) end
+	end
+	local pct = math.floor(cov * 100)
+	if L.phase == "spray" then
+		progLabel.Text = "Lackar..."
+		progPct.Text = pct .. "%"
+		progFill.Size = UDim2.fromScale(cov, 1)
 	end
 end
-local function refreshStats()
-	local r = Paint.result(L.state)
-	local col = r.q >= 0.75 and "#2ECC71" or (r.q >= 0.5 and "#F1C40F" or "#E74C3C")
-	statText.Text = string.format('Täckning: <b>%d %%</b>\nJämnhet: <b>%d %%</b>\nRinningar: <b>%d</b>\nKvalitet: <font color="%s"><b>%s</b></font>', math.floor(r.cover * 100), math.floor(r.even * 100), math.floor(r.runs * Paint.COLS * Paint.ROWS + 0.5), col, r.label)
-	distText.Text = string.format("Avstånd: %s (rullhjul)", L.dist < 0.85 and "nära" or (L.dist > 1.2 and "långt" or "lagom"))
-end
-local function buildButtons()
-	UI.clear(buttons)
-	UI.button(buttons, "Klar", UDim2.fromOffset(84, 36), nil, { kind = "green", order = 1 }, function()
-		if L.t < 3 then S.toast("Spraya kåpan först", "error"); return end
-		local ok, r = S.api("paintDone", L.color, L.finish, L.gloss, L.state)
-		if ok then
-			S.toast(string.format("Lackerat: %s (%d %%). Lacken torkar i 20 sekunder.", r.label, math.floor(r.q * 100)), "ok")
-			S.endMode("paint")
-		end
-	end)
-	UI.button(buttons, "Börja om", UDim2.fromOffset(90, 36), nil, { kind = "secondary", order = 2 }, function()
-		local s2 = Paint.new()
-		for i = 1, Paint.COLS * Paint.ROWS do if not L.cells[i] then s2.cells[i] = 1 end end
-		L.state = s2
-		for _, d in ipairs(L.dots or {}) do d:Destroy() end
-		L.dots = {}
-		paintCells()
-		refreshStats()
-	end)
-	UI.button(buttons, "Avbryt", UDim2.fromOffset(84, 36), nil, { kind = "danger", order = 3 }, function() S.endMode("paint") end)
+buildChecks = function()
+	UI.clear(checks)
+	local cov = L.state and Paint.coverage(L.state) or 0
+	local rows = {
+		{ "Placera kåpan", L.state ~= nil },
+		{ "Välj färg", L.chosen },
+		{ "Spraya jämnt", cov >= 0.9 },
+		{ "Låt torka", L.phase == "dry" and L.dryLeft and L.dryLeft <= 0 },
+	}
+	for i, r in ipairs(rows) do
+		local f = UI.new("Frame", { Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1, LayoutOrder = i, Name = r[1] }, checks)
+		local mark = UI.new("Frame", { Size = UDim2.fromOffset(20, 20), Position = UDim2.fromOffset(0, 4), BackgroundColor3 = r[2] and UI.C.green or UI.C.panel, BackgroundTransparency = r[2] and 0 or 1, BorderSizePixel = 0 }, f)
+		UI.corner(mark, 10)
+		if r[2] then UI.text(mark, "✓", UDim2.fromScale(1, 1), nil, { ts = 14, font = UI.BOLD, xa = Enum.TextXAlignment.Center })
+		else UI.stroke(mark, UI.C.text, 2, 0.2) end
+		UI.text(f, r[1], UDim2.new(1, -30, 1, 0), UDim2.fromOffset(30, 0), { ts = 16, font = UI.BOLD })
+	end
 end
 
----------------------------------------------------------------- open / close
+---------------------------------------------------------------- flow: pick a panel, spray, Avsluta saves, then it dries
 local function begin()
 	local ok, inf = S.api("paintStart")
 	if not ok then return false end
 	L.even = inf.even or 0
 	L.t = 0
+	L.phase = "spray"
+	L.chosen = false
 	buildScene(inf.item)
-	side.Visible, info.Visible, heatPanel.Visible = true, true, true
+	panel.Visible, checks.Visible, prog.Visible, quit.Visible, tipBox.Visible = true, true, true, true, true
 	refreshColor()
-	buildButtons()
 	paintCells()
-	refreshStats()
+	buildChecks()
 	return true
 end
 local function showPicker()
@@ -5605,10 +5854,24 @@ local function showPicker()
 	UI.button(picker, "Avbryt", UDim2.new(1, 0, 0, 36), nil, { kind = "danger", order = 99 }, function() S.endMode("paint") end)
 	picker.Visible = true
 end
+quit.Activated:Connect(function()
+	if L.phase == "spray" and L.state and L.t >= 3 then
+		local ok, r = S.api("paintDone", L.color, L.finish, L.gloss, L.state, L.decal)
+		if ok then
+			S.toast(string.format("Lackerat: %s (%d %%). Låt lacken torka.", r.label, math.floor(r.q * 100)), "ok")
+			L.phase = "dry"
+			L.dryLeft = Config.PAINT_DRY
+			L.spraying = false
+			buildChecks()
+		end
+		return
+	end
+	S.endMode("paint")
+end)
 local function open()
 	if not S.setMode("paint") then return end
 	gui.Enabled = true
-	side.Visible, info.Visible, heatPanel.Visible = false, false, false
+	panel.Visible, checks.Visible, prog.Visible, quit.Visible, tipBox.Visible = false, false, false, false, false
 	S.camTo(S.origin() * GarageBuilder.BOOTH * CFrame.new(0, 2, -9) * CFrame.Angles(math.rad(-8), math.pi, 0), 50, 0.4)
 	local hung
 	for _, it in pairs(S.profile.items) do if it.loc == "lack" then hung = true end end
@@ -5618,10 +5881,7 @@ local function close()
 	gui.Enabled = false
 	picker.Visible = false
 	L.spraying = false
-	L.cells = nil
-	L.visual = nil
-	L.mask = nil
-	L.dots = nil
+	L.state, L.cells, L.visual, L.mask, L.dots, L.decalGui, L.decalLabel, L.cupPaint = nil, nil, nil, nil, nil, nil, nil, nil
 	for _, q in ipairs(L.hidden or {}) do if q.Parent then q.LocalTransparencyModifier = 0 end end
 	L.hidden = nil
 	scene:ClearAllChildren()
@@ -5633,33 +5893,37 @@ S.modeEv.Event:Connect(function(mode) if mode ~= "paint" and gui.Enabled then cl
 ---------------------------------------------------------------- input and spraying
 UIS.InputBegan:Connect(function(input, gp)
 	if S.mode ~= "paint" or not L.state then return end
-	if input.UserInputType == Enum.UserInputType.MouseButton1 and not gp then L.spraying = true end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 and not gp and L.phase == "spray" then L.spraying = true end
 end)
 UIS.InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
 		L.spraying = false
-		for _, s in ipairs(sliders) do s.drag = false end
+		dragging = nil
 	end
 end)
 UIS.InputChanged:Connect(function(input)
 	if S.mode ~= "paint" then return end
 	if input.UserInputType == Enum.UserInputType.MouseWheel then
 		L.dist = math.clamp(L.dist - input.Position.Z * 0.1, 0.6, 1.6)
-		refreshStats()
-	elseif input.UserInputType == Enum.UserInputType.MouseMovement then
-		for _, s in ipairs(sliders) do
-			if s.drag then
-				local m = UIS:GetMouseLocation()
-				s.set(math.clamp((m.X - s.bar.AbsolutePosition.X) / s.bar.AbsoluteSize.X, 0, 1))
-				refreshColor()
-				paintCells()
-			end
-		end
+	elseif input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
+		dragTo()
 	end
 end)
 local acc = 0
 RunService.RenderStepped:Connect(function(dt)
 	if S.mode ~= "paint" or not L.state or not frame or not L.handRig then return end
+	-- drying countdown after Avsluta
+	if L.phase == "dry" then
+		L.dryLeft = math.max(0, L.dryLeft - dt)
+		progLabel.Text = L.dryLeft > 0 and "Torkar..." or "Torr!"
+		progPct.Text = string.format("%d s", math.ceil(L.dryLeft))
+		progFill.Size = UDim2.fromScale(1 - L.dryLeft / Config.PAINT_DRY, 1)
+		if L.dryLeft <= 0 and not L.dryDone then
+			L.dryDone = true
+			buildChecks()
+			task.delay(1.2, function() if S.mode == "paint" then S.endMode("paint") end; L.dryDone = false end)
+		end
+	end
 	local cam = workspace.CurrentCamera
 	local m = UIS:GetMouseLocation()
 	local ray = cam:ViewportPointToRay(m.X, m.Y)
@@ -5668,34 +5932,30 @@ RunService.RenderStepped:Connect(function(dt)
 	if math.abs(denom) < 1e-4 then return end
 	local hit = ray.Origin + ray.Direction * ((frame.Position - ray.Origin):Dot(n) / denom)
 	-- the gun hovers in front of the panel at the chosen distance, nozzle aimed at the point
-	local gunPos = hit + n * (1.2 + 1.6 * L.dist) + frame.UpVector * 0.25
+	-- (frame.RightVector points to the camera's left) so the gun sits low and to the right of the aim point
+	local gunPos = hit + n * (0.9 + 1.1 * L.dist) - frame.RightVector * 0.55 - frame.UpVector * 0.3
+	-- while it dries the gun is put away (out of sight behind the camera)
+	if L.phase == "dry" then gunPos, hit = cam.CFrame.Position - cam.CFrame.LookVector * 20, cam.CFrame.Position - cam.CFrame.LookVector * 25 end
 	local gunCF = CFrame.lookAt(gunPos, hit)
 	for _, r in ipairs(L.gunRig) do r[1].CFrame = gunCF * r[2] end
-	local handCF = gunCF * CFrame.new(0.05, -0.45, 0.25) * CFrame.Angles(math.rad(-70), 0, 0)
+	-- hand round the grip, fingers up around it and the arm going down out of the picture
+	local handCF = gunCF * CFrame.new(0, -0.34, 0.16) * CFrame.Angles(math.rad(78), 0, 0)
 	for _, r in ipairs(L.handRig) do r[1].CFrame = handCF * r[2] end
 	L.nozzle.CFrame = gunCF * CFrame.new(0, 0.03, -0.32)
-	L.mist.Color = ColorSequence.new(Color3.fromRGB(L.color[1], L.color[2], L.color[3]))
-	L.mist.Rate = L.spraying and 90 or 0
+	L.mist.Color = ColorSequence.new(col3())
+	L.mist.Rate = L.spraying and 150 or 0
 	if L.spraying then
 		local l = frame:PointToObjectSpace(hit)
-		local u, v = (l.X + L.w / 2) / L.w, (L.h / 2 - l.Y) / L.h
-		if u > -0.15 and u < 1.15 and v > -0.15 and v < 1.15 then Paint.spray(L.state, u, v, dt, L.dist, L.even) else L.state.t = L.state.t + dt end
-		-- paint spots where the spray hits the panel (you see exactly where you have painted)
-		-- the block version of the panel decides where the panel is; the spot sits on the smooth surface if it is there
-		local maskParams = RaycastParams.new()
-		maskParams.FilterType = Enum.RaycastFilterType.Include
-		maskParams.FilterDescendantsInstances = { L.mask }
-		local visParams = RaycastParams.new()
-		visParams.FilterType = Enum.RaycastFilterType.Include
-		visParams.FilterDescendantsInstances = L.visual or {}
+		local u, v = (l.X + L.pw / 2) / L.pw, (L.ph / 2 - l.Y) / L.ph
+		if u > -0.15 and u < 1.15 and v > -0.15 and v < 1.15 then Paint.spray(L.state, u, v, dt, L.dist, L.even, L.pw / Paint.COLS, L.ph / Paint.ROWS) else L.state.t = L.state.t + dt end
+		-- paint spots where the spray hits the panel
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Include
+		params.FilterDescendantsInstances = L.smooth and L.visual or { L.mask }
 		local fin = Paint.FIN[L.finish]
 		for _ = 1, 3 do
-			local jitter = frame.RightVector * (math.random() - 0.5) * 0.6 * L.dist + frame.UpVector * (math.random() - 0.5) * 0.6 * L.dist
-			local aim = hit + jitter
-			-- the smooth panel if it is shown (precise collision), otherwise the block version
-			local res
-			if L.smooth then res = workspace:Raycast(gunPos, (aim - gunPos) * 1.5, visParams)
-			elseif L.mask then res = workspace:Raycast(gunPos, (aim - gunPos) * 1.5, maskParams) end
+			local aim = hit + frame.RightVector * (math.random() - 0.5) * 0.6 * L.dist + frame.UpVector * (math.random() - 0.5) * 0.6 * L.dist
+			local res = workspace:Raycast(gunPos, (aim - gunPos) * 1.5, params)
 			if res then
 				local dot
 				if #L.dots >= 900 then dot = table.remove(L.dots, 1) else
@@ -5705,19 +5965,23 @@ RunService.RenderStepped:Connect(function(dt)
 					dot.Name = "Lackprick"
 					dot.Parent = scene
 				end
-				local d = (0.13 + math.random() * 0.09) * L.dist
+				local d = (0.1 + math.random() * 0.07) * L.dist
 				dot.Size = Vector3.new(0.02, d, d)
 				dot.CFrame = CFrame.lookAt(res.Position + res.Normal * 0.015, res.Position + res.Normal) * CFrame.Angles(0, math.pi / 2, 0)
-				dot.Color = Color3.fromRGB(L.color[1], L.color[2], L.color[3])
+				dot.Color = col3()
 				dot.Material = Enum.Material[fin.mat]
 				dot.Reflectance = fin.refl[1] + (fin.refl[2] - fin.refl[1]) * L.gloss
-				dot.Transparency = 0.12
+				dot.Transparency = math.clamp(0.15 + Paint.coverage(L.state) * 0.9, 0.15, 1)
 				L.dots[#L.dots + 1] = dot
 			end
 		end
 		L.t = L.t + dt
 		acc = acc + dt
-		if acc > 0.08 then acc = 0; paintCells(); refreshStats() end
+		if acc > 0.1 then
+			acc = 0
+			paintCells()
+			if Paint.coverage(L.state) >= 0.9 then buildChecks() end
+		end
 	end
 end)
 ]]></ProtectedString></Properties></Item>
@@ -6778,6 +7042,7 @@ function S.setMode(name)
 	if S.mode == name then return true end
 	if S.mode then return false end
 	S.mode = name
+	S.tip(nil)
 	workView(true)
 	S.lockMove(true)
 	S.modeEv:Fire(name)
@@ -6961,7 +7226,7 @@ function UI.viewport(parent, model, size, pos, opts)
 	opts = opts or {}
 	local vf = UI.new("ViewportFrame", {
 		Size = size, Position = pos or UDim2.new(), BackgroundColor3 = opts.bg or Color3.fromRGB(235, 237, 240), BackgroundTransparency = opts.bgT or 0,
-		Ambient = Color3.fromRGB(170, 170, 175), LightColor = Color3.fromRGB(255, 250, 240), LightDirection = Vector3.new(-1, -1.4, -0.8),
+		Ambient = Color3.fromRGB(205, 205, 210), LightColor = Color3.fromRGB(255, 252, 245), LightDirection = Vector3.new(-1, -1.4, -0.8),
 		BorderSizePixel = 0, Name = "Bild", ZIndex = opts.z or 1, LayoutOrder = opts.order or 0,
 	}, parent)
 	UI.corner(vf, opts.radius or 8)

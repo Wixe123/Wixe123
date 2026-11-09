@@ -178,7 +178,7 @@ float tri(vec3 p,float s){vec3 a=abs(vN);return (n3(p.yzx*s)*a.x+n3(p.xzy*s)*a.y
     const d=document.createElement('div');d.className='g';
     d.style.left=(e.x-ox)+'px';d.style.top=(e.y-oy)+'px';d.style.width=Math.max(0,e.w)+'px';d.style.height=Math.max(0,e.h)+'px';
     if(e.bgt<1){
-      if(e.grad){const stops=e.grad.c.map(k=>`rgb(${k[1][0]*(e.bg[0]/255)},${k[1][1]*(e.bg[1]/255)},${k[1][2]*(e.bg[2]/255)}) ${k[0]*100}%`).join(',');d.style.background=`linear-gradient(${90+e.grad.rot}deg,${stops})`;d.style.opacity=1-e.bgt;}
+      if(e.grad){const stops=e.grad.c.map(k=>`rgb(${k[1][0]*(e.bg[0]/255)},${k[1][1]*(e.bg[1]/255)},${k[1][2]*(e.bg[2]/255)}) ${k[0]*100}%`).join(',');d.style.background=`linear-gradient(${90+e.grad.rot}deg,${stops})`;d.style.opacity=1-e.bgt;if(e.grad.t&&e.grad.t.some(k=>k[1]>0)){const m=e.grad.t.map(k=>`rgba(0,0,0,${1-k[1]}) ${k[0]*100}%`).join(',');d.style.maskImage=d.style.webkitMaskImage=`linear-gradient(${90+e.grad.rot}deg,${m})`;}}
       else d.style.background=css(e.bg,e.bgt);
     }
     if(e.corner)d.style.borderRadius=e.corner+'px';

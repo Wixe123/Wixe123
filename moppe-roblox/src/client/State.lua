@@ -98,6 +98,7 @@ function S.setMode(name)
 	if S.mode == name then return true end
 	if S.mode then return false end
 	S.mode = name
+	S.tip(nil)
 	workView(true)
 	S.lockMove(true)
 	S.modeEv:Fire(name)

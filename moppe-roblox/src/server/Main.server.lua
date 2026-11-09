@@ -498,8 +498,8 @@ function H.paintStart(plr, p)
 	local tool = Profile.bestTool(p, "spruta")
 	return true, { item = e, even = tool.stats.even }
 end
-function H.paintDone(plr, p, color, finish, gloss, state)
-	local ok, r = Profile.paintDone(p, color, finish, gloss, state, now())
+function H.paintDone(plr, p, color, finish, gloss, state, decal)
+	local ok, r = Profile.paintDone(p, color, finish, gloss, state, now(), decal)
 	if not ok then return ok, r end
 	changed(plr, { "items" })
 	return true, r

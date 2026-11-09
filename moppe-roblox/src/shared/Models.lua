@@ -444,6 +444,7 @@ C.kapa = function(mk, ctx, part, item)
 	local def = MopedDef.MODELS[part.stats.fits]
 	local pdef = def and def.panelById[part.stats.panel]
 	if not pdef then return end
+	local big
 	for _, pr in ipairs(pdef.prims) do
 		local shape, size, pos, rot = pr[1], pr[2], pr[3], pr[4] or { 0, 0, 0 }
 		local cf = ctx.cf * CF(pos[1], pos[2], pos[3]) * CFrame.fromOrientation(rad(rot[1]), rad(rot[2]), rad(rot[3]))
@@ -459,6 +460,31 @@ C.kapa = function(mk, ctx, part, item)
 		else p = mk.box(pdef.n, V3(size[1], size[2], size[3]), cf) end
 		Models.paintPart(p, item and item.paint)
 		p:SetAttribute("Panel", pdef.id)
+		if shape ~= "ball" and shape ~= "cyl" and (not big or size[1] * size[2] * size[3] > big[2]) then big = { p, size[1] * size[2] * size[3], pos } end
+	end
+	-- decal: brand text on the outward side of the biggest piece
+	local dk = item and item.paint and item.paint.dk and Paint.DECAL[item.paint.dk]
+	if dk and big then
+		local p, pos = big[1], big[3]
+		local face = Enum.NormalId.Top
+		if math.abs(pos[1]) > 0.25 then face = pos[1] < 0 and Enum.NormalId.Left or Enum.NormalId.Right end
+		local sg = Instance.new("SurfaceGui")
+		sg.Name = "Dekal"
+		sg.Face = face
+		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		sg.PixelsPerStud = 40
+		sg.LightInfluence = 1
+		sg.Parent = p
+		local t = Instance.new("TextLabel")
+		t.Size = UDim2.fromScale(0.9, 0.5)
+		t.Position = UDim2.fromScale(0.05, 0.25)
+		t.BackgroundTransparency = 1
+		t.Text = dk.text
+		t.TextScaled = true
+		t.Font = Enum.Font.GothamBlack
+		t.TextColor3 = C3(dk.c[1], dk.c[2], dk.c[3])
+		t.TextStrokeTransparency = 0.4
+		t.Parent = sg
 	end
 end
 
