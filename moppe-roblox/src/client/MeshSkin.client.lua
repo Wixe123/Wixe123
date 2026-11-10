@@ -14,14 +14,29 @@ local templates = {} -- "model/panel" -> { part = MeshPart, center, size } or fa
 local disabled = false -- smooth panels failed
 local aeroxFailed = false
 
--- Roblox gives nil instead of an EditableMesh when the game may not use it: the place has to be published
--- and Game Settings -> Security -> "Allow Mesh / Image APIs" switched on. Say that once, clearly.
-local NO_API = "Robloxs mesh-API är avstängt i det här spelet. Publicera spelet (File → Publish to Roblox) och slå på Game Settings → Security → Allow Mesh / Image APIs. Eller importera aerox.obj själv (se README)."
+-- Roblox gives nil instead of an EditableMesh when this game may not use it. The setting
+-- (Game Settings -> Security -> Allow Mesh / Image APIs) belongs to the PUBLISHED game, so a .rbxlx file
+-- opened from disk (PlaceId 0) never gets it, even after the setting is on. Say which case it is.
+local NO_API = "Robloxs mesh-API är avstängt i det här spelet."
+local function noApiText(detail)
+	if game.PlaceId == 0 then
+		return "3D-modellerna kan inte skapas: filen du kör är inte kopplad till ditt publicerade spel (PlaceId 0). "
+			.. "Välj File → Publish to Roblox As…, välj ditt befintliga spel och tryck Play igen. (" .. detail .. ")"
+	end
+	return "3D-modellerna kan inte skapas i spelet " .. game.PlaceId .. " fast det är publicerat. Kontrollera att Allow Mesh / Image APIs är på och sparat (Save), "
+		.. "och att kontot som äger spelet är ID-verifierat. Starta om Studio och prova igen. (" .. detail .. ")"
+end
 local warned = false
+local apiDetail = ""
 local function newMesh()
-	local em = AssetService:CreateEditableMesh()
-	if not em then error(NO_API, 0) end
-	return em
+	-- older and newer forms of the call
+	local ok, em = pcall(function() return AssetService:CreateEditableMesh() end)
+	if ok and em then return em end
+	local why1 = ok and "gav nil" or tostring(em)
+	local ok2, em2 = pcall(function() return AssetService:CreateEditableMesh({ FixedSize = false }) end)
+	if ok2 and em2 then return em2 end
+	apiDetail = "CreateEditableMesh: " .. why1 .. " / " .. (ok2 and "gav nil" or tostring(em2))
+	error(NO_API, 0)
 end
 local function tell(msg)
 	if warned then return end
@@ -54,7 +69,7 @@ local function template(model, panel)
 	end)
 	if not ok or not res then
 		disabled = true
-		tell(tostring(res) == NO_API and NO_API or ("Släta 3D-kåpor kunde inte skapas: " .. tostring(res)))
+		tell(tostring(res) == NO_API and noApiText(apiDetail) or ("Släta 3D-kåpor kunde inte skapas: " .. tostring(res)))
 		return false
 	end
 	res.Name = "Kåpa3D"
@@ -143,7 +158,7 @@ local function bodyTemplates()
 	end)
 	if not ok then
 		aeroxFailed = true
-		tell(tostring(err) == NO_API and NO_API or ("Aerox-modellen kunde inte visas: " .. tostring(err) .. ". Importera aerox.obj i Studio (se README)."))
+		tell(tostring(err) == NO_API and noApiText(apiDetail) or ("Aerox-modellen kunde inte visas: " .. tostring(err) .. ". Importera aerox.obj i Studio (se README)."))
 		return false
 	end
 	body = list

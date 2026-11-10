@@ -76,6 +76,7 @@ Ett mopedmekanikerspel i Roblox, byggt från grunden. Du har ett eget garage. D�
    - File → **Publish to Roblox** (inställningen finns bara för publicerade spel).
    - Game Settings → Security → slå på **Allow Mesh / Image APIs** och spara.
    - Starta testet igen.
+   - Viktigt: inställningen hör till det **publicerade** spelet. En .rbxlx-fil som du öppnar från datorn (t.ex. en ny version från mig) är inte kopplad till spelet (PlaceId 0), och då är mesh-API:t avstängt fast inställningen är på. Öppna filen och välj **File → Publish to Roblox As…** och ditt befintliga spel, sedan Play.
    Utan det visas kåporna som block, och resten av spelet fungerar som vanligt.
 3. **Läs meddelandet:** kan spelet inte skapa modellen visas ett rött meddelande som säger varför. Samma text står i View → Output.
 4. **Reservväg:** importera modellen själv i Studio:

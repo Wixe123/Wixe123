@@ -11,7 +11,7 @@ for _ = 1, 60 do
 		if t and not seen[o] then seen[o] = true; texts[#texts + 1] = t.Text; HOST_ECHO("toast: " .. t.Text) end
 	end
 end
-E.check("exactly one message about the mesh API", #texts == 1 and texts[1]:find("Allow Mesh") ~= nil)
+E.check("exactly one message about the mesh API", #texts == 1 and texts[1]:find("3D-modellerna kan inte skapas", 1, true) ~= nil)
 E.check("unmount side panel", E.api("unmountChassis", "pan:sidaV"))
 E.usePrompt("Lackera"); E.run(1)
 E.clickGui(E.findGui("Sidokåpa vänster", { button = true })); E.run(1)
